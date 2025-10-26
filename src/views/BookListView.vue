@@ -1,16 +1,20 @@
 <script setup lang="ts">
-import { ref, onActivated, onDeactivated } from 'vue'
+import { ref, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
 import { bookListBusi } from '@/core/busi/bookListBusi'
 import { bookInput } from '@/core/model/book/bookInput'
-import { bookOutput } from '@/core/model/book/bookOutput'
+import { bookOutput, bookItem } from '@/core/model/book/bookOutput'
 import { categoryEnum } from '@/core/common/enum/categoryEnum'
 import BookItem from '@/components/BookItem.vue'
-import { Search, ArrowDown, ArrowUp, Filter } from '@element-plus/icons-vue'
+import { Search, ArrowDown, ArrowUp, Filter, Loading } from '@element-plus/icons-vue'
 
 const bookInputs = ref<bookInput>(new bookInput())
 const bookOutputs = ref<bookOutput>()
 const showAdvanced = ref(false)
 const loading = ref(false)
+const loadingMore = ref(false)
+const allBooks = ref<bookItem[]>([])
+const loadMoreTrigger = ref<HTMLElement | null>(null)
+let observer: IntersectionObserver | null = null
 
 // 分类选项
 const categoryOptions = [
@@ -39,13 +43,87 @@ const ratingOptions = [
 async function fetchBookList() {
   loading.value = true
   try {
+    // 重置分页参数
+    bookInputs.value.pageNxt = undefined
+    bookInputs.value.pagePrev = undefined
+
     const busi = new bookListBusi()
     const result = await busi.getBookPageList(bookInputs.value)
     bookOutputs.value = result
+    allBooks.value = result.data || []
+
+    // 重置滚动位置
+    const mainElement = document.querySelector('.layout-main') as HTMLElement
+    if (mainElement) {
+      mainElement.scrollTop = 0
+    }
   } catch (error) {
     console.error('获取书籍列表失败:', error)
   } finally {
     loading.value = false
+  }
+}
+
+// 加载更多（下一页）
+async function loadMore() {
+  if (loadingMore.value || loading.value || !bookOutputs.value?.nxtPage) {
+    return
+  }
+
+  console.log('开始加载下一页...')
+  loadingMore.value = true
+  try {
+    const busi = new bookListBusi()
+    const nextInput = new bookInput()
+    nextInput.keyword = bookInputs.value.keyword
+    nextInput.category = bookInputs.value.category
+    nextInput.minRating = bookInputs.value.minRating
+    nextInput.showHide = bookInputs.value.showHide
+    nextInput.pageNxt = bookOutputs.value.nxtPage
+
+    const result = await busi.getBookPageList(nextInput)
+
+    if (result.isSuccess && result.data) {
+      // 追加新数据
+      allBooks.value.push(...result.data)
+      bookOutputs.value = result
+      console.log('加载成功，当前总数:', allBooks.value.length)
+    }
+  } catch (error) {
+    console.error('加载更多失败:', error)
+  } finally {
+    loadingMore.value = false
+  }
+}
+
+// 设置 IntersectionObserver
+const setupObserver = () => {
+  // 清理旧的 observer
+  if (observer) {
+    observer.disconnect()
+  }
+
+  // 创建新的 observer
+  observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          console.log('触发器进入视野，准备加载更多')
+          loadMore()
+        }
+      })
+    },
+    {
+      root: null,
+      rootMargin: '200px', // 提前 200px 开始加载
+      threshold: 0.1,
+    },
+  )
+
+  // 观察触发元素
+  if (loadMoreTrigger.value) {
+    observer.observe(loadMoreTrigger.value)
+    console.log('已设置 IntersectionObserver')
   }
 }
 
@@ -61,18 +139,44 @@ defineOptions({
 
 const scrollPosition = ref(0)
 
+// 挂载时设置 observer
+onMounted(() => {
+  setupObserver()
+})
+
+// 卸载时清理 observer
+onUnmounted(() => {
+  if (observer) {
+    observer.disconnect()
+  }
+})
+
 // 组件被激活时调用(从缓存中恢复)
 onActivated(() => {
+  // 重新设置 observer
+  setupObserver()
+
   // 恢复滚动位置
   if (scrollPosition.value > 0) {
-    window.scrollTo(0, scrollPosition.value)
+    const mainElement = document.querySelector('.layout-main') as HTMLElement
+    if (mainElement) {
+      mainElement.scrollTop = scrollPosition.value
+    }
   }
 })
 
 // 组件被停用时调用(进入缓存)
 onDeactivated(() => {
   // 保存滚动位置
-  scrollPosition.value = window.scrollY
+  const mainElement = document.querySelector('.layout-main') as HTMLElement
+  if (mainElement) {
+    scrollPosition.value = mainElement.scrollTop
+  }
+
+  // 清理 observer
+  if (observer) {
+    observer.disconnect()
+  }
 })
 </script>
 
@@ -154,24 +258,34 @@ onDeactivated(() => {
       <el-icon>
         <Filter />
       </el-icon>
-      <span>找到 {{ bookOutputs.totalCount }} 个结果</span>
+      <span>找到 {{ bookOutputs.totalCount }} 个结果，已加载 {{ allBooks.length }} 条</span>
     </div>
 
     <!-- 书籍列表 -->
     <div class="book-list" v-loading="loading">
-      <BookItem
-        v-for="book in bookOutputs?.data"
-        :key="book.bookId"
-        :book="book"
-        class="book-item"
-      />
+      <BookItem v-for="book in allBooks" :key="book.bookId" :book="book" class="book-item" />
+
+      <!-- 加载更多触发器（用于 IntersectionObserver） -->
+      <div ref="loadMoreTrigger" class="load-more-trigger"></div>
+
+      <!-- 加载更多提示 -->
+      <div v-if="loadingMore" class="loading-more">
+        <el-icon class="is-loading">
+          <Loading />
+        </el-icon>
+        <span>加载中...</span>
+      </div>
+
+      <!-- 没有更多数据提示 -->
+      <div v-else-if="allBooks.length > 0 && !bookOutputs?.nxtPage" class="no-more">
+        没有更多数据了
+      </div>
     </div>
-    <el-backtop :bottom="100" />
+
     <!-- 空状态 -->
-    <el-empty
-      v-if="!loading && (!bookOutputs?.data || bookOutputs.data.length === 0)"
-      description="暂无数据"
-    />
+    <el-empty v-if="!loading && allBooks.length === 0" description="暂无数据" />
+
+    <el-backtop :bottom="100" />
   </div>
 </template>
 
@@ -247,6 +361,36 @@ onDeactivated(() => {
 
 .book-item {
   transition: all 0.3s;
+}
+
+/* 加载更多触发器（不可见） */
+.load-more-trigger {
+  height: 1px;
+  width: 100%;
+  visibility: hidden;
+}
+
+/* 加载更多提示 */
+.loading-more {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 20px;
+  color: var(--el-color-primary);
+  font-size: 14px;
+}
+
+.loading-more .el-icon {
+  font-size: 18px;
+}
+
+/* 没有更多数据提示 */
+.no-more {
+  text-align: center;
+  padding: 20px;
+  color: var(--el-text-color-secondary);
+  font-size: 14px;
 }
 
 /* 响应式设计 */
