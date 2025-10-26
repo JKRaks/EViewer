@@ -6,6 +6,9 @@ export class bookInfoInput extends R {
     return `/g/${this.bookId}`
   }
   bookId: string = ''
+
   @jsonClass.property('p')
   page: number = 0
+  @jsonClass.property('nw')
+  readonly nw: string = 'always'
 }

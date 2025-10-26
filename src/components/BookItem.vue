@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useRouter } from 'vue-router'
 import type { bookItem } from '@/core/model/book/bookOutput'
 import { Picture, Star, Clock } from '@element-plus/icons-vue'
 import CategoryTag from './CategoryTag.vue'
@@ -9,16 +10,19 @@ interface Props {
 }
 
 const props = defineProps<Props>()
+const router = useRouter()
 
 // 格式化图片数量
 const imageCountText = computed(() => {
   return `${props.book.imgCount || 0} 张`
 })
 
-// 处理点击事件
+// 处理点击事件 - 跳转到详情页
 const handleClick = () => {
-  // 可以通过 emit 传递点击事件
-  console.log('Book clicked:', props.book.bookId)
+  router.push({
+    name: 'bookinfo',
+    query: { bookId: props.book.bookId },
+  })
 }
 </script>
 

@@ -16,4 +16,13 @@ export class bookInfoOutput extends P<string[]> {
   lastPageIndex: number = 0
   category: string = ''
   uploader: string = ''
+  userComments: userComment[] | undefined = undefined
+}
+
+export class userComment {
+  username: string = ''
+  comment: string = ''
+  date: Date | undefined = undefined
+  score: number = 0
+  isUploader: boolean = false
 }
