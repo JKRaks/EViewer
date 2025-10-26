@@ -1,4 +1,4 @@
-import { bookInfoOutput } from '../model/book/bookInfoOutput'
+import { bookInfoOutput, userComment } from '../model/book/bookInfoOutput'
 import { bookInfoInput } from '../model/book/bookInfoInput'
 import { httpClass } from '../common/httpClass'
 import { parserClass } from '../common/parserClass'
@@ -104,7 +104,7 @@ export class bookInfoBusi {
       result.tags = this.getTags(bookInfo)
 
       result.data = this.getImageIds(bodyParser)
-
+      result.userComments = this.getUserComments(bodyParser)
       result.lastPageIndex = Math.ceil(result.imageCount / 20)
       result.isSuccess = true
     } else {
@@ -112,7 +112,6 @@ export class bookInfoBusi {
     }
     return result
   }
-
   /**
    * 获取全部画册详情
    * @param param 画册信息
@@ -192,6 +191,33 @@ export class bookInfoBusi {
         result?.push(match[1])
       }
     })
+    return result
+  }
+  /**
+   * 获取用户评论
+   * @param bodyParser 页面解析对象
+   * @returns 用户评论
+   */
+  private getUserComments(bodyParser: parserClass): userComment[] {
+    const result: userComment[] = []
+    const userComments = bodyParser.getElementsBySelector(['#cdiv', '.c1'])
+    for (const commentElement of userComments) {
+      const comment = new userComment()
+      const info = commentElement.getElementBySelector(['.c2', '.c3'])
+      const dateStr = info?.element?.textContent?.trim()
+      const dateMatch = dateStr?.match(/Posted on (\d{1,2} \w+ \d{4}, \d{2}:\d{2}) by:/)
+      if (dateMatch && dateMatch[1]) {
+        comment.date = new Date(dateMatch[1])
+      }
+      comment.username =
+        commentElement
+          .getElementBySelector(['.c2', '.c3', 'a:first-child'])
+          ?.element?.textContent?.trim() || ''
+      comment.comment =
+        commentElement.getElementBySelector(['.c6'])?.element?.textContent?.trim() || ''
+      comment.isUploader = commentElement.getElementBySelector(['.c2', '.c4']) ? true : false
+      result.push(comment)
+    }
     return result
   }
 }
