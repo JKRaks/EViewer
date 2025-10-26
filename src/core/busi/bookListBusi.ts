@@ -1,6 +1,7 @@
+import { categoryEnum } from '../common/enum/categoryEnum'
 import { httpClass } from '../common/httpClass'
 import { parserClass } from '../common/parserClass'
-import type { bookInput } from '../model/book/bookInput'
+import { bookInput } from '../model/book/bookInput'
 import { bookOutput, bookItem } from '../model/book/bookOutput'
 
 export class bookListBusi {
@@ -12,7 +13,14 @@ export class bookListBusi {
   async getBookPageList(param: bookInput): Promise<bookOutput> {
     const result: bookOutput = new bookOutput()
     result.data = []
-    const htmlResult = await httpClass.sendRequest(param)
+    const queryParams = Object.create(param)
+    if (!queryParams.showHide) {
+      queryParams.showHide = undefined
+    }
+    if (queryParams.category !== categoryEnum.All) {
+      queryParams.category = categoryEnum.All - queryParams.category
+    }
+    const htmlResult = await httpClass.sendRequest(queryParams)
     if (htmlResult.isSuccess) {
       const bodyParser = parserClass.loadBody(htmlResult.data!)
       //解析画册列表
@@ -273,7 +281,7 @@ export class bookListBusi {
     const text = selectElement?.element?.textContent
     let number = 0
     if (text) {
-      const match = text.match(/Found ([\d,]+) results/)
+      const match = text.match(/Found(?: about)? ([\d,]+) results/)
       if (match && match[1]) {
         const numberStr = match[1].replace(/,/g, '')
         number = parseInt(numberStr)
