@@ -19,6 +19,14 @@ export class bookInfoInput extends R {
    */
   @jsonClass.property('p')
   page: number = 0
+
   @jsonClass.property('nw')
-  readonly nw: string = 'always'
+  readonly nw: string = this.page != 0 ? '' : 'always'
+
+  shouldSerializeProperty(propertyKey: string): boolean {
+    if (propertyKey === 'nw' && this.page > 0) {
+      return false
+    }
+    return true
+  }
 }
