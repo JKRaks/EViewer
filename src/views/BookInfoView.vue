@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { bookInfoBusi } from '@/core/busi/bookInfoBusi'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
@@ -16,6 +16,7 @@ import {
   StarFilled,
 } from '@element-plus/icons-vue'
 import router from '@/router'
+import { useLayoutMainScrollMemory } from '@/composables/useLayoutMainScrollMemory'
 
 const route = useRoute()
 const funcData = reactive({
@@ -24,6 +25,8 @@ const funcData = reactive({
   readMode: false,
 })
 const pageData = ref(new bookInfoOutput())
+const { persistScrollPosition, bindScrollListener, unbindScrollListener } =
+  useLayoutMainScrollMemory('bookinfo-scroll-position')
 
 // 计算评分星星
 const ratingStars = computed(() => {
@@ -60,9 +63,22 @@ const formatCommentDate = (dateStr: string | Date | undefined) => {
 }
 
 onMounted(() => {
-  const mainElement = document.querySelector('.layout-main') as HTMLElement | null
-  mainElement?.scrollTo({ top: 0, behavior: 'auto' })
+  bindScrollListener()
   void fetchBookInfo()
+})
+
+onActivated(() => {
+  bindScrollListener()
+})
+
+onDeactivated(() => {
+  persistScrollPosition()
+  unbindScrollListener()
+})
+
+onUnmounted(() => {
+  persistScrollPosition()
+  unbindScrollListener()
 })
 
 async function fetchBookInfo() {

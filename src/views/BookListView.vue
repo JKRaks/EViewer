@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { ref, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { bookListBusi } from '@/core/busi/bookListBusi'
 import { bookInput } from '@/core/model/book/bookInput'
 import { bookOutput, bookItem } from '@/core/model/book/bookOutput'
 import { categoryEnum } from '@/core/common/enum/categoryEnum'
 import BookItem from '@/components/BookItem.vue'
 import { Search, ArrowDown, ArrowUp, Filter, Loading } from '@element-plus/icons-vue'
+import { useLayoutMainScrollMemory } from '@/composables/useLayoutMainScrollMemory'
 
 const bookInputs = ref<bookInput>(new bookInput())
 const bookOutputs = ref<bookOutput>()
@@ -40,6 +42,9 @@ const ratingOptions = [
   { label: '5星', value: 5 },
 ]
 
+const { persistScrollPosition, applyScrollTop, bindScrollListener, unbindScrollListener } =
+  useLayoutMainScrollMemory('booklist-scroll-position')
+
 async function fetchBookList() {
   loading.value = true
   try {
@@ -53,10 +58,7 @@ async function fetchBookList() {
     allBooks.value = result.data || []
 
     // 重置滚动位置
-    const mainElement = document.querySelector('.layout-main') as HTMLElement
-    if (mainElement) {
-      mainElement.scrollTop = 0
-    }
+    applyScrollTop(0)
   } catch (error) {
     console.error('获取书籍列表失败:', error)
   } finally {
@@ -137,15 +139,16 @@ defineOptions({
   name: 'BookList',
 })
 
-const scrollPosition = ref(0)
-
 // 挂载时设置 observer
 onMounted(() => {
+  bindScrollListener()
   setupObserver()
 })
 
 // 卸载时清理 observer
 onUnmounted(() => {
+  unbindScrollListener()
+
   if (observer) {
     observer.disconnect()
   }
@@ -153,25 +156,22 @@ onUnmounted(() => {
 
 // 组件被激活时调用(从缓存中恢复)
 onActivated(() => {
+  bindScrollListener()
+
   // 重新设置 observer
   setupObserver()
+})
 
-  // 恢复滚动位置
-  if (scrollPosition.value > 0) {
-    const mainElement = document.querySelector('.layout-main') as HTMLElement
-    if (mainElement) {
-      mainElement.scrollTop = scrollPosition.value
-    }
-  }
+onBeforeRouteLeave(() => {
+  persistScrollPosition()
 })
 
 // 组件被停用时调用(进入缓存)
 onDeactivated(() => {
   // 保存滚动位置
-  const mainElement = document.querySelector('.layout-main') as HTMLElement
-  if (mainElement) {
-    scrollPosition.value = mainElement.scrollTop
-  }
+  persistScrollPosition()
+
+  unbindScrollListener()
 
   // 清理 observer
   if (observer) {

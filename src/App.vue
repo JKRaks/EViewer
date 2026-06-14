@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import { Menu as IconMenu, Search, ArrowLeft, Loading } from '@element-plus/icons-vue'
 import { useFloatingActions } from '@/composables/useFloatingActions'
@@ -33,6 +33,43 @@ const showBackButton = computed(() => {
   return window.history.length > 1
 })
 
+const getLayoutMainElement = () => {
+  return document.querySelector('.layout-main') as HTMLElement | null
+}
+
+const getRouteScrollKey = (routePath: string) => {
+  return `layout-scroll:${routePath}`
+}
+
+const persistCurrentRouteScroll = (routePath = route.fullPath) => {
+  const mainElement = getLayoutMainElement()
+  if (!mainElement) {
+    return
+  }
+
+  sessionStorage.setItem(getRouteScrollKey(routePath), String(mainElement.scrollTop))
+}
+
+const restoreRouteScroll = async (routePath = route.fullPath) => {
+  await nextTick()
+
+  const mainElement = getLayoutMainElement()
+  if (!mainElement) {
+    return
+  }
+
+  const storedPosition = Number(sessionStorage.getItem(getRouteScrollKey(routePath)) || '0')
+  const targetPosition = routePath === '/booklist' ? storedPosition : 0
+
+  requestAnimationFrame(() => {
+    mainElement.scrollTo({ top: targetPosition, behavior: 'auto' })
+    requestAnimationFrame(() => {
+      const secondMainElement = getLayoutMainElement()
+      secondMainElement?.scrollTo({ top: targetPosition, behavior: 'auto' })
+    })
+  })
+}
+
 const checkViewport = () => {
   isMobile.value = window.innerWidth < 768
 }
@@ -55,6 +92,8 @@ const goBookList = () => {
 
 // 处理主内容区滚动
 const handleMainScroll = (event: Event) => {
+  persistCurrentRouteScroll()
+
   if (!isMobile.value) {
     return
   }
@@ -72,15 +111,25 @@ const handleMainScroll = (event: Event) => {
 }
 
 onMounted(() => {
+  if ('scrollRestoration' in history) {
+    history.scrollRestoration = 'manual'
+  }
+
   checkViewport()
   window.addEventListener('resize', checkViewport)
   window.addEventListener('orientationchange', checkViewport)
+  void restoreRouteScroll()
 })
 
 watch(
   () => route.fullPath,
-  () => {
+  async (newRoutePath, oldRoutePath) => {
+    if (oldRoutePath) {
+      persistCurrentRouteScroll(oldRoutePath)
+    }
+
     clearFloatingActions()
+    await restoreRouteScroll(newRoutePath)
   },
 )
 
