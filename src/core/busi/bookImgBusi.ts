@@ -1,8 +1,6 @@
 import { httpClass } from '../common/httpClass'
 import { parserClass } from '../common/parserClass'
 import { bookImgInput } from '../model/book/bookImgInput'
-import type { bookImgListInput } from '../model/book/bookImgListInput'
-import { bookImgListOutput } from '../model/book/bookImgListOutput'
 import { bookImgOutput } from '../model/book/bookImgOutput'
 
 export class bookImageBusi {
@@ -22,29 +20,27 @@ export class bookImageBusi {
         result.msg = '解析失败'
       }
 
-      result.bookName = imageInfo?.getElementBySelector(['h1'])?.element?.textContent?.trim() || ''
+      result.bookName = imageInfo.getElementBySelector(['h1']).text
 
-      const pageElement =
-        imageInfo?.getElementsBySelector(['div#i2', 'div.sn', 'div', 'span']) || []
+      const pageElement = imageInfo.getElementsBySelector(['div#i2', 'div.sn', 'div', 'span']) || []
       if (pageElement.length >= 2) {
-        result.index = parseInt(pageElement[0]?.element?.textContent?.trim() || '0') || 0
-        result.totalCount = parseInt(pageElement[1]?.element?.textContent?.trim() || '0') || 0
+        result.index = parseInt(pageElement[0]?.text || '0') || 0
+        result.totalCount = parseInt(pageElement[1]?.text || '0') || 0
       }
 
       const prevLink = imageInfo
-        ?.getElementBySelector(['div#i2', 'div.sn', 'a#prev'])
-        ?.element?.getAttribute('href')
-      const prevMatch = prevLink?.match(/\/s\/([^\/]+\/[^\/]+)/)
+        .getElementBySelector(['div#i2', 'div.sn', 'a#prev'])
+        .attribute('href')
+      const prevMatch = prevLink.match(/\/s\/([^\/]+\/[^\/]+)/)
       result.prevImageId = prevMatch ? prevMatch[1] || '' : ''
 
       const nextLink = imageInfo
-        ?.getElementBySelector(['div#i2', 'div.sn', 'a#prev'])
-        ?.element?.getAttribute('href')
-      const nextMatch = nextLink?.match(/\/s\/([^\/]+\/[^\/]+)/)
+        .getElementBySelector(['div#i2', 'div.sn', 'a#prev'])
+        .attribute('href')
+      const nextMatch = nextLink.match(/\/s\/([^\/]+\/[^\/]+)/)
       result.nextImageId = nextMatch ? nextMatch[1] || '' : ''
 
-      const lastDiv =
-        imageInfo?.getElementBySelector(['div#i2', 'div:last-child'])?.element?.textContent || ''
+      const lastDiv = imageInfo.getElementBySelector(['div#i2', 'div:last-child']).text
 
       if (lastDiv) {
         const match = lastDiv.match(/^(.+?)\s+::\s+(\d+\s+x\s+\d+)\s+::\s+(.+)$/)
@@ -59,36 +55,12 @@ export class bookImageBusi {
         }
       }
 
-      result.data =
-        imageInfo?.getElementBySelector(['div#i3', 'a', 'img#img'])?.element?.getAttribute('src') ||
-        ''
+      result.data = imageInfo.getElementBySelector(['div#i3', 'a', 'img#img']).attribute('src')
 
       result.isSuccess = true
     } else {
       result.msg = htmlResult.msg
     }
-    return result
-  }
-
-  /**
-   * 单次获取全部画册图片
-   * @param param
-   * @returns
-   */
-  async getBookImages(param: bookImgListInput): Promise<bookImgListOutput> {
-    const result: bookImgListOutput = new bookImgListOutput()
-    result.data = []
-    for (const imageId of param.imageIds) {
-      const imgInput = new bookImgInput()
-      imgInput.imageId = imageId
-      const imgResult = await this.getBookImage(imgInput)
-      if (imgResult.isSuccess) {
-        result.data.push(imgResult)
-      }
-    }
-    result.data.sort((a, b) => a.index - b.index)
-    result.isSuccess = true
-    result.msg = '获取画册图片列表成功'
     return result
   }
 }
