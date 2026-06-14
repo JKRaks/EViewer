@@ -164,7 +164,8 @@ export class bookInfoBusi {
       }
       comment.username = commentElement.getElementBySelector(['.c2', '.c3', 'a:first-child']).text
       comment.comment = commentElement.getElementBySelector(['.c6']).text
-      comment.isUploader = commentElement.getElementBySelector(['.c2', '.c4']) ? true : false
+      comment.isUploader =
+        commentElement.getElementBySelector(['.c2', '.c4']).text == 'Uploader Comment'
       result.push(comment)
     }
     return result
