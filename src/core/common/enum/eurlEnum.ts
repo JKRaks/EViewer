@@ -1,5 +1,7 @@
-export enum eurlEnum {
-  // EH = 'http://127.0.0.1:3000/ehentai',
-  EH = 'https://eproxy.jkraks.workers.dev/ehentai',
-  // EH = 'https://eproxy.gghf.top',
-}
+const defaultEhUrl = 'https://eproxy.jkraks.workers.dev/ehentai'
+
+export const eurlEnum = {
+  EH: import.meta.env.VITE_EH_URL || defaultEhUrl,
+} as const
+
+export type eurlEnum = (typeof eurlEnum)[keyof typeof eurlEnum]
