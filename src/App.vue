@@ -1,25 +1,28 @@
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onUnmounted, watch } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
-import { Menu as IconMenu, Search, ArrowLeft, Loading } from '@element-plus/icons-vue'
+import {
+  ArrowLeft,
+  Loading,
+  Menu as IconMenu,
+  Search,
+  UserFilled,
+  House,
+} from '@element-plus/icons-vue'
 import { useFloatingActions } from '@/composables/useFloatingActions'
 
 const route = useRoute()
 const router = useRouter()
-const drawer = ref(false)
+const menuExpanded = ref(false)
 const isMobile = ref(false)
 const showFloatingButtons = ref(true)
 const lastScrollTop = ref(0)
 const scrollThreshold = 48
 const { pageFloatingActions, clearFloatingActions } = useFloatingActions()
 
-// 需要缓存的页面路由名称列表
 const cachedViews = ref<string[]>(['BookList'])
+const menuItems = [{ path: '/login', label: '账号信息', icon: UserFilled }]
 
-// 菜单项配置
-const menuItems = [{ path: '/booklist', label: '探花郎', icon: Search }]
-
-// 当前激活的菜单
 const activeMenu = computed(() => route.path)
 const visiblePageActions = computed(() => {
   return pageFloatingActions.value
@@ -28,7 +31,6 @@ const visiblePageActions = computed(() => {
     .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
 })
 
-// 是否显示返回按钮
 const showBackButton = computed(() => {
   return window.history.length > 1
 })
@@ -74,14 +76,20 @@ const checkViewport = () => {
   isMobile.value = window.innerWidth < 768
 }
 
-// 处理菜单选择
-const handleSelect = () => {
-  drawer.value = false
-}
-
-// 处理返回按钮点击
 const handleBack = () => {
   router.back()
+}
+
+const toggleMenu = () => {
+  menuExpanded.value = !menuExpanded.value
+}
+
+const goMenuItem = (path: string) => {
+  menuExpanded.value = false
+
+  if (route.path !== path) {
+    router.push(path)
+  }
 }
 
 const goBookList = () => {
@@ -90,7 +98,12 @@ const goBookList = () => {
   }
 }
 
-// 处理主内容区滚动
+const goHome = () => {
+  if (route.path !== '/') {
+    router.push('/')
+  }
+}
+
 const handleMainScroll = (event: Event) => {
   persistCurrentRouteScroll()
 
@@ -129,6 +142,7 @@ watch(
     }
 
     clearFloatingActions()
+    menuExpanded.value = false
     await restoreRouteScroll(newRoutePath)
   },
 )
@@ -171,6 +185,26 @@ onUnmounted(() => {
       />
       <el-button
         class="floating-btn"
+        :class="{ 'is-active': activeMenu === '/' }"
+        :icon="House"
+        circle
+        @click="goHome"
+      />
+      <el-button
+        v-for="action in visiblePageActions"
+        :key="action.key"
+        class="floating-btn"
+        :class="[{ 'is-active': action.active }, action.className]"
+        circle
+        @click="action.onClick"
+      >
+        <el-icon>
+          <component :is="action.icon" />
+        </el-icon>
+      </el-button>
+
+      <el-button
+        class="floating-btn"
         :class="{ 'is-active': activeMenu === '/booklist' }"
         :icon="Search"
         circle
@@ -188,16 +222,31 @@ onUnmounted(() => {
           <component :is="action.icon" />
         </el-icon>
       </el-button>
-      <el-button class="floating-btn" :icon="IconMenu" circle @click="drawer = true" />
-    </div>
 
-    <el-drawer v-model="drawer" title="菜单" direction="rtl" size="280px" :with-header="true">
-      <el-menu :default-active="activeMenu" class="drawer-menu" router @select="handleSelect">
-        <el-menu-item v-for="item in menuItems" :key="item.path" :index="item.path">
-          <el-icon><component :is="item.icon" /></el-icon>
-          <span>{{ item.label }}</span>
-        </el-menu-item>
-      </el-menu>
-    </el-drawer>
+      <div class="floating-menu-wrapper">
+        <div class="floating-menu" :class="{ 'is-expanded': menuExpanded }">
+          <el-button
+            v-for="item in menuItems"
+            :key="item.path"
+            class="floating-btn floating-sub-btn"
+            :class="{ 'is-active': activeMenu === item.path }"
+            @click="goMenuItem(item.path)"
+          >
+            <el-icon>
+              <component :is="item.icon" />
+            </el-icon>
+            <span class="floating-sub-label">{{ item.label }}</span>
+          </el-button>
+        </div>
+
+        <el-button
+          class="floating-btn floating-menu-toggle"
+          :class="{ 'is-active': menuExpanded }"
+          :icon="IconMenu"
+          circle
+          @click="toggleMenu"
+        />
+      </div>
+    </div>
   </el-container>
 </template>

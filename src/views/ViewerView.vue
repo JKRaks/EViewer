@@ -1,24 +1,35 @@
 <script lang="ts" setup>
-import { nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { bookImageBusi } from '@/core/busi/bookImgBusi'
 import { bookImgInput } from '@/core/model/book/bookImgInput'
 import { bookInfoBusi } from '@/core/busi/bookInfoBusi'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
-import { Loading } from '@element-plus/icons-vue'
+import { Loading, RefreshRight } from '@element-plus/icons-vue'
 
 interface ViewerImageItem {
   key: string
+  imageId: string
   url: string
   loading: boolean
   failed: boolean
 }
 
+interface PageImageQueue {
+  bookId: string
+  pageIndex: number
+  imageIds: string[]
+  nextImageIndex: number
+}
+
+const imageBatchSize = 4
 const route = useRoute()
 const bookId = (route.query.bookId ?? route.params.bookId) as string | undefined
+const imageBusi = new bookImageBusi()
+
 let bookInfo: bookInfoOutput | null = null
-let observer: IntersectionObserver | null = null
+let currentPageQueue: PageImageQueue | null = null
 let isViewUnmounted = false
 
 const pageData = reactive({
@@ -29,19 +40,18 @@ const pageData = reactive({
   noMore: false,
 })
 const bookImages = ref<ViewerImageItem[]>([])
-const loadMoreTrigger = ref<HTMLElement | null>(null)
+
+const infiniteScrollDisabled = computed(() => {
+  return pageData.loading || pageData.loadingMore || pageData.pageRendering || pageData.noMore
+})
 
 onMounted(() => {
   isViewUnmounted = false
-  void nextTick(() => {
-    setupObserver()
-  })
   void initialize()
 })
 
 onUnmounted(() => {
   isViewUnmounted = true
-  observer?.disconnect()
 })
 
 async function initialize() {
@@ -54,6 +64,9 @@ async function initialize() {
   try {
     pageData.loading = true
     bookImages.value = []
+    currentPageQueue = null
+    pageData.noMore = false
+
     bookInfo = await fetchBookInfo(bookId)
     if (!bookInfo?.isSuccess) {
       console.error('获取书籍信息失败:', bookInfo?.msg)
@@ -61,13 +74,13 @@ async function initialize() {
     }
 
     pageData.pageIndex = bookInfo.pageIndex
-    pageData.noMore = bookInfo.lastPageIndex - 1 <= bookInfo.pageIndex
     await appendPageInOrder(bookInfo)
   } catch (error) {
     console.error('初始化阅读页失败:', error)
   } finally {
     if (!isViewUnmounted) {
       pageData.loading = false
+      refreshNoMoreState()
     }
   }
 }
@@ -80,11 +93,8 @@ async function fetchBookInfo(currentBookId: string, page = 0): Promise<bookInfoO
   return await bookBusi.getBookInfo(input)
 }
 
-/**
- * 加载更多图片
- */
 async function loadMorePic() {
-  if (pageData.loading || pageData.loadingMore || pageData.pageRendering || pageData.noMore) {
+  if (infiniteScrollDisabled.value) {
     return
   }
 
@@ -92,15 +102,22 @@ async function loadMorePic() {
     if (isViewUnmounted) {
       return
     }
+
     pageData.loadingMore = true
+
+    if (hasPendingCurrentPageImages()) {
+      await loadNextImageBatch()
+      return
+    }
+
     const current = await loadNextPage()
     if (isViewUnmounted) {
       return
     }
-    if (current.isSuccess && current.dataOrDefault) {
+
+    if (current.isSuccess) {
       await appendPageInOrder(current)
     } else {
-      pageData.noMore = true
       console.warn('没有更多图片了')
     }
   } catch (error) {
@@ -108,6 +125,7 @@ async function loadMorePic() {
   } finally {
     if (!isViewUnmounted) {
       pageData.loadingMore = false
+      refreshNoMoreState()
     }
   }
 }
@@ -116,122 +134,167 @@ async function appendPageInOrder(current: bookInfoOutput): Promise<void> {
   if (isViewUnmounted) {
     return
   }
-  pageData.pageRendering = true
-  try {
-    await loadCurrentPage(current)
-  } finally {
-    pageData.pageRendering = false
+
+  currentPageQueue = {
+    bookId: current.bookId,
+    pageIndex: current.pageIndex,
+    imageIds: getPageImageIds(current),
+    nextImageIndex: 0,
   }
-}
 
-/**
- * 加载当前页图片
- * @param current 当前页信息
- */
-async function loadCurrentPage(current: bookInfoOutput): Promise<void> {
-  const imageIds = current.dataOrDefault ?? []
-  const startIndex = bookImages.value.length
-
-  if (imageIds.length === 0) {
+  if (!hasPendingCurrentPageImages()) {
+    refreshNoMoreState()
     return
   }
 
-  bookImages.value.push(
-    ...imageIds.map((_, index) => ({
-      key: `${current.bookId}-${current.pageIndex}-${startIndex + index}`,
-      url: '',
-      loading: true,
-      failed: false,
-    })),
-  )
+  await loadNextImageBatch()
+}
 
-  const imageBusi = new bookImageBusi()
+async function loadNextImageBatch(): Promise<void> {
+  if (!currentPageQueue || !hasPendingCurrentPageImages() || isViewUnmounted) {
+    return
+  }
 
-  for (let currentIndex = 0; currentIndex < imageIds.length; currentIndex++) {
+  pageData.pageRendering = true
+
+  try {
+    const batchStart = currentPageQueue.nextImageIndex
+    const batchEnd = Math.min(batchStart + imageBatchSize, currentPageQueue.imageIds.length)
+    const batchImageIds = currentPageQueue.imageIds.slice(batchStart, batchEnd)
+    const startIndex = bookImages.value.length
+
+    currentPageQueue.nextImageIndex = batchEnd
+
+    bookImages.value.push(
+      ...batchImageIds.map((imageId, index) => ({
+        key: `${currentPageQueue?.bookId}-${currentPageQueue?.pageIndex}-${batchStart + index}`,
+        imageId,
+        url: '',
+        loading: false,
+        failed: false,
+      })),
+    )
+
+    for (let currentIndex = 0; currentIndex < batchImageIds.length; currentIndex++) {
+      if (isViewUnmounted) {
+        return
+      }
+
+      const target = bookImages.value[startIndex + currentIndex]
+      if (!target) {
+        continue
+      }
+
+      await loadImageItem(target)
+    }
+  } finally {
+    if (!isViewUnmounted) {
+      pageData.pageRendering = false
+      refreshNoMoreState()
+    }
+  }
+}
+
+async function loadImageItem(target: ViewerImageItem): Promise<void> {
+  if (isViewUnmounted || target.loading) {
+    return
+  }
+
+  target.url = ''
+  target.failed = false
+  target.loading = true
+
+  try {
+    const input = new bookImgInput()
+    input.imageId = target.imageId
+    const result = await imageBusi.getBookImage(input)
     if (isViewUnmounted) {
       return
     }
 
-    const imageId = imageIds[currentIndex] ?? ''
-    const target = bookImages.value[startIndex + currentIndex]
-    if (!target) {
-      continue
-    }
-
-    try {
-      const input = new bookImgInput()
-      input.imageId = imageId
-      const result = await imageBusi.getBookImage(input)
-      if (isViewUnmounted) {
-        return
-      }
-      if (result.isSuccess && result.dataOrDefault) {
-        target.url = result.dataOrDefault
-      } else {
-        target.failed = true
-      }
-    } catch (error) {
-      console.error(`加载图片失败: ${imageId}`, error)
+    if (result.isSuccess && result.dataOrDefault) {
+      target.url = result.dataOrDefault
+    } else {
       target.failed = true
-    } finally {
-      if (!isViewUnmounted) {
-        target.loading = false
-      }
+    }
+  } catch (error) {
+    console.error(`加载图片失败: ${target.imageId}`, error)
+    target.failed = true
+  } finally {
+    if (!isViewUnmounted) {
+      target.loading = false
     }
   }
 }
 
-/**
- * 加载下一页图片
- */
-async function loadNextPage(): Promise<bookInfoOutput> {
-  if (!bookInfo)
-    return {
-      isSuccess: false,
-      msg: '没有书籍信息',
-    } as bookInfoOutput
-  if (bookInfo.lastPageIndex - 1 <= pageData.pageIndex) {
-    pageData.noMore = true
-    return {
-      isSuccess: false,
-      msg: '没有下一页了',
-    } as bookInfoOutput
+async function retryImage(image: ViewerImageItem) {
+  await loadImageItem(image)
+}
+
+function handleImageLoadError(image: ViewerImageItem) {
+  if (isViewUnmounted) {
+    return
   }
+
+  image.url = ''
+  image.loading = false
+  image.failed = true
+}
+
+async function loadNextPage(): Promise<bookInfoOutput> {
+  if (!bookInfo) {
+    return createFailedBookInfo('没有书籍信息')
+  }
+
+  if (isLastLoadedPage()) {
+    pageData.noMore = true
+    return createFailedBookInfo('没有下一页了')
+  }
+
   const nextPageInfo = await fetchBookInfo(bookInfo.bookId, pageData.pageIndex + 1)
-  if (nextPageInfo.isSuccess && nextPageInfo.dataOrDefault) {
+  if (nextPageInfo.isSuccess) {
     pageData.pageIndex = nextPageInfo.pageIndex
     bookInfo = nextPageInfo
-    pageData.noMore = nextPageInfo.lastPageIndex - 1 <= nextPageInfo.pageIndex
   }
+
   return nextPageInfo
 }
 
-function setupObserver() {
-  observer?.disconnect()
+function getPageImageIds(current: bookInfoOutput): string[] {
+  return Array.isArray(current.data) ? current.data : []
+}
 
-  observer = new IntersectionObserver(
-    (entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          void loadMorePic()
-        }
-      })
-    },
-    {
-      root: null,
-      rootMargin: '300px',
-      threshold: 0.1,
-    },
+function hasPendingCurrentPageImages(): boolean {
+  return Boolean(
+    currentPageQueue && currentPageQueue.nextImageIndex < currentPageQueue.imageIds.length,
   )
+}
 
-  if (loadMoreTrigger.value) {
-    observer.observe(loadMoreTrigger.value)
-  }
+function isLastLoadedPage(): boolean {
+  return Boolean(bookInfo && bookInfo.lastPageIndex - 1 <= pageData.pageIndex)
+}
+
+function refreshNoMoreState() {
+  pageData.noMore = !hasPendingCurrentPageImages() && isLastLoadedPage()
+}
+
+function createFailedBookInfo(msg: string): bookInfoOutput {
+  return {
+    isSuccess: false,
+    msg,
+  } as bookInfoOutput
 }
 </script>
 
 <template>
-  <div class="viewer-view">
+  <div
+    v-infinite-scroll="loadMorePic"
+    class="viewer-view"
+    :infinite-scroll-disabled="infiniteScrollDisabled"
+    :infinite-scroll-distance="300"
+    :infinite-scroll-delay="200"
+    :infinite-scroll-immediate="true"
+  >
     <div v-if="pageData.loading && bookImages.length === 0" class="viewer-skeleton">
       <el-skeleton v-for="index in 3" :key="index" animated class="image-skeleton">
         <template #template>
@@ -247,14 +310,28 @@ function setupObserver() {
             <el-skeleton-item variant="image" class="image-skeleton__media" />
           </template>
           <template #default>
-            <el-image v-if="image.url" :src="image.url" class="reader-image" lazy />
-            <div v-else-if="image.failed" class="image-error">图片加载失败</div>
+            <el-image
+              v-if="image.url"
+              :src="image.url"
+              class="reader-image"
+              lazy
+              @error="handleImageLoadError(image)"
+            />
+            <button
+              v-else-if="image.failed"
+              type="button"
+              class="image-error"
+              @click="retryImage(image)"
+            >
+              <el-icon>
+                <RefreshRight />
+              </el-icon>
+              <span>图片加载失败，点击重试</span>
+            </button>
           </template>
         </el-skeleton>
       </div>
     </div>
-
-    <div ref="loadMoreTrigger" class="load-more-trigger"></div>
 
     <div v-if="pageData.loadingMore" class="load-state">
       <el-icon class="is-loading">
@@ -307,12 +384,22 @@ function setupObserver() {
   display: flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
+  border: 1px dashed var(--el-border-color);
   background-color: var(--el-fill-color-light);
   color: var(--el-text-color-secondary);
+  cursor: pointer;
+  font: inherit;
+  transition:
+    border-color 0.2s ease,
+    color 0.2s ease,
+    background-color 0.2s ease;
 }
 
-.load-more-trigger {
-  height: 1px;
+.image-error:hover {
+  border-color: var(--el-color-primary);
+  background-color: var(--el-color-primary-light-9);
+  color: var(--el-color-primary);
 }
 
 .load-state {

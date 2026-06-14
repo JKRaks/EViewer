@@ -71,6 +71,65 @@
   font-size: var(--fab-icon-size);
 }
 
+.floating-menu-wrapper {
+  position: relative;
+  width: var(--fab-size);
+  height: var(--fab-size);
+}
+
+.floating-menu {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 12px);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.floating-menu .floating-sub-btn {
+  width: auto;
+  min-width: max-content;
+  height: var(--fab-size);
+  min-height: var(--fab-size);
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0 16px 0 14px;
+  border-radius: calc(var(--fab-size) / 2);
+  opacity: 0;
+  transform: translateX(12px) scale(0.96);
+  transition:
+    opacity 0.18s ease,
+    transform 0.18s ease;
+}
+
+.floating-menu.is-expanded {
+  pointer-events: auto;
+}
+
+.floating-menu.is-expanded .floating-sub-btn {
+  opacity: 1;
+  transform: translateX(0) scale(1);
+}
+
+.floating-sub-label {
+  white-space: nowrap;
+  line-height: 1;
+}
+
+.floating-menu-toggle {
+  transition:
+    transform 0.18s ease,
+    background-color 0.18s ease,
+    color 0.18s ease;
+}
+
+.floating-menu-toggle.is-active {
+  transform: rotate(90deg);
+}
+
 .floating-btn.is-active {
   background-color: var(--el-color-primary);
   color: #fff;
