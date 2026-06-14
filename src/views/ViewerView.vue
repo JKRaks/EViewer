@@ -19,6 +19,7 @@ const route = useRoute()
 const bookId = (route.query.bookId ?? route.params.bookId) as string | undefined
 let bookInfo: bookInfoOutput | null = null
 let observer: IntersectionObserver | null = null
+let isViewUnmounted = false
 
 const pageData = reactive({
   loading: true,
@@ -31,6 +32,7 @@ const bookImages = ref<ViewerImageItem[]>([])
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 
 onMounted(() => {
+  isViewUnmounted = false
   void nextTick(() => {
     setupObserver()
   })
@@ -38,6 +40,7 @@ onMounted(() => {
 })
 
 onUnmounted(() => {
+  isViewUnmounted = true
   observer?.disconnect()
 })
 
@@ -63,7 +66,9 @@ async function initialize() {
   } catch (error) {
     console.error('初始化阅读页失败:', error)
   } finally {
-    pageData.loading = false
+    if (!isViewUnmounted) {
+      pageData.loading = false
+    }
   }
 }
 
@@ -84,8 +89,14 @@ async function loadMorePic() {
   }
 
   try {
+    if (isViewUnmounted) {
+      return
+    }
     pageData.loadingMore = true
     const current = await loadNextPage()
+    if (isViewUnmounted) {
+      return
+    }
     if (current.isSuccess && current.dataOrDefault) {
       await appendPageInOrder(current)
     } else {
@@ -95,11 +106,16 @@ async function loadMorePic() {
   } catch (error) {
     console.error('加载更多图片失败:', error)
   } finally {
-    pageData.loadingMore = false
+    if (!isViewUnmounted) {
+      pageData.loadingMore = false
+    }
   }
 }
 
 async function appendPageInOrder(current: bookInfoOutput): Promise<void> {
+  if (isViewUnmounted) {
+    return
+  }
   pageData.pageRendering = true
   try {
     await loadCurrentPage(current)
@@ -132,6 +148,10 @@ async function loadCurrentPage(current: bookInfoOutput): Promise<void> {
   const imageBusi = new bookImageBusi()
 
   for (let currentIndex = 0; currentIndex < imageIds.length; currentIndex++) {
+    if (isViewUnmounted) {
+      return
+    }
+
     const imageId = imageIds[currentIndex] ?? ''
     const target = bookImages.value[startIndex + currentIndex]
     if (!target) {
@@ -142,6 +162,9 @@ async function loadCurrentPage(current: bookInfoOutput): Promise<void> {
       const input = new bookImgInput()
       input.imageId = imageId
       const result = await imageBusi.getBookImage(input)
+      if (isViewUnmounted) {
+        return
+      }
       if (result.isSuccess && result.dataOrDefault) {
         target.url = result.dataOrDefault
       } else {
@@ -151,7 +174,9 @@ async function loadCurrentPage(current: bookInfoOutput): Promise<void> {
       console.error(`加载图片失败: ${imageId}`, error)
       target.failed = true
     } finally {
-      target.loading = false
+      if (!isViewUnmounted) {
+        target.loading = false
+      }
     }
   }
 }
