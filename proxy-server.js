@@ -211,9 +211,9 @@ app.use((req, res) => {
 })
 
 app.listen(PORT, () => {
-  // console.log(`代理服务器运行在 http://localhost:${PORT}`)
-  // console.log(`允许的来源: ${ALLOWED_ORIGINS.join(', ')}`)
-  // console.log('路由配置:')
-  // console.log('  - GET /health (健康检查)')
-  // console.log('  - ALL /ehentai/* (代理到 e-hentai.org)')
+  console.log(`代理服务器运行在 http://localhost:${PORT}`)
+  console.log(`允许的来源: ${ALLOWED_ORIGINS.join(', ')}`)
+  console.log('路由配置:')
+  console.log('  - GET /health (健康检查)')
+  console.log('  - ALL /ehentai/* (代理到 e-hentai.org)')
 })

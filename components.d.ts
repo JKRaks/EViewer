@@ -38,10 +38,12 @@ declare module 'vue' {
     ElSpace: typeof import('element-plus/es')['ElSpace']
     ElSwitch: typeof import('element-plus/es')['ElSwitch']
     ElTag: typeof import('element-plus/es')['ElTag']
+    ElTooltip: typeof import('element-plus/es')['ElTooltip']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
   }
   export interface GlobalDirectives {
+    vInfiniteScroll: typeof import('element-plus/es')['ElInfiniteScroll']
     vLoading: typeof import('element-plus/es')['ElLoadingDirective']
   }
 }
@@ -74,6 +76,7 @@ declare global {
   const ElSpace: typeof import('element-plus/es')['ElSpace']
   const ElSwitch: typeof import('element-plus/es')['ElSwitch']
   const ElTag: typeof import('element-plus/es')['ElTag']
+  const ElTooltip: typeof import('element-plus/es')['ElTooltip']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
 }

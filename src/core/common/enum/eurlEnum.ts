@@ -1,4 +1,4 @@
-const defaultEhUrl = 'https://eproxy.jkraks.workers.dev/ehentai'
+const defaultEhUrl = 'http://localhost:3000/ehentai'
 
 export const eurlEnum = {
   EH: import.meta.env.VITE_EH_URL || defaultEhUrl,
