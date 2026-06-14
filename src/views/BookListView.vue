@@ -455,4 +455,13 @@ onDeactivated(() => {
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
   }
 }
+
+/* iOS Safari: 输入控件字号小于 16px 会触发页面自动放大 */
+@supports (-webkit-touch-callout: none) {
+  .search-container :deep(.el-input__inner),
+  .search-container :deep(.el-select__selected-item),
+  .search-container :deep(.el-select__placeholder) {
+    font-size: 16px;
+  }
+}
 </style>
