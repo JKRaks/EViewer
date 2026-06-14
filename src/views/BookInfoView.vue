@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { bookInfoBusi } from '@/core/busi/bookInfoBusi'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
@@ -59,7 +59,11 @@ const formatCommentDate = (dateStr: string | Date | undefined) => {
   return String(dateStr)
 }
 
-await fetchBookInfo()
+onMounted(() => {
+  const mainElement = document.querySelector('.layout-main') as HTMLElement | null
+  mainElement?.scrollTo({ top: 0, behavior: 'auto' })
+  void fetchBookInfo()
+})
 
 async function fetchBookInfo() {
   funcData.loading = true
@@ -80,14 +84,70 @@ async function fetchBookInfo() {
 async function toRead() {
   router.push({
     name: 'viewerview',
-    params: {
-      bookInfo: JSON.stringify(pageData.value),
+    query: {
+      bookId: pageData.value.bookId,
     },
   })
 }
 </script>
-
 <template>
+  <el-skeleton animated v-if="funcData.loading">
+    <template #template>
+      <div class="bookinfo-skeleton">
+        <el-card class="info-card" shadow="never">
+          <div class="header-section">
+            <div class="cover-container">
+              <el-skeleton-item variant="image" class="skeleton-cover" />
+            </div>
+            <div class="info-container">
+              <el-skeleton-item variant="h1" class="skeleton-title" />
+              <el-skeleton-item variant="text" class="skeleton-category" />
+              <el-skeleton-item variant="text" class="skeleton-rating" />
+
+              <div class="meta-info">
+                <el-space wrap :size="16">
+                  <el-skeleton-item variant="text" class="skeleton-meta-item" />
+                  <el-skeleton-item variant="text" class="skeleton-meta-item" />
+                  <el-skeleton-item variant="text" class="skeleton-meta-item" />
+                  <el-skeleton-item variant="text" class="skeleton-meta-item" />
+                </el-space>
+              </div>
+
+              <div class="action-buttons">
+                <el-skeleton-item variant="button" class="skeleton-action-btn" />
+              </div>
+            </div>
+          </div>
+        </el-card>
+
+        <el-card class="tags-card" shadow="never">
+          <div class="card-header">
+            <el-skeleton-item variant="text" class="skeleton-card-title" />
+          </div>
+          <div class="tags-container">
+            <el-skeleton-item
+              v-for="i in 6"
+              :key="`tag-${i}`"
+              variant="button"
+              class="skeleton-tag"
+            />
+          </div>
+        </el-card>
+
+        <el-card class="comments-card" shadow="never">
+          <div class="card-header">
+            <el-skeleton-item variant="text" class="skeleton-card-title" />
+          </div>
+          <div class="comments-container">
+            <div v-for="i in 2" :key="`comment-${i}`" class="comment-item skeleton-comment-item">
+              <el-skeleton-item variant="text" class="skeleton-comment-user" />
+              <el-skeleton-item variant="p" class="skeleton-comment-content" />
+            </div>
+          </div>
+        </el-card>
+      </div>
+    </template>
+  </el-skeleton>
   <div class="bookinfo-view" v-loading="funcData.loading">
     <div class="content-wrapper" v-if="!funcData.loading">
       <!-- 头部信息区 -->
@@ -244,6 +304,66 @@ async function toRead() {
   margin: 0 auto;
   padding: 20px;
   position: relative;
+}
+
+.bookinfo-skeleton {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.skeleton-cover {
+  width: 100%;
+  height: 400px;
+  border-radius: 8px;
+}
+
+.skeleton-title {
+  width: 80%;
+  height: 34px;
+}
+
+.skeleton-category {
+  width: 120px;
+}
+
+.skeleton-rating {
+  width: 220px;
+}
+
+.skeleton-meta-item {
+  width: 140px;
+}
+
+.skeleton-action-btn {
+  width: 140px;
+  height: 40px;
+}
+
+.skeleton-card-title {
+  width: 200px;
+}
+
+.skeleton-tag {
+  width: 90px;
+  height: 32px;
+}
+
+.skeleton-comment-item {
+  pointer-events: none;
+}
+
+.skeleton-comment-user {
+  width: 180px;
+  margin-bottom: 12px;
+}
+
+.skeleton-comment-content {
+  width: 100%;
 }
 
 /* 返回按钮 */
@@ -465,6 +585,10 @@ async function toRead() {
     padding: 12px;
   }
 
+  .bookinfo-skeleton {
+    padding: 12px;
+  }
+
   .back-button {
     top: 60px;
     left: 12px;
@@ -478,6 +602,10 @@ async function toRead() {
     width: 100%;
     max-width: 300px;
     margin: 0 auto;
+  }
+
+  .skeleton-cover {
+    height: 320px;
   }
 
   .book-title {
@@ -505,6 +633,11 @@ async function toRead() {
 @media (max-width: 480px) {
   .bookinfo-view {
     padding: 8px;
+  }
+
+  .bookinfo-skeleton {
+    padding: 8px;
+    gap: 12px;
   }
 
   .content-wrapper {

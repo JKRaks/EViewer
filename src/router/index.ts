@@ -16,6 +16,11 @@ const router = createRouter({
       name: 'bookinfo',
       component: () => import('@/views/BookInfoView.vue'),
     },
+    {
+      path: '/viewer',
+      name: 'viewerview',
+      component: () => import('@/views/ViewerView.vue'),
+    },
   ],
 })
 
