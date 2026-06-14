@@ -36,10 +36,24 @@ function findOriginConfig(pathname) {
 }
 
 /**
- * 检查 CORS 来源是否被允许
+ * 获取请求方来源（优先 Origin，其次 Referer）
  */
-function isOriginAllowed(origin, allowedOrigins) {
-  return allowedOrigins.includes(origin) || allowedOrigins.includes('*')
+function getRequesterOrigin(request) {
+  const origin = request.headers.get('origin')
+  if (origin) {
+    return origin
+  }
+
+  const referer = request.headers.get('referer')
+  if (referer) {
+    try {
+      return new URL(referer).origin
+    } catch {
+      return null
+    }
+  }
+
+  return null
 }
 
 /**
@@ -77,7 +91,8 @@ function modifySetCookieHeaders(setCookieHeader, serverHost, targetHost) {
   return setCookieHeader
     .split(',')
     .map((cookie) => {
-      let modifiedCookie = cookie.trim()
+      let modifiedCookie = cookie
+        .trim()
         // 替换域名为当前服务器的主机名
         .replace(new RegExp(`Domain=\\.?${escapeRegExp(targetHost)}`, 'gi'), `Domain=${serverHost}`)
         // 移除 Secure 标志（如果不是 HTTPS）
@@ -184,10 +199,7 @@ async function handleProxyRequest(request, config, pathname) {
   const proxyHeaders = new Headers(request.headers)
 
   // 设置必要的请求头
-  proxyHeaders.set(
-    'User-Agent',
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-  )
+  proxyHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
   proxyHeaders.set(
     'Accept',
     'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
@@ -243,14 +255,15 @@ async function handleProxyRequest(request, config, pathname) {
     console.log('修改重定向:', location, '->', modifiedLocation)
   }
 
-  // 设置 CORS 头
-  const origin = request.headers.get('origin') || config.allowedOrigins[0]
-  if (isOriginAllowed(origin, config.allowedOrigins)) {
-    responseHeaders.set('Access-Control-Allow-Origin', origin)
+  // 设置 CORS 头：回传请求方来源，解决跨域访问
+  const requesterOrigin = getRequesterOrigin(request)
+  if (requesterOrigin) {
+    responseHeaders.set('Access-Control-Allow-Origin', requesterOrigin)
     responseHeaders.set('Access-Control-Allow-Credentials', 'true')
     responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
     responseHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie')
     responseHeaders.set('Access-Control-Expose-Headers', 'Set-Cookie')
+    responseHeaders.set('Vary', 'Origin')
   }
 
   // 移除可能干扰 cookie 设置的头
@@ -267,20 +280,26 @@ async function handleProxyRequest(request, config, pathname) {
 /**
  * 处理 OPTIONS 请求（CORS 预检）
  */
-function handleCorsPreFlight(request, allowedOrigins) {
-  const origin = request.headers.get('origin')
-  if (!isOriginAllowed(origin, allowedOrigins)) {
+function handleCorsPreFlight(request) {
+  const requesterOrigin = getRequesterOrigin(request)
+  if (!requesterOrigin) {
     return new Response('Forbidden', { status: 403 })
   }
+
+  const requestHeaders =
+    request.headers.get('Access-Control-Request-Headers') || 'Content-Type, Authorization, Cookie'
+  const requestMethod =
+    request.headers.get('Access-Control-Request-Method') || 'GET, POST, PUT, DELETE, OPTIONS'
 
   return new Response(null, {
     status: 204,
     headers: {
-      'Access-Control-Allow-Origin': origin,
+      'Access-Control-Allow-Origin': requesterOrigin,
       'Access-Control-Allow-Credentials': 'true',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie',
+      'Access-Control-Allow-Methods': requestMethod,
+      'Access-Control-Allow-Headers': requestHeaders,
       'Access-Control-Max-Age': '86400',
+      Vary: 'Origin',
     },
   })
 }
@@ -322,8 +341,7 @@ async function handleRequest(request) {
 
   // CORS 预检
   if (request.method === 'OPTIONS') {
-    const allowedOrigins = config?.allowedOrigins || ['*']
-    return handleCorsPreFlight(request, allowedOrigins)
+    return handleCorsPreFlight(request)
   }
 
   // 找到配置则进行代理
@@ -337,13 +355,10 @@ async function handleRequest(request) {
         stack: error.stack,
       })
 
-      return new Response(
-        JSON.stringify({ error: '代理请求失败', message: error.message }),
-        {
-          status: 500,
-          headers: { 'Content-Type': 'application/json' },
-        },
-      )
+      return new Response(JSON.stringify({ error: '代理请求失败', message: error.message }), {
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      })
     }
   }
 
