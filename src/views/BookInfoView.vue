@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { ref, computed } from 'vue'
+import { computed, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { bookInfoBusi } from '@/core/busi/bookInfoBusi'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
@@ -15,17 +15,19 @@ import {
   ChatLineRound,
   StarFilled,
 } from '@element-plus/icons-vue'
+import router from '@/router'
 
 const route = useRoute()
-const bookInfo = ref<bookInfoOutput>()
-const bookQueryInfo = ref<bookInfoInput>()
-const loading = ref(true)
-const readMode = ref(false)
+const funcData = reactive({
+  bookQueryInfo: new bookInfoInput(),
+  loading: true,
+  readMode: false,
+})
+const pageData = ref(new bookInfoOutput())
 
 // 计算评分星星
 const ratingStars = computed(() => {
-  if (!bookInfo.value?.rating) return 0
-  return parseFloat(bookInfo.value.rating)
+  return parseFloat(pageData.value.rating)
 })
 
 // 格式化日期
@@ -60,68 +62,58 @@ const formatCommentDate = (dateStr: string | Date | undefined) => {
 await fetchBookInfo()
 
 async function fetchBookInfo() {
-  loading.value = true
+  funcData.loading = true
   try {
     const infoBusi = new bookInfoBusi()
-    if (!bookQueryInfo.value) {
-      bookQueryInfo.value = new bookInfoInput()
+    if (!funcData.bookQueryInfo.bookId) {
+      funcData.bookQueryInfo.bookId = route.query.bookId as string
     }
-    if (!bookQueryInfo.value.bookId) {
-      bookQueryInfo.value.bookId = route.query.bookId as string
-    }
-    bookQueryInfo.value.bookId = bookQueryInfo.value.bookId.replace('-', '/')
-    bookInfo.value = await infoBusi.getBookInfo(bookQueryInfo.value)
+    funcData.bookQueryInfo.bookId = funcData.bookQueryInfo.bookId.replace('-', '/')
+    pageData.value = await infoBusi.getBookInfo(funcData.bookQueryInfo)
   } catch (error) {
     console.error('获取书籍信息失败:', error)
   } finally {
-    loading.value = false
+    funcData.loading = false
   }
 }
 
-async function toRead(bookQueryInfo: bookInfoInput) {
-  loading.value = true
-  readMode.value = true
-  try {
-    const infoBusi = new bookInfoBusi()
-  } catch (error) {
-    console.error('加载图片失败:', error)
-  } finally {
-    loading.value = false
-  }
+async function toRead() {
+  router.push({
+    name: 'viewerview',
+    params: {
+      bookInfo: JSON.stringify(pageData.value),
+    },
+  })
 }
 </script>
 
 <template>
-  <div class="bookinfo-view" v-loading="loading">
-    <div class="content-wrapper" v-if="bookInfo">
+  <div class="bookinfo-view" v-loading="funcData.loading">
+    <div class="content-wrapper" v-if="!funcData.loading">
       <!-- 头部信息区 -->
       <el-card class="info-card" shadow="hover">
         <div class="header-section">
           <!-- 左侧封面 -->
           <div class="cover-container">
             <el-image
-              :src="bookInfo.coverImage"
+              :src="pageData.coverImage"
+              :zoom-rate="1.2"
+              :max-scale="7"
+              :min-scale="0.2"
               fit="cover"
               class="cover-image"
-              :preview-src-list="[bookInfo.coverImage]"
-              lazy
-            >
-              <template #placeholder>
-                <div class="image-placeholder">
-                  <el-icon :size="40"><Picture /></el-icon>
-                </div>
-              </template>
-            </el-image>
+              :preview-src-list="[pageData.coverImage]"
+            />
           </div>
 
           <!-- 右侧信息 -->
           <div class="info-container">
             <!-- 标题 -->
-            <h1 class="book-title">{{ bookInfo.bookName }}</h1>
+            <h1 class="book-title">{{ pageData.bookName }}</h1>
 
             <!-- 分类标签 -->
             <div class="category-row">
-              <CategoryTag :category="bookInfo.category" />
+              <CategoryTag :category="pageData.category" />
             </div>
 
             <!-- 评分 -->
@@ -133,7 +125,7 @@ async function toRead(bookQueryInfo: bookInfoInput) {
                 text-color="#ff9900"
                 score-template="{value}"
               />
-              <span class="rating-count">({{ bookInfo.ratingCount }} 评分)</span>
+              <span class="rating-count">({{ pageData.ratingCount }} 评分)</span>
             </div>
 
             <!-- 元数据 -->
@@ -141,27 +133,27 @@ async function toRead(bookQueryInfo: bookInfoInput) {
               <el-space wrap :size="16">
                 <div class="meta-item">
                   <el-icon><User /></el-icon>
-                  <span>上传者: {{ bookInfo.uploader }}</span>
+                  <span>上传者: {{ pageData.uploader }}</span>
                 </div>
                 <div class="meta-item">
                   <el-icon><Clock /></el-icon>
-                  <span>{{ formatDate(bookInfo.publishDate) }}</span>
+                  <span>{{ formatDate(pageData.publishDate) }}</span>
                 </div>
                 <div class="meta-item">
                   <el-icon><Picture /></el-icon>
-                  <span>{{ bookInfo.imageCount }} 张图片</span>
+                  <span>{{ pageData.imageCount }} 张图片</span>
                 </div>
                 <div class="meta-item">
                   <el-icon><Download /></el-icon>
-                  <span>{{ bookInfo.totalSize }}</span>
+                  <span>{{ pageData.totalSize }}</span>
                 </div>
-                <div class="meta-item" v-if="bookInfo.language">
+                <div class="meta-item" v-if="pageData.language">
                   <el-icon><Reading /></el-icon>
-                  <span>{{ bookInfo.language }}</span>
+                  <span>{{ pageData.language }}</span>
                 </div>
-                <div class="meta-item" v-if="bookInfo.favorited">
+                <div class="meta-item" v-if="pageData.favorited">
                   <el-icon><StarFilled /></el-icon>
-                  <span>{{ bookInfo.favorited }} 收藏</span>
+                  <span>{{ pageData.favorited }} 收藏</span>
                 </div>
               </el-space>
             </div>
@@ -172,8 +164,8 @@ async function toRead(bookQueryInfo: bookInfoInput) {
                 type="primary"
                 size="large"
                 :icon="View"
-                @click="toRead(bookQueryInfo!)"
-                :loading="loading"
+                @click="toRead"
+                :loading="funcData.loading"
               >
                 开始阅读
               </el-button>
@@ -183,7 +175,7 @@ async function toRead(bookQueryInfo: bookInfoInput) {
       </el-card>
 
       <!-- 标签区 -->
-      <el-card class="tags-card" shadow="hover" v-if="bookInfo.tags && bookInfo.tags.length > 0">
+      <el-card class="tags-card" shadow="hover" v-if="pageData.tags && pageData.tags.length > 0">
         <template #header>
           <div class="card-header">
             <el-icon><Reading /></el-icon>
@@ -192,7 +184,7 @@ async function toRead(bookQueryInfo: bookInfoInput) {
         </template>
         <div class="tags-container">
           <el-tag
-            v-for="tag in bookInfo.tags"
+            v-for="tag in pageData.tags"
             :key="tag"
             class="tag-item"
             size="large"
@@ -207,16 +199,16 @@ async function toRead(bookQueryInfo: bookInfoInput) {
       <el-card
         class="comments-card"
         shadow="hover"
-        v-if="bookInfo.userComments && bookInfo.userComments.length > 0"
+        v-if="pageData.userComments && pageData.userComments.length > 0"
       >
         <template #header>
           <div class="card-header">
             <el-icon><ChatLineRound /></el-icon>
-            <span>用户评论 ({{ bookInfo.userComments.length }})</span>
+            <span>用户评论 ({{ pageData.userComments.length }})</span>
           </div>
         </template>
         <div class="comments-container">
-          <div v-for="(comment, index) in bookInfo.userComments" :key="index" class="comment-item">
+          <div v-for="(comment, index) in pageData.userComments" :key="index" class="comment-item">
             <div class="comment-header">
               <div class="comment-user">
                 <el-avatar :size="40" :icon="User" />
@@ -292,10 +284,6 @@ async function toRead(bookQueryInfo: bookInfoInput) {
   cursor: pointer;
 }
 
-.cover-image:hover {
-  transform: scale(1.02);
-}
-
 .image-placeholder {
   display: flex;
   flex-direction: column;
@@ -367,8 +355,7 @@ async function toRead(bookQueryInfo: bookInfoInput) {
 
 /* 标签卡片 */
 .tags-card,
-.comments-card,
-.images-card {
+.comments-card {
   border-radius: 12px;
 }
 

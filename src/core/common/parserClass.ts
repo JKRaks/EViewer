@@ -1,10 +1,41 @@
 export class parserClass {
   rawHtml: string = ''
   element: Element | null = null
+  invalid: boolean = false
 
-  constructor(html: Element) {
-    this.rawHtml = html.outerHTML
-    this.element = html
+  constructor(html: Element | null = null) {
+    if (html) {
+      this.rawHtml = html.outerHTML
+      this.element = html
+    } else {
+      this.invalid = true
+    }
+  }
+
+  /**
+   * 获取文档内容
+   * @param this 文档元素
+   * @returns 内容
+   */
+  get text(): string {
+    if (this.invalid) {
+      return ''
+    } else {
+      return this?.element?.textContent?.trim() || ''
+    }
+  }
+
+  /**
+   * 获取文档属性值
+   * @param key 键值
+   * @returns 结果
+   */
+  attribute(key: string): string {
+    if (this.invalid) {
+      return ''
+    } else {
+      return this?.element?.getAttribute(key)?.trim() || ''
+    }
   }
 
   /**
@@ -12,7 +43,7 @@ export class parserClass {
    * @param selector 选择器
    * @returns 文档元素
    */
-  getElementBySelector(selector: string | string[]): parserClass | null {
+  getElementBySelector(selector: string | string[]): parserClass {
     let result: parserClass | null = null
     let target: Element | null | undefined
     if (Array.isArray(selector)) {
@@ -22,6 +53,8 @@ export class parserClass {
     }
     if (target) {
       result = new parserClass(target)
+    } else {
+      result = new parserClass()
     }
     return result
   }
@@ -33,6 +66,9 @@ export class parserClass {
    */
   getElementsBySelector(selector: string | string[]): parserClass[] {
     const result: parserClass[] = []
+    if (this.invalid) {
+      return result
+    }
     let elements: NodeListOf<Element> | undefined
     if (Array.isArray(selector)) {
       elements = this.element?.querySelectorAll(selector.join(' '))

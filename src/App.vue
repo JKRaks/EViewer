@@ -95,17 +95,6 @@ const checkOrientation = () => {
 
   isMobile.value = width < 768
   isLandscape.value = width > height
-
-  console.log('Screen:', {
-    width,
-    height,
-    isMobile: isMobile.value,
-    isLandscape: isLandscape.value,
-    showAsidebar: showAsidebar.value,
-    showTopNav: showTopNav.value,
-    showBottomNav: showBottomNav.value,
-    showDrawerButton: showDrawerButton.value,
-  })
 }
 
 // 处理菜单选择
@@ -317,3 +306,9 @@ onUnmounted(() => {
     </el-drawer>
   </el-container>
 </template>
+
+<style lang="css">
+.el-aside.layout-aside {
+  overflow: hidden;
+}
+</style>

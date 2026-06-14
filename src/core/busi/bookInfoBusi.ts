@@ -2,8 +2,6 @@ import { bookInfoOutput, userComment } from '../model/book/bookInfoOutput'
 import { bookInfoInput } from '../model/book/bookInfoInput'
 import { httpClass } from '../common/httpClass'
 import { parserClass } from '../common/parserClass'
-import { bookAllInfoInput } from '../model/book/bookAllInfoInput'
-import { bookAllInfoOutput } from '../model/book/bookAllInfoOutput'
 
 export class bookInfoBusi {
   /**
@@ -16,25 +14,22 @@ export class bookInfoBusi {
     const htmlResult = await httpClass.sendRequest(param)
     if (htmlResult.isSuccess) {
       const bodyParser = parserClass.loadBody(htmlResult.data!)
-      let bookInfo = bodyParser.getElementBySelector(['div.gm'])
+      const bookInfo = bodyParser.getElementBySelector(['div.gm'])
       if (!bookInfo) {
         result.isSuccess = false
         result.msg = '解析失败'
       }
-      bookInfo = bookInfo!
-      result.bookName =
-        bookInfo.getElementBySelector(['div#gd2', 'h1#gn'])?.element?.textContent?.trim() || ''
+      result.bookId = param.bookId
+      result.bookName = bookInfo.getElementBySelector(['div#gd2', 'h1#gn']).text
       result.coverImage =
         bookInfo
           .getElementBySelector(['div#gleft', 'div#gd1', 'div'])
-          ?.element?.getAttribute('style')
-          ?.match(/url\(([^)]+)\)/)?.[1] || ''
+          .attribute('style')
+          .match(/url\(([^)]+)\)/)?.[1] || ''
       const bookInfos = bookInfo.getElementsBySelector(['div#gdd', 'table', 'tbody', 'tr'])
       bookInfos.forEach((trs) => {
-        const propertyName: string =
-          trs.getElementBySelector(['td.gdt1'])?.element?.textContent?.trim() || ''
-        const propertyValue: string =
-          trs.getElementBySelector(['td.gdt2'])?.element?.textContent?.trim() || ''
+        const propertyName: string = trs.getElementBySelector(['td.gdt1']).text
+        const propertyValue: string = trs.getElementBySelector(['td.gdt2']).text
 
         if (!propertyName || !propertyValue) {
           return
@@ -64,15 +59,14 @@ export class bookInfoBusi {
         }
       })
 
-      result.uploader =
-        bookInfo
-          .getElementBySelector(['div#gmid', 'div#gd3', 'div#gdn', 'a'])
-          ?.element?.textContent?.trim() || ''
+      result.uploader = bookInfo.getElementBySelector(['div#gmid', 'div#gd3', 'div#gdn', 'a']).text
 
-      result.category =
-        bookInfo
-          .getElementBySelector(['div#gmid', 'div#gd3', 'div#gdc', 'div.cs'])
-          ?.element?.textContent?.trim() || ''
+      result.category = bookInfo.getElementBySelector([
+        'div#gmid',
+        'div#gd3',
+        'div#gdc',
+        'div.cs',
+      ]).text
 
       result.rating =
         bookInfo
@@ -85,7 +79,7 @@ export class bookInfoBusi {
             'tr',
             'td#rating_label',
           ])
-          ?.element?.textContent?.replace('Average:', '')
+          .text.replace('Average:', '')
           ?.trim() || ''
       result.ratingCount = parseInt(
         bookInfo
@@ -99,7 +93,7 @@ export class bookInfoBusi {
             'td#grt3',
             'span#rating_count',
           ])
-          ?.element?.textContent?.trim() || '',
+          .text.trim() || '',
       )
       result.tags = this.getTags(bookInfo)
 
@@ -109,45 +103,6 @@ export class bookInfoBusi {
       result.isSuccess = true
     } else {
       result.msg = htmlResult.msg
-    }
-    return result
-  }
-  /**
-   * 获取全部画册详情
-   * @param param 画册信息
-   * @returns 画册所有页详情
-   */
-  async getAllBookInfo(param: bookAllInfoInput): Promise<bookAllInfoOutput> {
-    const result: bookAllInfoOutput = new bookAllInfoOutput()
-    result.allImgIds = []
-    const defultParam: bookInfoInput = new bookInfoInput()
-    defultParam.bookId = param.bookId
-    defultParam.page = 0
-    result.bookData = await this.getBookInfo(defultParam)
-    if (result.bookData.isSuccess) {
-      result.isSuccess = true
-      result.msg = '获取画册信息成功'
-      result.data?.push(result.bookData)
-      result.allImgIds = result.allImgIds.concat(result.bookData.data || [])
-      for (let pageIndex = 1; pageIndex <= result.bookData.lastPageIndex; pageIndex++) {
-        const pageParam: bookInfoInput = new bookInfoInput()
-        pageParam.bookId = param.bookId
-        pageParam.page = pageIndex
-        const pageData = await this.getBookInfo(pageParam)
-        if (pageData.isSuccess) {
-          result.data?.push(pageData)
-          result.allImgIds = result.allImgIds.concat(pageData.data || [])
-        } else {
-          result.isSuccess = false
-          console.log(`获取第 ${pageIndex} 页画册信息失败，原因：${pageData.msg}`)
-          result.msg = `获取第 ${pageIndex} 页画册信息失败，原因：${pageData.msg}`
-          return result
-        }
-      }
-    } else {
-      result.isSuccess = false
-      result.msg = result.bookData.msg
-      return result
     }
     return result
   }
@@ -162,13 +117,13 @@ export class bookInfoBusi {
     element
       .getElementsBySelector(['div#gmid', 'div#gd4', 'div#taglist', 'table', 'tbody', 'tr'])
       .forEach((tr) => {
-        const tag = tr.getElementBySelector(['td.tc'])?.element?.textContent?.trim() || ''
+        const tag = tr.getElementBySelector(['td.tc']).text
         if (!tag) {
           return
         }
 
         tr.getElementsBySelector(['td', 'div']).forEach((tagDiv) => {
-          const name = tagDiv.element?.textContent?.trim()
+          const name = tagDiv.text
           if (name) {
             tags.push(`${tag}${name}`)
           }
@@ -185,8 +140,7 @@ export class bookInfoBusi {
   private getImageIds(element: parserClass): string[] {
     const result: string[] = []
     element.getElementsBySelector(['div#gdt', 'a']).forEach((a) => {
-      const href = a.element?.getAttribute('href') || ''
-      const match = href.match(/\/s\/([^\/]+\/[^\/]+)/)
+      const match = a.attribute('href').match(/\/s\/([^\/]+\/[^\/]+)/)
       if (match && match[1]) {
         result?.push(match[1])
       }
@@ -203,18 +157,13 @@ export class bookInfoBusi {
     const userComments = bodyParser.getElementsBySelector(['#cdiv', '.c1'])
     for (const commentElement of userComments) {
       const comment = new userComment()
-      const info = commentElement.getElementBySelector(['.c2', '.c3'])
-      const dateStr = info?.element?.textContent?.trim()
+      const dateStr = commentElement.getElementBySelector(['.c2', '.c3']).text
       const dateMatch = dateStr?.match(/Posted on (\d{1,2} \w+ \d{4}, \d{2}:\d{2}) by:/)
       if (dateMatch && dateMatch[1]) {
         comment.date = new Date(dateMatch[1])
       }
-      comment.username =
-        commentElement
-          .getElementBySelector(['.c2', '.c3', 'a:first-child'])
-          ?.element?.textContent?.trim() || ''
-      comment.comment =
-        commentElement.getElementBySelector(['.c6'])?.element?.textContent?.trim() || ''
+      comment.username = commentElement.getElementBySelector(['.c2', '.c3', 'a:first-child']).text
+      comment.comment = commentElement.getElementBySelector(['.c6']).text
       comment.isUploader = commentElement.getElementBySelector(['.c2', '.c4']) ? true : false
       result.push(comment)
     }

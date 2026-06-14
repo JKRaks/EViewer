@@ -62,20 +62,20 @@ const createProxyOptions = () => ({
   },
   on: {
     proxyReq: (proxyReq, req) => {
-      console.log('\n========== onProxyReq 被触发 ==========')
+      // console.log('\n========== onProxyReq 被触发 ==========')
       const targetUrl = `https://e-hentai.org${proxyReq.path}`
-      console.log('代理请求详情:', {
-        原始URL: req.url,
-        原始路径: req.path,
-        目标URL: targetUrl,
-        目标路径: proxyReq.path,
-        Cookie: req.headers.cookie,
-      })
+      // console.log('代理请求详情:', {
+      //   原始URL: req.url,
+      //   原始路径: req.path,
+      //   目标URL: targetUrl,
+      //   目标路径: proxyReq.path,
+      //   Cookie: req.headers.cookie,
+      // })
 
       // 转发客户端的 Cookie
       if (req.headers.cookie) {
         proxyReq.setHeader('Cookie', req.headers.cookie)
-        console.log('转发 Cookie:', req.headers.cookie)
+        // console.log('转发 Cookie:', req.headers.cookie)
       }
 
       proxyReq.setHeader(
@@ -89,27 +89,27 @@ const createProxyOptions = () => ({
       proxyReq.setHeader('Accept-Language', 'en-US,en;q=0.5')
       proxyReq.setHeader('Referer', 'https://e-hentai.org/')
 
-      console.log('已设置请求头')
+      // console.log('已设置请求头')
     },
     proxyRes: (proxyRes, req) => {
-      console.log('\n========== onProxyRes 被触发 ==========')
-      console.log('代理响应:', {
-        状态码: proxyRes.statusCode,
-        Location: proxyRes.headers.location,
-        ContentType: proxyRes.headers['content-type'],
-        SetCookie: proxyRes.headers['set-cookie'],
-      })
+      // console.log('\n========== onProxyRes 被触发 ==========')
+      // console.log('代理响应:', {
+      //   状态码: proxyRes.statusCode,
+      //   Location: proxyRes.headers.location,
+      //   ContentType: proxyRes.headers['content-type'],
+      //   SetCookie: proxyRes.headers['set-cookie'],
+      // })
 
       // 获取当前服务器的主机名
       const serverHost = getServerHost(req)
       const serverPort = req.headers.host?.split(':')[1] || PORT
       const serverUrl = `http://${serverHost}:${serverPort}`
 
-      console.log('服务器信息:', { serverHost, serverPort, serverUrl })
+      // console.log('服务器信息:', { serverHost, serverPort, serverUrl })
 
       // 修改 Set-Cookie 头
       if (proxyRes.headers['set-cookie']) {
-        console.log('原始 Set-Cookie:', proxyRes.headers['set-cookie'])
+        // console.log('原始 Set-Cookie:', proxyRes.headers['set-cookie'])
 
         proxyRes.headers['set-cookie'] = proxyRes.headers['set-cookie'].map((cookie) => {
           let modifiedCookie = cookie
@@ -139,9 +139,9 @@ const createProxyOptions = () => ({
 
           return modifiedCookie
         })
-        console.log('修改后的 Set-Cookie:', proxyRes.headers['set-cookie'])
+        // console.log('修改后的 Set-Cookie:', proxyRes.headers['set-cookie'])
       } else {
-        console.log('响应中没有 Set-Cookie 头')
+        // console.log('响应中没有 Set-Cookie 头')
       }
 
       // 如果是重定向，修改 Location 头
@@ -149,7 +149,7 @@ const createProxyOptions = () => ({
         const location = proxyRes.headers.location
         if (location.startsWith('/')) {
           proxyRes.headers.location = `/ehentai${location}`
-          console.log('修改相对路径重定向:', location, '->', proxyRes.headers.location)
+          // console.log('修改相对路径重定向:', location, '->', proxyRes.headers.location)
         } else if (
           location.startsWith('http://e-hentai.org') ||
           location.startsWith('https://e-hentai.org')
@@ -158,7 +158,7 @@ const createProxyOptions = () => ({
             /https?:\/\/e-hentai\.org/,
             `${serverUrl}/ehentai`,
           )
-          console.log('修改绝对路径重定向:', location, '->', proxyRes.headers.location)
+          // console.log('修改绝对路径重定向:', location, '->', proxyRes.headers.location)
         }
       }
 
@@ -176,15 +176,15 @@ const createProxyOptions = () => ({
       delete proxyRes.headers['x-frame-options']
       delete proxyRes.headers['content-security-policy']
 
-      console.log('========== onProxyRes 结束 ==========\n')
+      // console.log('========== onProxyRes 结束 ==========\n')
     },
     error: (err, req, res) => {
-      console.error('\n========== 代理错误 ==========')
-      console.error('错误:', {
-        message: err.message,
-        code: err.code,
-        stack: err.stack,
-      })
+      // console.error('\n========== 代理错误 ==========')
+      // console.error('错误:', {
+      //   message: err.message,
+      //   code: err.code,
+      //   stack: err.stack,
+      // })
       if (!res.headersSent) {
         res.status(500).json({ error: '代理请求失败', message: err.message })
       }
@@ -196,9 +196,9 @@ const createProxyOptions = () => ({
 app.use(
   '/ehentai',
   (req, res, next) => {
-    console.log('========== 进入 /ehentai 代理中间件 ==========')
-    console.log('匹配到 /ehentai 路径:', req.path)
-    console.log('完整 URL:', req.url)
+    // console.log('========== 进入 /ehentai 代理中间件 ==========')
+    // console.log('匹配到 /ehentai 路径:', req.path)
+    // console.log('完整 URL:', req.url)
     next()
   },
   createProxyMiddleware(createProxyOptions()),
@@ -206,14 +206,14 @@ app.use(
 
 // 404 处理
 app.use((req, res) => {
-  console.log('404: 未找到路由', req.path)
+  // console.log('404: 未找到路由', req.path)
   res.status(404).json({ error: 'Not found', path: req.path })
 })
 
 app.listen(PORT, () => {
-  console.log(`代理服务器运行在 http://localhost:${PORT}`)
-  console.log(`允许的来源: ${ALLOWED_ORIGINS.join(', ')}`)
-  console.log('路由配置:')
-  console.log('  - GET /health (健康检查)')
-  console.log('  - ALL /ehentai/* (代理到 e-hentai.org)')
+  // console.log(`代理服务器运行在 http://localhost:${PORT}`)
+  // console.log(`允许的来源: ${ALLOWED_ORIGINS.join(', ')}`)
+  // console.log('路由配置:')
+  // console.log('  - GET /health (健康检查)')
+  // console.log('  - ALL /ehentai/* (代理到 e-hentai.org)')
 })

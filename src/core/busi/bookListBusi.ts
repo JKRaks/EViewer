@@ -89,7 +89,7 @@ export class bookListBusi {
       'div.gl4e.glname',
       'div.glink',
     ])
-    return selectElement?.element?.textContent ?? ''
+    return selectElement.text
   }
 
   /**
@@ -99,7 +99,7 @@ export class bookListBusi {
    */
   private getBookUrl(element: parserClass): string {
     const selectElement = element.getElementBySelector(['td.gl2e>', 'div>', 'a'])
-    return selectElement?.element?.getAttribute('href') ?? ''
+    return selectElement.attribute('href')
   }
 
   /**
@@ -109,7 +109,7 @@ export class bookListBusi {
    */
   private getThumbnailUrl(element: parserClass): string {
     const selectElement = element.getElementBySelector(['td.gl1e', 'div', 'img'])
-    return selectElement?.element?.getAttribute('src') ?? ''
+    return selectElement.attribute('src') ?? ''
   }
 
   /**
@@ -119,7 +119,7 @@ export class bookListBusi {
    */
   private getCategory(element: parserClass): string {
     const selectElement = element.getElementBySelector(['td.gl2e', 'div', 'div.gl3e', 'div.cn'])
-    return selectElement?.element?.textContent ?? ''
+    return selectElement.text
   }
 
   /**
@@ -134,7 +134,7 @@ export class bookListBusi {
       'div.gl3e',
       'div[onclick][id]',
     ])
-    const dateStr = selectElement?.element?.textContent
+    const dateStr = selectElement.text
     return dateStr ? new Date(dateStr) : new Date()
   }
 
@@ -151,7 +151,7 @@ export class bookListBusi {
       'div.gldown',
       'a',
     ])
-    let text = selectElement?.element?.getAttribute('href') ?? ''
+    let text = selectElement.attribute('href')
     text = decodeURI(text)
     return text
   }
@@ -165,7 +165,7 @@ export class bookListBusi {
     let result = 0
     const selectElements = element.getElementsBySelector(['td.gl2e', 'div', 'div.gl3e', 'div'])
     for (const selectElement of selectElements) {
-      const text = selectElement.element?.textContent ?? ''
+      const text = selectElement.text
       if (text.includes('pages')) {
         result = Number.parseInt(text.replace(' pages', '').trim())
       }
@@ -180,7 +180,7 @@ export class bookListBusi {
    */
   private getUploader(element: parserClass): string {
     const selectElement = element.getElementBySelector(['td.gl2e', 'div', 'div.gl3e', 'div', 'a'])
-    const text = selectElement?.element?.textContent ?? ''
+    const text = selectElement.text
     return text
   }
 
@@ -219,7 +219,7 @@ export class bookListBusi {
       ]),
     )
     for (const tagElement of selectElement) {
-      const text = tagElement.element?.getAttribute('title') ?? ''
+      const text = tagElement.attribute('title')
       result.push(text)
     }
     return result
@@ -238,7 +238,7 @@ export class bookListBusi {
       'div',
       'a#dnext',
     ])
-    const url = selectElement?.element?.getAttribute('href') ?? ''
+    const url = selectElement.attribute('href')
     const urlObj = new URL(url)
     const nxt = urlObj.searchParams.get('next') ?? ''
     if (nxt) {
@@ -261,7 +261,7 @@ export class bookListBusi {
       'div',
       'a#dlast',
     ])
-    const url = selectElement?.element?.getAttribute('href') ?? ''
+    const url = selectElement.attribute('href')
     const urlObj = new URL(url)
     const nxt = urlObj.searchParams.get('prev') ?? ''
     if (nxt) {
@@ -278,7 +278,7 @@ export class bookListBusi {
    */
   private getTotalCount(bodyParser: parserClass): number {
     const selectElement = bodyParser.getElementBySelector(['div.ido', 'div', 'div.searchtext', 'p'])
-    const text = selectElement?.element?.textContent
+    const text = selectElement.text
     let number = 0
     if (text) {
       const match = text.match(/Found(?: about)? ([\d,]+) results/)
