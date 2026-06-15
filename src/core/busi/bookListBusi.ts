@@ -239,6 +239,9 @@ export class bookListBusi {
       'a#dnext',
     ])
     const url = selectElement.attribute('href')
+    if (!url) {
+      return 0
+    }
     const urlObj = new URL(url)
     const nxt = urlObj.searchParams.get('next') ?? ''
     if (nxt) {
@@ -262,6 +265,9 @@ export class bookListBusi {
       'a#dlast',
     ])
     const url = selectElement.attribute('href')
+    if (!url) {
+      return 0
+    }
     const urlObj = new URL(url)
     const nxt = urlObj.searchParams.get('prev') ?? ''
     if (nxt) {

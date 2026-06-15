@@ -678,9 +678,7 @@ async function toRead() {
 }
 
 /* 深色模式适配 */
-@media (prefers-color-scheme: dark) {
-  .cover-image {
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  }
+html.dark .cover-image {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 </style>
