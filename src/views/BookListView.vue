@@ -450,10 +450,8 @@ onDeactivated(() => {
 }
 
 /* 深色模式适配 */
-@media (prefers-color-scheme: dark) {
-  .search-container {
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-  }
+html.dark .search-container {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
 }
 
 /* iOS Safari: 输入控件字号小于 16px 会触发页面自动放大 */
