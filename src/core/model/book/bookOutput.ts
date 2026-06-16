@@ -33,7 +33,7 @@ export class bookItem {
   /**
    * 标签列表
    */
-  tags: string[] = []
+  tags: tagCollection[] = []
   /**
    * 上传者
    */
@@ -50,4 +50,27 @@ export class bookItem {
    * 评分
    */
   rate: number = 0
+}
+
+export class tagCollection {
+  /**
+   * 标签系列
+   */
+  collection: string = ''
+  /**
+   * 标签名称
+   */
+  items: tagItem[] = []
+}
+
+export class tagItem {
+  /**
+   * 标签名称
+   */
+  name: string = ''
+
+  /**
+   * 是否官方标签
+   */
+  official: boolean = false
 }

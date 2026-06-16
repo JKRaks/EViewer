@@ -14,6 +14,7 @@ declare module 'vue' {
   export interface GlobalComponents {
     BookItem: typeof import('./src/components/BookItem.vue')['default']
     CategoryTag: typeof import('./src/components/CategoryTag.vue')['default']
+    ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAvatar: typeof import('element-plus/es')['ElAvatar']
     ElBacktop: typeof import('element-plus/es')['ElBacktop']
     ElButton: typeof import('element-plus/es')['ElButton']
@@ -52,6 +53,7 @@ declare module 'vue' {
 declare global {
   const BookItem: typeof import('./src/components/BookItem.vue')['default']
   const CategoryTag: typeof import('./src/components/CategoryTag.vue')['default']
+  const ElAlert: typeof import('element-plus/es')['ElAlert']
   const ElAvatar: typeof import('element-plus/es')['ElAvatar']
   const ElBacktop: typeof import('element-plus/es')['ElBacktop']
   const ElButton: typeof import('element-plus/es')['ElButton']

@@ -2,7 +2,9 @@ import { categoryEnum } from '../common/enum/categoryEnum'
 import { httpClass } from '../common/httpClass'
 import { parserClass } from '../common/parserClass'
 import { bookInput } from '../model/book/bookInput'
-import { bookOutput, bookItem } from '../model/book/bookOutput'
+import { bookOutput, bookItem, tagCollection, tagItem } from '../model/book/bookOutput'
+import { popularInput } from '../model/book/popularInput'
+import { popularOutput } from '../model/book/popularOutput'
 
 export class bookListBusi {
   /**
@@ -53,6 +55,53 @@ export class bookListBusi {
       result.nxtPage = this.getNextPage(bodyParser)
       result.prvPage = this.getLastPage(bodyParser)
       result.totalCount = this.getTotalCount(bodyParser)
+      result.isSuccess = true
+      result.msg = '获取画册列表成功'
+    } else {
+      result.msg = htmlResult.msg
+    }
+    return result
+  }
+
+  /**
+   * 获取流行画册列表
+   * @param param 画册列表参数
+   * @returns 画册列表
+   */
+  async getPopularList(param: popularInput): Promise<popularOutput> {
+    const result = new popularOutput()
+    const queryParams = Object.create(param)
+    result.data = []
+    const htmlResult = await httpClass.sendRequest(queryParams)
+    if (htmlResult.isSuccess) {
+      const bodyParser = parserClass.loadBody(htmlResult.data!)
+      //解析画册列表
+      const elements = bodyParser.getElementsBySelector([
+        'div.ido',
+        'div',
+        'table.itg.glte',
+        '>tbody',
+        '>tr',
+      ])
+      for (const element of elements) {
+        const item = new bookItem()
+        item.bookTitle = this.getBookTitle(element)
+        item.bookUrl = this.getBookUrl(element)
+        const urlParts = item.bookUrl.match(/\/g\/(.+)$/)
+        item.bookId = (urlParts ? urlParts[1] || '' : '').replace('/', '-')
+        item.thumbnailUrl = this.getThumbnailUrl(element)
+        item.category = this.getCategory(element)
+        item.downloadUrl = this.getDownloadUrl(element)
+        item.imgCount = this.getPicCount(element)
+        item.publishDate = this.getPublishDate(element)
+        item.rate = 0
+        item.tags = this.getTags(element)
+        item.uploader = this.getUploader(element)
+        if (!this.validBookItem(item)) {
+          continue
+        }
+        result.data.push(item)
+      }
       result.isSuccess = true
       result.msg = '获取画册列表成功'
     } else {
@@ -189,8 +238,8 @@ export class bookListBusi {
    * @param element
    * @returns
    */
-  private getTags(element: parserClass): string[] {
-    const result: string[] = []
+  private getTags(element: parserClass): tagCollection[] {
+    const result: tagCollection[] = []
     const selectElement = element.getElementsBySelector([
       'td.gl2e',
       'div',
@@ -214,13 +263,22 @@ export class bookListBusi {
         'table',
         'tbody',
         'tr',
-        'td',
-        'div.gtl',
       ]),
     )
     for (const tagElement of selectElement) {
-      const text = tagElement.attribute('title')
-      result.push(text)
+      const itemCollection = new tagCollection()
+      itemCollection.collection = tagElement
+        .getElementBySelector(['td.tc'])
+        .text.replace(':', '')
+        .trim()
+      const bodyElement = tagElement.getElementsBySelector(['td', 'div'])
+      for (const body of bodyElement) {
+        const item = new tagItem()
+        item.name = body.text
+        item.official = body.attribute('class') == 'gt'
+        itemCollection.items.push(item)
+      }
+      result.push(itemCollection)
     }
     return result
   }
