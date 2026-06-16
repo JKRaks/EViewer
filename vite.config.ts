@@ -30,7 +30,7 @@ export default defineConfig({
         theme_color: '#2b5ca8',
         background_color: '#ffffff',
         display: 'standalone',
-        start_url: '/booklist',
+        start_url: '/',
         scope: '/',
         icons: [
           {
