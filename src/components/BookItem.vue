@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import type { bookItem } from '@/core/model/book/bookOutput'
+import type { bookItem, tagCollection } from '@/core/model/book/bookOutput'
 import { Picture, Star, Clock } from '@element-plus/icons-vue'
 import CategoryTag from './CategoryTag.vue'
 
@@ -18,6 +18,29 @@ const imageCountText = computed(() => {
 })
 
 // 处理点击事件 - 跳转到详情页
+const formatTagText = (tag: tagCollection) => {
+  const officialTag = tag.items.find((item) => item.official)
+  const tagName = (officialTag?.name ?? tag.items[0]?.name ?? '').trim()
+
+  if (!tagName) {
+    return ''
+  }
+
+  return tagName
+}
+
+const validTagTexts = computed(() => {
+  return props.book.tags.map(formatTagText).filter(Boolean)
+})
+
+const visibleTags = computed(() => {
+  return validTagTexts.value.slice(0, 3)
+})
+
+const hiddenTagCount = computed(() => {
+  return Math.max(validTagTexts.value.length - visibleTags.value.length, 0)
+})
+
 const handleClick = () => {
   router.push({
     name: 'bookinfo',
@@ -60,25 +83,27 @@ const handleClick = () => {
       </div>
 
       <!-- 标签 -->
-      <div class="book-tags" v-if="book.tags && book.tags.length > 0">
+      <div class="book-tags" v-if="visibleTags.length > 0">
         <el-tag
-          v-for="(tag, index) in book.tags.slice(0, 3)"
+          v-for="(tagText, index) in visibleTags"
           :key="index"
           size="small"
           type="info"
           class="tag-item"
           effect="plain"
         >
-          <span class="tag-text" :title="tag">{{ tag }}</span>
+          <span class="tag-text">
+            {{ tagText }}
+          </span>
         </el-tag>
         <el-tag
-          v-if="book.tags.length > 3"
+          v-if="hiddenTagCount > 0"
           size="small"
           type="info"
           class="tag-item tag-more"
           effect="plain"
         >
-          <span class="tag-text">+{{ book.tags.length - 3 }}</span>
+          <span class="tag-text">+{{ hiddenTagCount }}</span>
         </el-tag>
       </div>
 

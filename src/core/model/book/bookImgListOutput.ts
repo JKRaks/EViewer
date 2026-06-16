@@ -1,4 +1,4 @@
 import { P } from '../P'
-import { bookImgOutput } from './bookImgOutput'
+import { bookItem } from './bookOutput'
 
-export class bookImgListOutput extends P<bookImgOutput[]> {}
+export class bookImgListOutput extends P<bookItem[]> {}
