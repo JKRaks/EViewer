@@ -27,7 +27,7 @@ const globalState = useGlobalState()
 const themeModeList = ['auto', 'dark', 'light'] as const
 let systemThemeMedia: MediaQueryList | null = null
 
-const cachedViews = ref<string[]>(['BookList'])
+const cachedViews = ref<string[]>(['BookList', 'BookInfoView'])
 const themeModeMeta = {
   auto: {
     label: '自动主题',
