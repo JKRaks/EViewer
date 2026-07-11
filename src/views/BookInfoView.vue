@@ -25,8 +25,13 @@ const funcData = reactive({
   readMode: false,
 })
 const pageData = ref(new bookInfoOutput())
+let loadingBookId = ''
 const { persistScrollPosition, bindScrollListener, unbindScrollListener } =
   useLayoutMainScrollMemory('bookinfo-scroll-position')
+
+defineOptions({
+  name: 'BookInfoView',
+})
 
 // 计算评分星星
 const ratingStars = computed(() => {
@@ -69,6 +74,11 @@ onMounted(() => {
 
 onActivated(() => {
   bindScrollListener()
+
+  const routeBookId = getRouteBookId()
+  if (routeBookId && routeBookId !== pageData.value.bookId && routeBookId !== loadingBookId) {
+    void fetchBookInfo()
+  }
 })
 
 onDeactivated(() => {
@@ -82,19 +92,28 @@ onUnmounted(() => {
 })
 
 async function fetchBookInfo() {
+  const routeBookId = getRouteBookId()
+  if (!routeBookId || loadingBookId === routeBookId) {
+    return
+  }
+
+  loadingBookId = routeBookId
   funcData.loading = true
   try {
     const infoBusi = new bookInfoBusi()
-    if (!funcData.bookQueryInfo.bookId) {
-      funcData.bookQueryInfo.bookId = route.query.bookId as string
-    }
-    funcData.bookQueryInfo.bookId = funcData.bookQueryInfo.bookId.replace('-', '/')
+    funcData.bookQueryInfo.bookId = routeBookId
     pageData.value = await infoBusi.getBookInfo(funcData.bookQueryInfo)
   } catch (error) {
     console.error('获取书籍信息失败:', error)
   } finally {
+    loadingBookId = ''
     funcData.loading = false
   }
+}
+
+function getRouteBookId(): string {
+  const routeBookId = route.query.bookId
+  return typeof routeBookId === 'string' ? routeBookId.replace('-', '/') : ''
 }
 
 async function toRead() {
