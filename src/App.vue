@@ -27,7 +27,7 @@ const globalState = useGlobalState()
 const themeModeList = ['auto', 'dark', 'light'] as const
 let systemThemeMedia: MediaQueryList | null = null
 
-const cachedViews = ref<string[]>(['BookList', 'BookInfoView'])
+const cachedViews = ref<string[]>(['HomeView', 'BookList', 'BookInfoView'])
 const themeModeMeta = {
   auto: {
     label: '自动主题',
@@ -72,7 +72,7 @@ const visiblePageActions = computed(() => {
 })
 
 const showBackButton = computed(() => {
-  return window.history.length > 1
+  return route.name !== 'home'
 })
 
 const getLayoutMainElement = () => {
@@ -117,7 +117,12 @@ const checkViewport = () => {
 }
 
 const handleBack = () => {
-  router.back()
+  if (window.history.state?.back) {
+    router.back()
+    return
+  }
+
+  void router.push('/')
 }
 
 const toggleMenu = () => {

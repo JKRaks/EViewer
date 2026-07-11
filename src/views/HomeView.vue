@@ -10,6 +10,10 @@ const books = ref<bookItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
 
+defineOptions({
+  name: 'HomeView',
+})
+
 const featuredBooks = computed(() => books.value.slice(0, 3))
 const regularBooks = computed(() => books.value.slice(3))
 
