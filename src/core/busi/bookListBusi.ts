@@ -1,8 +1,10 @@
 import { categoryEnum } from '../common/enum/categoryEnum'
 import { httpClass } from '../common/httpClass'
 import { parserClass } from '../common/parserClass'
+import { parseTagCollections } from '../common/tagParser'
 import { bookInput } from '../model/book/bookInput'
-import { bookOutput, bookItem, tagCollection, tagItem } from '../model/book/bookOutput'
+import { bookOutput, bookItem } from '../model/book/bookOutput'
+import type { tagCollection } from '../model/book/tag'
 import { popularInput } from '../model/book/popularInput'
 import { popularOutput } from '../model/book/popularOutput'
 
@@ -239,8 +241,7 @@ export class bookListBusi {
    * @returns
    */
   private getTags(element: parserClass): tagCollection[] {
-    const result: tagCollection[] = []
-    const selectElement = element.getElementsBySelector([
+    const rows = element.getElementsBySelector([
       'td.gl2e',
       'div',
       'a',
@@ -249,38 +250,9 @@ export class bookListBusi {
       'table',
       'tbody',
       'tr',
-      'td',
-      'div.gt',
     ])
 
-    selectElement.push(
-      ...element.getElementsBySelector([
-        'td.gl2e',
-        'div',
-        'a',
-        'div.gl4e.glname',
-        'div',
-        'table',
-        'tbody',
-        'tr',
-      ]),
-    )
-    for (const tagElement of selectElement) {
-      const itemCollection = new tagCollection()
-      itemCollection.collection = tagElement
-        .getElementBySelector(['td.tc'])
-        .text.replace(':', '')
-        .trim()
-      const bodyElement = tagElement.getElementsBySelector(['td', 'div'])
-      for (const body of bodyElement) {
-        const item = new tagItem()
-        item.name = body.text
-        item.official = body.attribute('class') == 'gt'
-        itemCollection.items.push(item)
-      }
-      result.push(itemCollection)
-    }
-    return result
+    return parseTagCollections(rows)
   }
 
   /**
