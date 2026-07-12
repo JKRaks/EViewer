@@ -1,4 +1,5 @@
 import { P } from '../P'
+import { tagCollection } from './tag'
 
 export class bookInfoOutput extends P<string[]> {
   /**
@@ -44,7 +45,7 @@ export class bookInfoOutput extends P<string[]> {
   /**
    * 画册标签
    */
-  tags: string[] = []
+  tags: tagCollection[] = []
   /**
    * 画册是否可见
    */

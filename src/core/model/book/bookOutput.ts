@@ -1,4 +1,5 @@
 import { P } from '../P'
+import { tagCollection } from './tag'
 
 export class bookOutput extends P<bookItem[]> {
   nxtPage: number | undefined = undefined
@@ -50,27 +51,4 @@ export class bookItem {
    * 评分
    */
   rate: number = 0
-}
-
-export class tagCollection {
-  /**
-   * 标签系列
-   */
-  collection: string = ''
-  /**
-   * 标签名称
-   */
-  items: tagItem[] = []
-}
-
-export class tagItem {
-  /**
-   * 标签名称
-   */
-  name: string = ''
-
-  /**
-   * 是否官方标签
-   */
-  official: boolean = false
 }

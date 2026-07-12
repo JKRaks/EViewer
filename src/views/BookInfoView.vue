@@ -17,6 +17,7 @@ import {
 } from '@element-plus/icons-vue'
 import router from '@/router'
 import { useLayoutMainScrollMemory } from '@/composables/useLayoutMainScrollMemory'
+import { getTagDisplayInfo } from '@/core/common/tagTranslations'
 
 const route = useRoute()
 const funcData = reactive({
@@ -36,6 +37,19 @@ defineOptions({
 // 计算评分星星
 const ratingStars = computed(() => {
   return parseFloat(pageData.value.rating)
+})
+
+const tagGroups = computed(() => {
+  return pageData.value.tags
+    .filter((collection) => collection.items.length > 0)
+    .map((collection) => ({
+      collection: collection.collection,
+      items: collection.items.map((tag, index) => ({
+        key: `${collection.collection}:${tag.name}:${index}`,
+        tag,
+        display: getTagDisplayInfo(collection.collection, tag),
+      })),
+    }))
 })
 
 // 格式化日期
@@ -270,23 +284,37 @@ async function toRead() {
       </el-card>
 
       <!-- 标签区 -->
-      <el-card class="tags-card" shadow="hover" v-if="pageData.tags && pageData.tags.length > 0">
+      <el-card class="tags-card" shadow="hover" v-if="tagGroups.length > 0">
         <template #header>
           <div class="card-header">
             <el-icon><Reading /></el-icon>
             <span>标签</span>
           </div>
         </template>
-        <div class="tags-container">
-          <el-tag
-            v-for="tag in pageData.tags"
-            :key="tag"
-            class="tag-item"
-            size="large"
-            effect="plain"
-          >
-            {{ tag }}
-          </el-tag>
+        <div class="tag-groups">
+          <section v-for="group in tagGroups" :key="group.collection" class="tag-group">
+            <h3 class="tag-group-title">{{ group.collection }}</h3>
+            <div class="tags-container">
+              <el-tooltip
+                v-for="item in group.items"
+                :key="item.key"
+                :content="item.display.original"
+                :disabled="!item.display.translated"
+                placement="top"
+              >
+                <el-tag
+                  class="tag-item"
+                  :class="item.tag.official ? 'is-official' : 'is-unofficial'"
+                  :type="item.tag.official ? 'primary' : 'info'"
+                  :effect="item.tag.official ? 'light' : 'plain'"
+                  size="large"
+                  tabindex="0"
+                >
+                  <span class="tag-label">{{ item.display.text }}</span>
+                </el-tag>
+              </el-tooltip>
+            </div>
+          </section>
         </div>
       </el-card>
 
@@ -526,19 +554,66 @@ async function toRead() {
   color: var(--el-color-primary);
 }
 
+.tag-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.tag-group {
+  display: grid;
+  grid-template-columns: minmax(96px, 140px) minmax(0, 1fr);
+  align-items: start;
+  gap: 12px;
+}
+
+.tag-group-title {
+  margin: 5px 0 0;
+  color: var(--el-text-color-regular);
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
 .tags-container {
   display: flex;
   flex-wrap: wrap;
   gap: 10px;
+  min-width: 0;
 }
 
 .tag-item {
-  cursor: pointer;
-  transition: transform 0.2s;
+  max-width: min(320px, 100%);
+  overflow: hidden;
+  transition:
+    border-color 0.2s ease,
+    background-color 0.2s ease;
 }
 
-.tag-item:hover {
-  transform: scale(1.05);
+.tag-item :deep(.el-tag__content) {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.tag-label {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tag-item.is-unofficial {
+  border-style: dashed;
+  color: var(--el-text-color-secondary);
+}
+
+.tag-item:focus-visible {
+  outline: 2px solid var(--el-color-primary-light-5);
+  outline-offset: 2px;
 }
 
 /* 评论区 */
@@ -689,6 +764,15 @@ async function toRead() {
 
   .tags-container {
     gap: 8px;
+  }
+
+  .tag-group {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .tag-group-title {
+    margin-top: 0;
   }
 
   .comment-item {

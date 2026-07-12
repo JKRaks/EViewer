@@ -2,6 +2,8 @@ import { bookInfoOutput, userComment } from '../model/book/bookInfoOutput'
 import { bookInfoInput } from '../model/book/bookInfoInput'
 import { httpClass } from '../common/httpClass'
 import { parserClass } from '../common/parserClass'
+import { parseTagCollections } from '../common/tagParser'
+import type { tagCollection } from '../model/book/tag'
 
 export class bookInfoBusi {
   /**
@@ -112,24 +114,17 @@ export class bookInfoBusi {
    * @param element 元素
    * @returns tags
    */
-  private getTags(element: parserClass): string[] {
-    const tags: string[] = []
-    element
-      .getElementsBySelector(['div#gmid', 'div#gd4', 'div#taglist', 'table', 'tbody', 'tr'])
-      .forEach((tr) => {
-        const tag = tr.getElementBySelector(['td.tc']).text
-        if (!tag) {
-          return
-        }
+  private getTags(element: parserClass): tagCollection[] {
+    const rows = element.getElementsBySelector([
+      'div#gmid',
+      'div#gd4',
+      'div#taglist',
+      'table',
+      'tbody',
+      'tr',
+    ])
 
-        tr.getElementsBySelector(['td', 'div']).forEach((tagDiv) => {
-          const name = tagDiv.text
-          if (name) {
-            tags.push(`${tag}${name}`)
-          }
-        })
-      })
-    return tags
+    return parseTagCollections(rows)
   }
 
   /**

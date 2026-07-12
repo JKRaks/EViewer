@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
-import type { bookItem, tagCollection } from '@/core/model/book/bookOutput'
+import type { bookItem } from '@/core/model/book/bookOutput'
+import type { tagCollection } from '@/core/model/book/tag'
+import { getTagDisplayInfo } from '@/core/common/tagTranslations'
 import { Picture, Star, Clock } from '@element-plus/icons-vue'
 import CategoryTag from './CategoryTag.vue'
 
@@ -20,13 +22,13 @@ const imageCountText = computed(() => {
 // 处理点击事件 - 跳转到详情页
 const formatTagText = (tag: tagCollection) => {
   const officialTag = tag.items.find((item) => item.official)
-  const tagName = (officialTag?.name ?? tag.items[0]?.name ?? '').trim()
+  const selectedTag = officialTag ?? tag.items[0]
 
-  if (!tagName) {
+  if (!selectedTag) {
     return ''
   }
 
-  return tagName
+  return getTagDisplayInfo(tag.collection, selectedTag).text
 }
 
 const validTagTexts = computed(() => {
@@ -226,13 +228,22 @@ const handleClick = () => {
   /* 确保标签内容不被压缩 */
   min-width: 0;
   /* 添加最大宽度,防止过长标签 */
-  max-width: 150px;
+  max-width: min(150px, 100%);
   height: auto; /* 允许高度自适应 */
+  overflow: hidden;
+}
+
+.tag-item :deep(.el-tag__content) {
+  display: block;
+  min-width: 0;
+  max-width: 100%;
+  overflow: hidden;
 }
 
 /* 标签内部文字样式 */
 .tag-text {
-  display: inline-block;
+  display: block;
+  width: 100%;
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
