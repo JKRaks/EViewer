@@ -81,36 +81,36 @@ let databasePromise: Promise<IDBPDatabase<EViewerCacheDatabase>> | undefined
 export function openCacheDatabase(): Promise<IDBPDatabase<EViewerCacheDatabase>> {
   if (!databasePromise) {
     const opening = openDB<EViewerCacheDatabase>(databaseName, databaseVersion, {
-        upgrade(database) {
-          if (!database.objectStoreNames.contains('meta')) {
-            database.createObjectStore('meta', { keyPath: 'key' })
-          }
-          if (!database.objectStoreNames.contains('tagTranslations')) {
-            const store = database.createObjectStore('tagTranslations', { keyPath: 'key' })
-            store.createIndex('by-generation', 'generation')
-          }
-          if (!database.objectStoreNames.contains('galleryDetails')) {
-            const store = database.createObjectStore('galleryDetails', { keyPath: 'bookId' })
-            store.createIndex('by-updated-at', 'updatedAt')
-          }
-          if (!database.objectStoreNames.contains('galleryImagePages')) {
-            const store = database.createObjectStore('galleryImagePages', {
-              keyPath: ['bookId', 'pageIndex'],
-            })
-            store.createIndex('by-book', 'bookId')
-          }
-          if (!database.objectStoreNames.contains('galleryImageUrls')) {
-            const store = database.createObjectStore('galleryImageUrls', {
-              keyPath: ['bookId', 'imageId'],
-            })
-            store.createIndex('by-book', 'bookId')
-            store.createIndex('by-resolved-at', 'resolvedAt')
-          }
-        },
-        terminated() {
-          databasePromise = undefined
-        },
-      })
+      upgrade(database) {
+        if (!database.objectStoreNames.contains('meta')) {
+          database.createObjectStore('meta', { keyPath: 'key' })
+        }
+        if (!database.objectStoreNames.contains('tagTranslations')) {
+          const store = database.createObjectStore('tagTranslations', { keyPath: 'key' })
+          store.createIndex('by-generation', 'generation')
+        }
+        if (!database.objectStoreNames.contains('galleryDetails')) {
+          const store = database.createObjectStore('galleryDetails', { keyPath: 'bookId' })
+          store.createIndex('by-updated-at', 'updatedAt')
+        }
+        if (!database.objectStoreNames.contains('galleryImagePages')) {
+          const store = database.createObjectStore('galleryImagePages', {
+            keyPath: ['bookId', 'pageIndex'],
+          })
+          store.createIndex('by-book', 'bookId')
+        }
+        if (!database.objectStoreNames.contains('galleryImageUrls')) {
+          const store = database.createObjectStore('galleryImageUrls', {
+            keyPath: ['bookId', 'imageId'],
+          })
+          store.createIndex('by-book', 'bookId')
+          store.createIndex('by-resolved-at', 'resolvedAt')
+        }
+      },
+      terminated() {
+        databasePromise = undefined
+      },
+    })
 
     databasePromise = openWithTimeout(opening).catch((error) => {
       databasePromise = undefined
@@ -125,7 +125,7 @@ function openWithTimeout(
 ): Promise<IDBPDatabase<EViewerCacheDatabase>> {
   return new Promise((resolve, reject) => {
     let settled = false
-    const timeout = window.setTimeout(() => {
+    const timeout = globalThis.setTimeout(() => {
       settled = true
       reject(new Error('IndexedDB 打开超时'))
     }, databaseOpenTimeout)
@@ -137,7 +137,7 @@ function openWithTimeout(
           return
         }
         settled = true
-        window.clearTimeout(timeout)
+        globalThis.clearTimeout(timeout)
         resolve(database)
       },
       (error) => {
@@ -145,7 +145,7 @@ function openWithTimeout(
           return
         }
         settled = true
-        window.clearTimeout(timeout)
+        globalThis.clearTimeout(timeout)
         reject(error)
       },
     )
