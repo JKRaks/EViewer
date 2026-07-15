@@ -263,12 +263,16 @@ onMounted(() => {
 }
 
 .featured-section {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
+  columns: 3 360px;
+  column-gap: 14px;
 }
 
 .featured-book {
+  display: flex;
+  width: 100%;
+  margin-bottom: 14px;
+  -webkit-column-break-inside: avoid;
+  break-inside: avoid;
   background-color: var(--el-bg-color);
   border-color: var(--el-color-primary-light-7);
 }
@@ -299,15 +303,24 @@ onMounted(() => {
   font-size: 13px;
 }
 
-.popular-grid,
+.popular-grid {
+  columns: 360px;
+  column-gap: 12px;
+}
+
+.popular-book {
+  display: flex;
+  width: 100%;
+  margin-bottom: 12px;
+  -webkit-column-break-inside: avoid;
+  break-inside: avoid;
+  background-color: var(--el-bg-color);
+}
+
 .home-skeleton {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
   gap: 12px;
-}
-
-.popular-book {
-  background-color: var(--el-bg-color);
 }
 
 .skeleton-card {
@@ -353,7 +366,7 @@ html.dark .home-hero {
 
 @media (max-width: 1024px) {
   .featured-section {
-    grid-template-columns: 1fr;
+    columns: 1;
   }
 }
 
@@ -386,7 +399,10 @@ html.dark .home-hero {
     font-size: 44px;
   }
 
-  .popular-grid,
+  .popular-grid {
+    columns: 1;
+  }
+
   .home-skeleton {
     grid-template-columns: 1fr;
     gap: 10px;

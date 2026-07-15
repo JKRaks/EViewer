@@ -1,9 +1,9 @@
 <script lang="ts" setup>
 import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
-import { bookInfoBusi } from '@/core/busi/bookInfoBusi'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
 import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
+import { getBookInfoWithCache } from '@/core/cache/galleryCache'
 import CategoryTag from '@/components/CategoryTag.vue'
 import {
   Picture,
@@ -17,7 +17,7 @@ import {
 } from '@element-plus/icons-vue'
 import router from '@/router'
 import { useLayoutMainScrollMemory } from '@/composables/useLayoutMainScrollMemory'
-import { getTagDisplayInfo } from '@/core/common/tagTranslations'
+import { getTagCollectionDisplayName, getTagDisplayInfo } from '@/core/common/tagTranslations'
 
 const route = useRoute()
 const funcData = reactive({
@@ -44,6 +44,7 @@ const tagGroups = computed(() => {
     .filter((collection) => collection.items.length > 0)
     .map((collection) => ({
       collection: collection.collection,
+      displayCollection: getTagCollectionDisplayName(collection.collection),
       items: collection.items.map((tag, index) => ({
         key: `${collection.collection}:${tag.name}:${index}`,
         tag,
@@ -114,9 +115,8 @@ async function fetchBookInfo() {
   loadingBookId = routeBookId
   funcData.loading = true
   try {
-    const infoBusi = new bookInfoBusi()
     funcData.bookQueryInfo.bookId = routeBookId
-    pageData.value = await infoBusi.getBookInfo(funcData.bookQueryInfo)
+    pageData.value = await getBookInfoWithCache(funcData.bookQueryInfo, 'detail')
   } catch (error) {
     console.error('获取书籍信息失败:', error)
   } finally {
@@ -293,7 +293,7 @@ async function toRead() {
         </template>
         <div class="tag-groups">
           <section v-for="group in tagGroups" :key="group.collection" class="tag-group">
-            <h3 class="tag-group-title">{{ group.collection }}</h3>
+            <h3 class="tag-group-title">{{ group.displayCollection }}</h3>
             <div class="tags-container">
               <el-tooltip
                 v-for="item in group.items"

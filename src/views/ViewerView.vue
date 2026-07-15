@@ -4,9 +4,17 @@ import { useRoute } from 'vue-router'
 import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { bookImageBusi } from '@/core/busi/bookImgBusi'
 import { bookImgInput } from '@/core/model/book/bookImgInput'
-import { bookInfoBusi } from '@/core/busi/bookInfoBusi'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
 import { Loading, RefreshRight } from '@element-plus/icons-vue'
+import {
+  cacheImageUrl,
+  getBookInfoWithCache,
+  getCachedImagePages,
+  getCachedImageUrls,
+  invalidateCachedImageUrl,
+  updateImagePageProgress,
+} from '@/core/cache/galleryCache'
+import type { GalleryImagePageRecord } from '@/core/cache/indexedDb'
 
 interface ViewerImageItem {
   key: string
@@ -31,6 +39,8 @@ const imageBusi = new bookImageBusi()
 let bookInfo: bookInfoOutput | null = null
 let currentPageQueue: PageImageQueue | null = null
 let isViewUnmounted = false
+let cachedImagePages = new Map<number, GalleryImagePageRecord>()
+let cachedImageUrls = new Map<string, string>()
 
 const pageData = reactive({
   loading: true,
@@ -65,7 +75,16 @@ async function initialize() {
     pageData.loading = true
     bookImages.value = []
     currentPageQueue = null
+    cachedImagePages = new Map()
+    cachedImageUrls = new Map()
     pageData.noMore = false
+
+    const [cachedPages, cachedUrls] = await Promise.all([
+      getCachedImagePages(bookId),
+      getCachedImageUrls(bookId),
+    ])
+    cachedImagePages = new Map(cachedPages.map((page) => [page.pageIndex, page]))
+    cachedImageUrls = cachedUrls
 
     bookInfo = await fetchBookInfo(bookId)
     if (!bookInfo?.isSuccess) {
@@ -86,11 +105,10 @@ async function initialize() {
 }
 
 async function fetchBookInfo(currentBookId: string, page = 0): Promise<bookInfoOutput> {
-  const bookBusi = new bookInfoBusi()
   const input = new bookInfoInput()
   input.bookId = currentBookId
   input.page = page
-  return await bookBusi.getBookInfo(input)
+  return await getBookInfoWithCache(input, 'viewer')
 }
 
 async function loadMorePic() {
@@ -135,12 +153,34 @@ async function appendPageInOrder(current: bookInfoOutput): Promise<void> {
     return
   }
 
+  const imageIds = getPageImageIds(current)
+  const cachedPage = cachedImagePages.get(current.pageIndex)
+  const sameCachedPage =
+    cachedPage?.imageIds.length === imageIds.length &&
+    cachedPage.imageIds.every((imageId, index) => imageId === imageIds[index])
+  const attemptedImageCount = sameCachedPage
+    ? Math.min(cachedPage.nextImageIndex, imageIds.length)
+    : 0
+
   currentPageQueue = {
     bookId: current.bookId,
     pageIndex: current.pageIndex,
-    imageIds: getPageImageIds(current),
-    nextImageIndex: 0,
+    imageIds,
+    nextImageIndex: attemptedImageCount,
   }
+
+  bookImages.value.push(
+    ...imageIds.slice(0, attemptedImageCount).map((imageId, index) => {
+      const url = cachedImageUrls.get(imageId) ?? ''
+      return {
+        key: `${current.bookId}-${current.pageIndex}-${index}`,
+        imageId,
+        url,
+        loading: false,
+        failed: !url,
+      }
+    }),
+  )
 
   if (!hasPendingCurrentPageImages()) {
     refreshNoMoreState()
@@ -160,16 +200,15 @@ async function loadNextImageBatch(): Promise<void> {
   try {
     const batchStart = currentPageQueue.nextImageIndex
     const batchEnd = Math.min(batchStart + imageBatchSize, currentPageQueue.imageIds.length)
-    const batchImageIds = currentPageQueue.imageIds.slice(batchStart, batchEnd)
+    const queue = currentPageQueue
+    const batchImageIds = queue.imageIds.slice(batchStart, batchEnd)
     const startIndex = bookImages.value.length
-
-    currentPageQueue.nextImageIndex = batchEnd
 
     bookImages.value.push(
       ...batchImageIds.map((imageId, index) => ({
-        key: `${currentPageQueue?.bookId}-${currentPageQueue?.pageIndex}-${batchStart + index}`,
+        key: `${queue.bookId}-${queue.pageIndex}-${batchStart + index}`,
         imageId,
-        url: '',
+        url: cachedImageUrls.get(imageId) ?? '',
         loading: false,
         failed: false,
       })),
@@ -185,7 +224,15 @@ async function loadNextImageBatch(): Promise<void> {
         continue
       }
 
-      await loadImageItem(target)
+      if (!target.url) {
+        await loadImageItem(target)
+      }
+
+      queue.nextImageIndex = batchStart + currentIndex + 1
+      await updateImagePageProgress(queue.bookId, queue.pageIndex, queue.nextImageIndex)
+      if (isViewUnmounted) {
+        return
+      }
     }
   } finally {
     if (!isViewUnmounted) {
@@ -208,14 +255,17 @@ async function loadImageItem(target: ViewerImageItem): Promise<void> {
     const input = new bookImgInput()
     input.imageId = target.imageId
     const result = await imageBusi.getBookImage(input)
-    if (isViewUnmounted) {
-      return
-    }
-
     if (result.isSuccess && result.dataOrDefault) {
-      target.url = result.dataOrDefault
+      const url = result.dataOrDefault
+      await cacheImageUrl(bookId ?? '', target.imageId, url)
+      cachedImageUrls.set(target.imageId, url)
+      if (!isViewUnmounted) {
+        target.url = url
+      }
     } else {
-      target.failed = true
+      if (!isViewUnmounted) {
+        target.failed = true
+      }
     }
   } catch (error) {
     console.error(`加载图片失败: ${target.imageId}`, error)
@@ -239,6 +289,8 @@ function handleImageLoadError(image: ViewerImageItem) {
   image.url = ''
   image.loading = false
   image.failed = true
+  cachedImageUrls.delete(image.imageId)
+  void invalidateCachedImageUrl(bookId ?? '', image.imageId)
 }
 
 async function loadNextPage(): Promise<bookInfoOutput> {
