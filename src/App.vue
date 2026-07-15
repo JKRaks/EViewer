@@ -108,7 +108,10 @@ const restoreRouteScroll = async (routePath = route.fullPath) => {
   }
 
   const storedPosition = Number(sessionStorage.getItem(getRouteScrollKey(routePath)) || '0')
-  const targetPosition = routePath === '/booklist' ? storedPosition : 0
+  const routePathname = routePath.split('?')[0]
+  const shouldRestorePosition = routePathname === '/' || routePathname === '/booklist'
+  const targetPosition = shouldRestorePosition ? storedPosition : 0
+  lastScrollTop.value = targetPosition
 
   requestAnimationFrame(() => {
     mainElement.scrollTo({ top: targetPosition, behavior: 'auto' })
