@@ -3,10 +3,7 @@ import type { tagItem } from '../model/book/tag'
 import tagCollectionTranslationData from '../data/tagCollectionTranslations.json'
 import { indexedDbCacheSettings } from '../cache/cacheSettings'
 import { openCacheDatabase } from '../cache/indexedDb'
-import {
-  lookupTagTranslations,
-  onTagTranslationCacheRebuilt,
-} from './tagTranslationWorkerClient'
+import { lookupTagTranslations, onTagTranslationCacheRebuilt } from './tagTranslationWorkerClient'
 import {
   activeTranslationMetaKey,
   createLookupKey,
@@ -22,6 +19,11 @@ export interface tagDisplayInfo {
   original: string
   master: string
   translated: boolean
+}
+
+export interface tagDisplayInput {
+  collection: string
+  tag: tagItem
 }
 
 const tagCollectionTranslations = tagCollectionTranslationData as Readonly<Record<string, string>>
@@ -56,13 +58,34 @@ export function getTagDisplayInfo(collection: string, tag: tagItem): tagDisplayI
     enqueueTranslationLookup(lookupKey)
   }
 
-  const text = resolution?.displayName ?? original
-  return {
-    text,
-    original,
-    master: resolution?.master ?? original,
-    translated: text !== original,
+  return createTagDisplayInfo(original, resolution)
+}
+
+/** 批量等待标签翻译完成，用于导出等不应先显示英文回退值的场景。 */
+export async function resolveTagDisplayInfos(inputs: tagDisplayInput[]): Promise<tagDisplayInfo[]> {
+  const descriptors = inputs.map(({ collection, tag }) => {
+    const namespace = normalize(collection)
+    const original = tag.name.trim()
+    return {
+      original,
+      lookupKey: createLookupKey(namespace, normalize(original)),
+    }
+  })
+  const missingKeys = [
+    ...new Set(
+      descriptors
+        .map(({ lookupKey }) => lookupKey)
+        .filter((lookupKey) => !resolvedTranslations.has(lookupKey)),
+    ),
+  ]
+
+  if (missingKeys.length) {
+    await resolveTranslationKeys(missingKeys)
   }
+
+  return descriptors.map(({ original, lookupKey }) =>
+    createTagDisplayInfo(original, resolvedTranslations.get(lookupKey) ?? undefined),
+  )
 }
 
 function enqueueTranslationLookup(lookupKey: string) {
@@ -82,6 +105,10 @@ async function flushTranslationLookups() {
     return
   }
 
+  await resolveTranslationKeys(keys)
+}
+
+async function resolveTranslationKeys(keys: string[]) {
   if (
     indexedDbCacheSettings.enabled &&
     indexedDbCacheSettings.cacheTagTranslations &&
@@ -145,4 +172,17 @@ async function lookupTranslationsInWorker(keys: string[]) {
 
 function normalize(value: string) {
   return value.trim().toLowerCase()
+}
+
+function createTagDisplayInfo(
+  original: string,
+  resolution: TagResolution | null | undefined,
+): tagDisplayInfo {
+  const text = resolution?.displayName ?? original
+  return {
+    text,
+    original,
+    master: resolution?.master ?? original,
+    translated: text !== original,
+  }
 }

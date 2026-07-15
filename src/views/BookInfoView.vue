@@ -5,6 +5,7 @@ import { bookInfoInput } from '@/core/model/book/bookInfoInput'
 import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { getBookInfoWithCache } from '@/core/cache/galleryCache'
 import CategoryTag from '@/components/CategoryTag.vue'
+import BookShareOverlay from '@/components/BookShareOverlay.vue'
 import {
   Picture,
   Clock,
@@ -14,6 +15,7 @@ import {
   Download,
   ChatLineRound,
   StarFilled,
+  Share,
 } from '@element-plus/icons-vue'
 import router from '@/router'
 import { useLayoutMainScrollMemory } from '@/composables/useLayoutMainScrollMemory'
@@ -26,6 +28,7 @@ const funcData = reactive({
   readMode: false,
 })
 const pageData = ref(new bookInfoOutput())
+const shareVisible = ref(false)
 let loadingBookId = ''
 const { persistScrollPosition, bindScrollListener, unbindScrollListener } =
   useLayoutMainScrollMemory('bookinfo-scroll-position')
@@ -128,6 +131,10 @@ async function fetchBookInfo() {
 function getRouteBookId(): string {
   const routeBookId = route.query.bookId
   return typeof routeBookId === 'string' ? routeBookId.replace('-', '/') : ''
+}
+
+function openSharePreview() {
+  shareVisible.value = true
 }
 
 async function toRead() {
@@ -278,6 +285,7 @@ async function toRead() {
               >
                 开始阅读
               </el-button>
+              <el-button size="large" :icon="Share" @click="openSharePreview">分享</el-button>
             </div>
           </div>
         </div>
@@ -358,6 +366,7 @@ async function toRead() {
       </el-card>
     </div>
   </div>
+  <BookShareOverlay v-model="shareVisible" :book="pageData" />
 </template>
 
 <style scoped>
