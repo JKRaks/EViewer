@@ -13,6 +13,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     BookItem: typeof import('./src/components/BookItem.vue')['default']
+    BookShareOverlay: typeof import('./src/components/BookShareOverlay.vue')['default']
     CategoryTag: typeof import('./src/components/CategoryTag.vue')['default']
     ElAlert: typeof import('element-plus/es')['ElAlert']
     ElAvatar: typeof import('element-plus/es')['ElAvatar']
@@ -32,6 +33,7 @@ declare module 'vue' {
     ElOption: typeof import('element-plus/es')['ElOption']
     ElProgress: typeof import('element-plus/es')['ElProgress']
     ElRate: typeof import('element-plus/es')['ElRate']
+    ElSegmented: typeof import('element-plus/es')['ElSegmented']
     ElSelect: typeof import('element-plus/es')['ElSelect']
     ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
     ElSkeletonItem: typeof import('element-plus/es')['ElSkeletonItem']
@@ -51,6 +53,7 @@ declare module 'vue' {
 // For TSX support
 declare global {
   const BookItem: typeof import('./src/components/BookItem.vue')['default']
+  const BookShareOverlay: typeof import('./src/components/BookShareOverlay.vue')['default']
   const CategoryTag: typeof import('./src/components/CategoryTag.vue')['default']
   const ElAlert: typeof import('element-plus/es')['ElAlert']
   const ElAvatar: typeof import('element-plus/es')['ElAvatar']
@@ -70,6 +73,7 @@ declare global {
   const ElOption: typeof import('element-plus/es')['ElOption']
   const ElProgress: typeof import('element-plus/es')['ElProgress']
   const ElRate: typeof import('element-plus/es')['ElRate']
+  const ElSegmented: typeof import('element-plus/es')['ElSegmented']
   const ElSelect: typeof import('element-plus/es')['ElSelect']
   const ElSkeleton: typeof import('element-plus/es')['ElSkeleton']
   const ElSkeletonItem: typeof import('element-plus/es')['ElSkeletonItem']
