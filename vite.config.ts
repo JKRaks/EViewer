@@ -10,6 +10,9 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vite.dev/config/
 export default defineConfig({
+  worker: {
+    format: 'es',
+  },
   plugins: [
     vue(),
     vueJsx(),
@@ -49,7 +52,24 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,ico,png,webp,json}'],
-        maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
+        globIgnores: [
+          '**/tagTranslation.worker-*.js',
+          '**/unofficialTagTranslations-*.js',
+        ],
+        runtimeCaching: [
+          {
+            urlPattern:
+              /\/assets\/(?:tagTranslation\.worker|unofficialTagTranslations)-[^/]+\.js$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'tag-translation-data',
+              expiration: {
+                maxEntries: 4,
+                maxAgeSeconds: 30 * 24 * 60 * 60,
+              },
+            },
+          },
+        ],
       },
     }),
   ],

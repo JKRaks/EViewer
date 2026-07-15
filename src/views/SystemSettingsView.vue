@@ -2,6 +2,8 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import { Delete, RefreshRight, Search } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
+import 'element-plus/es/components/message-box/style/css'
 import { useIndexedDbCacheSettings } from '@/core/cache/cacheSettings'
 import {
   validateIndexedDbEnvironment,
@@ -10,8 +12,8 @@ import {
 import {
   getTagTranslationCacheStatus,
   rebuildTagTranslationCache,
-  type TagTranslationCacheStatus,
-} from '@/core/common/tagTranslations'
+} from '@/core/common/tagTranslationWorkerClient'
+import type { TagTranslationCacheStatus } from '@/core/common/tagTranslationProtocol'
 import {
   clearGalleryDetailsCache,
   clearGalleryImageCache,
@@ -38,7 +40,7 @@ const rebuildPercentage = computed(() => {
 })
 
 onMounted(() => {
-  void Promise.all([runIndexedDbValidation(), refreshTagCacheStatus()])
+  window.setTimeout(() => void refreshTagCacheStatus(), 0)
 })
 
 async function handleIndexedDbToggle() {
@@ -182,9 +184,13 @@ function formatDate(timestamp?: number) {
         已使用 {{ formatBytes(environmentStatus.usage) }} / 配额
         {{ formatBytes(environmentStatus.quota) }}
       </div>
-      <div class="setting-tip">
-        无痕模式、浏览器存储限制或空间不足可能导致 IndexedDB 不可用；检测会执行一次临时读写并立即清理。
-      </div>
+      <el-alert
+        class="setting-tip"
+        title="无痕模式、浏览器存储限制或空间不足可能导致 IndexedDB 不可用；检测会执行一次临时读写并立即清理。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
     </section>
 
     <section class="settings-section">
@@ -276,7 +282,6 @@ function formatDate(timestamp?: number) {
 }
 
 .setting-value,
-.setting-tip,
 .storage-summary {
   font-size: 12px;
   line-height: 1.6;
@@ -299,9 +304,12 @@ function formatDate(timestamp?: number) {
 }
 
 .setting-tip {
-  margin: 4px 0 12px;
-  padding-left: 10px;
-  border-left: 2px solid var(--el-border-color);
+  margin: 6px 0 12px;
+}
+
+.setting-tip :deep(.el-alert__title) {
+  font-size: 12px;
+  line-height: 1.6;
 }
 
 @media (max-width: 560px) {

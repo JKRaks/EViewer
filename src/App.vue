@@ -237,8 +237,9 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <el-container class="layout-container" :class="{ 'is-mobile': isMobile }">
-    <el-main class="layout-main" @scroll="handleMainScroll">
+  <el-config-provider size="small" :z-index="3000">
+    <el-container class="layout-container" :class="{ 'is-mobile': isMobile }">
+      <el-main class="layout-main" @scroll="handleMainScroll">
       <Suspense>
         <template #default>
           <RouterView v-slot="{ Component, route }">
@@ -256,9 +257,9 @@ onUnmounted(() => {
           </div>
         </template>
       </Suspense>
-    </el-main>
+      </el-main>
 
-    <div class="floating-actions" :class="{ 'is-hidden': !showFloatingButtons }">
+      <div class="floating-actions" :class="{ 'is-hidden': !showFloatingButtons }">
       <el-button
         v-if="showBackButton"
         class="floating-btn"
@@ -330,6 +331,7 @@ onUnmounted(() => {
           @click="toggleMenu"
         />
       </div>
-    </div>
-  </el-container>
+      </div>
+    </el-container>
+  </el-config-provider>
 </template>

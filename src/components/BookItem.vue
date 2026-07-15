@@ -223,22 +223,25 @@ const handleClick = () => {
 .book-tags {
   display: flex;
   gap: 6px;
-  flex-wrap: wrap;
-  align-items: flex-start;
+  flex-wrap: nowrap;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
   line-height: 1.4;
 }
 
 .tag-item {
-  flex-shrink: 0;
+  flex: 0 1 auto;
   min-width: 0;
   max-width: min(150px, 100%);
-  height: auto;
+  overflow: hidden;
 }
 
 .tag-item :deep(.el-tag__content) {
   display: block;
   min-width: 0;
   max-width: 100%;
+  overflow: hidden;
 }
 
 /* 标签内部文字样式 */
@@ -246,13 +249,14 @@ const handleClick = () => {
   display: block;
   width: 100%;
   max-width: 100%;
-  overflow-wrap: anywhere;
-  white-space: normal;
+  overflow: hidden;
+  white-space: nowrap;
   vertical-align: middle;
   line-height: 1.4;
 }
 
 .tag-more {
+  flex-shrink: 0;
   background-color: var(--el-color-info-light-9);
 }
 
