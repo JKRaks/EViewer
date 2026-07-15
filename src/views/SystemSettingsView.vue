@@ -1,17 +1,19 @@
 <script setup lang="ts">
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Delete, RefreshRight, Search } from '@element-plus/icons-vue'
+import { Delete, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import 'element-plus/es/components/message-box/style/css'
 import { useIndexedDbCacheSettings } from '@/core/cache/cacheSettings'
 import {
   validateIndexedDbEnvironment,
+  deleteCacheDatabase,
   type IndexedDbEnvironmentStatus,
 } from '@/core/cache/indexedDb'
 import {
   getTagTranslationCacheStatus,
   rebuildTagTranslationCache,
+  resetTagTranslationRuntime,
 } from '@/core/common/tagTranslationWorkerClient'
 import type { TagTranslationCacheStatus } from '@/core/common/tagTranslationProtocol'
 import {
@@ -23,6 +25,7 @@ const settings = useIndexedDbCacheSettings()
 const environmentStatus = ref<IndexedDbEnvironmentStatus>()
 const tagCacheStatus = ref<TagTranslationCacheStatus>({ available: false, count: 0 })
 const validationRunning = ref(false)
+const fullClearRunning = ref(false)
 const rebuildState = reactive({
   running: false,
   completed: 0,
@@ -39,8 +42,10 @@ const rebuildPercentage = computed(() => {
   return Math.round((rebuildState.completed / rebuildState.total) * 100)
 })
 
+let indexedDbRefreshPromise: Promise<IndexedDbEnvironmentStatus> | undefined
+
 onMounted(() => {
-  window.setTimeout(() => void refreshTagCacheStatus(), 0)
+  window.setTimeout(() => void refreshIndexedDbInformation(), 0)
 })
 
 async function handleIndexedDbToggle() {
@@ -48,21 +53,18 @@ async function handleIndexedDbToggle() {
     return
   }
 
-  const status = await runIndexedDbValidation()
+  const status = await refreshIndexedDbInformation()
   if (!status.usable) {
     settings.enabled = false
     ElMessage.error('当前环境无法使用 IndexedDB，已关闭缓存')
   }
 }
 
-async function runIndexedDbValidation(showResult = false) {
+async function runIndexedDbValidation() {
   validationRunning.value = true
   try {
     const status = await validateIndexedDbEnvironment()
     environmentStatus.value = status
-    if (showResult) {
-      ElMessage[status.usable ? 'success' : 'error'](status.message)
-    }
     return status
   } finally {
     validationRunning.value = false
@@ -71,6 +73,25 @@ async function runIndexedDbValidation(showResult = false) {
 
 async function refreshTagCacheStatus() {
   tagCacheStatus.value = await getTagTranslationCacheStatus()
+}
+
+async function refreshIndexedDbInformation(showResult = false) {
+  if (!indexedDbRefreshPromise) {
+    indexedDbRefreshPromise = Promise.all([
+      runIndexedDbValidation(),
+      refreshTagCacheStatus(),
+    ])
+      .then(([status]) => status)
+      .finally(() => {
+        indexedDbRefreshPromise = undefined
+      })
+  }
+
+  const status = await indexedDbRefreshPromise
+  if (showResult) {
+    ElMessage[status.usable ? 'success' : 'error'](status.message)
+  }
+  return status
 }
 
 async function rebuildTranslations() {
@@ -88,8 +109,8 @@ async function rebuildTranslations() {
       rebuildState.completed = completed
       rebuildState.total = total
     })
-    await refreshTagCacheStatus()
     ElMessage.success(`标签翻译缓存已重建，共 ${count.toLocaleString()} 条索引`)
+    window.setTimeout(() => void refreshIndexedDbInformation(), 0)
   } catch (error) {
     console.error('重建标签翻译缓存失败:', error)
     ElMessage.error('重建失败，请先重新校验 IndexedDB')
@@ -112,11 +133,39 @@ async function clearCache(kind: 'details' | 'images') {
       await clearGalleryImageCache()
     }
     ElMessage.success(`${label}缓存已清除`)
+    window.setTimeout(() => void refreshIndexedDbInformation(), 0)
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') {
       console.error(`清除${label}缓存失败:`, error)
       ElMessage.error(`清除${label}缓存失败`)
     }
+  }
+}
+
+async function clearAllIndexedDb() {
+  try {
+    await ElMessageBox.confirm(
+      '确定完全清理 IndexedDB 中的标签翻译、画册详情和图片信息吗？',
+      '完全清理 IndexedDB',
+      {
+        confirmButtonText: '完全清理',
+        cancelButtonText: '取消',
+        type: 'warning',
+      },
+    )
+    fullClearRunning.value = true
+    resetTagTranslationRuntime()
+    await deleteCacheDatabase()
+    tagCacheStatus.value = { available: false, count: 0 }
+    ElMessage.success('IndexedDB 已完全清理')
+    window.setTimeout(() => void refreshIndexedDbInformation(), 0)
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') {
+      console.error('完全清理 IndexedDB 失败:', error)
+      ElMessage.error('完全清理 IndexedDB 失败')
+    }
+  } finally {
+    fullClearRunning.value = false
   }
 }
 
@@ -173,11 +222,11 @@ function formatDate(timestamp?: number) {
           <span class="setting-value">{{ environmentStatus?.message ?? '等待检测' }}</span>
         </div>
         <el-button
-          :icon="Search"
+          :icon="RefreshRight"
           :loading="validationRunning"
-          @click="runIndexedDbValidation(true)"
+          @click="refreshIndexedDbInformation(true)"
         >
-          检测
+          刷新
         </el-button>
       </div>
       <div v-if="environmentStatus?.usable" class="storage-summary">
@@ -206,7 +255,9 @@ function formatDate(timestamp?: number) {
           type="primary"
           :icon="RefreshRight"
           :loading="rebuildState.running"
-          :disabled="!settings.enabled || !settings.cacheTagTranslations"
+          :disabled="
+            !settings.enabled || !settings.cacheTagTranslations || fullClearRunning
+          "
           @click="rebuildTranslations"
         >
           重建
@@ -223,11 +274,39 @@ function formatDate(timestamp?: number) {
       <h2>缓存管理</h2>
       <div class="setting-row">
         <span class="setting-name">画册详情</span>
-        <el-button :icon="Delete" @click="clearCache('details')">清除</el-button>
+        <el-button
+          :icon="Delete"
+          :disabled="rebuildState.running || fullClearRunning"
+          @click="clearCache('details')"
+        >
+          清除
+        </el-button>
       </div>
       <div class="setting-row">
         <span class="setting-name">画册图片信息</span>
-        <el-button :icon="Delete" @click="clearCache('images')">清除</el-button>
+        <el-button
+          :icon="Delete"
+          :disabled="rebuildState.running || fullClearRunning"
+          @click="clearCache('images')"
+        >
+          清除
+        </el-button>
+      </div>
+      <div class="setting-row">
+        <div>
+          <div class="setting-name">全部 IndexedDB 数据</div>
+          <div class="setting-value">标签翻译、画册详情和图片信息</div>
+        </div>
+        <el-button
+          type="danger"
+          plain
+          :icon="Delete"
+          :loading="fullClearRunning"
+          :disabled="rebuildState.running"
+          @click="clearAllIndexedDb"
+        >
+          完全清理
+        </el-button>
       </div>
     </section>
   </main>
