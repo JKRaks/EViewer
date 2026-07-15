@@ -28,6 +28,22 @@ const ORIGIN_MAP = [
   },
 ]
 
+const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024
+
+function parseAllowedImageUrl(value) {
+  if (!value) {
+    throw new Error('缺少图片 URL')
+  }
+
+  const targetUrl = new URL(value)
+  const allowedHost =
+    targetUrl.hostname === 'ehgt.org' || targetUrl.hostname.endsWith('.ehgt.org')
+  if (targetUrl.protocol !== 'https:' || !allowedHost) {
+    throw new Error('不允许代理该图片地址')
+  }
+  return targetUrl
+}
+
 /**
  * 根据路径找到对应的配置
  */
@@ -170,6 +186,81 @@ function handleHealthCheck() {
       headers: { 'Content-Type': 'application/json' },
     },
   )
+}
+
+/**
+ * 处理封面图片代理请求
+ */
+async function handleImageProxy(request, requestUrl) {
+  if (request.method !== 'GET') {
+    return new Response(JSON.stringify({ error: 'Method not allowed' }), {
+      status: 405,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  let targetUrl
+  try {
+    targetUrl = parseAllowedImageUrl(requestUrl.searchParams.get('url'))
+  } catch (error) {
+    return new Response(JSON.stringify({ error: error.message }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  const response = await fetch(targetUrl, {
+    headers: {
+      Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      Referer: 'https://e-hentai.org/',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    },
+    redirect: 'manual',
+  })
+  if (!response.ok) {
+    return new Response(
+      JSON.stringify({ error: '图片源站请求失败', status: response.status }),
+      { status: 502, headers: { 'Content-Type': 'application/json' } },
+    )
+  }
+
+  const contentType = response.headers.get('content-type') || ''
+  const contentLength = Number(response.headers.get('content-length') || '0')
+  if (!contentType.toLowerCase().startsWith('image/')) {
+    return new Response(JSON.stringify({ error: '上游返回内容不是图片' }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+  if (contentLength > IMAGE_PROXY_MAX_BYTES) {
+    return new Response(JSON.stringify({ error: '图片体积超过限制' }), {
+      status: 413,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  const body = await response.arrayBuffer()
+  if (body.byteLength > IMAGE_PROXY_MAX_BYTES) {
+    return new Response(JSON.stringify({ error: '图片体积超过限制' }), {
+      status: 413,
+      headers: { 'Content-Type': 'application/json' },
+    })
+  }
+
+  const headers = new Headers({
+    'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+    'Content-Type': contentType,
+    'Cross-Origin-Resource-Policy': 'cross-origin',
+    'X-Content-Type-Options': 'nosniff',
+  })
+  const requesterOrigin = getRequesterOrigin(request)
+  if (requesterOrigin) {
+    headers.set('Access-Control-Allow-Origin', requesterOrigin)
+    headers.set('Vary', 'Origin')
+  }
+
+  return new Response(body, { status: 200, headers })
 }
 
 /**
@@ -342,6 +433,18 @@ async function handleRequest(request) {
   // CORS 预检
   if (request.method === 'OPTIONS') {
     return handleCorsPreFlight(request)
+  }
+
+  if (pathname === '/image-proxy') {
+    try {
+      return await handleImageProxy(request, url)
+    } catch (error) {
+      console.error('图片代理请求失败:', error)
+      return new Response(
+        JSON.stringify({ error: '图片代理请求失败', message: error.message }),
+        { status: 502, headers: { 'Content-Type': 'application/json' } },
+      )
+    }
   }
 
   // 找到配置则进行代理

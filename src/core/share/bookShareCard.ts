@@ -2,6 +2,7 @@ import QRCode from 'qrcode'
 import type { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { getCategoryDisplayName } from '@/core/common/category'
 import { resolveTagDisplayInfos } from '@/core/common/tagTranslations'
+import { eurlEnum } from '@/core/common/enum/eurlEnum'
 
 export type ShareQrSource = 'site' | 'source'
 
@@ -163,6 +164,25 @@ async function loadCoverImage(
     }
   } catch (error) {
     console.debug(`封面跨域读取失败: ${url}`, error)
+  }
+
+  try {
+    const proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
+    const proxyUrl = new URL('/image-proxy', proxyOrigin)
+    proxyUrl.searchParams.set('url', url)
+    const response = await fetch(proxyUrl, {
+      credentials: 'omit',
+      cache: 'force-cache',
+    })
+    if (!response.ok) throw new Error(`HTTP ${response.status}`)
+    const blob = await response.blob()
+    const cover = await createCoverDrawable(blob)
+    if (cover) {
+      void cacheCoverBlob(url, blob)
+      return cover
+    }
+  } catch (error) {
+    console.debug(`封面代理读取失败: ${url}`, error)
   }
 
   console.warn('分享卡无法读取封面，将使用占位图:', url)
