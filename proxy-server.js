@@ -5,11 +5,33 @@ import cors from 'cors'
 const app = express()
 const PORT = process.env.PORT || 3000
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173']
+const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024
+
+const isAllowedOrigin = (origin) =>
+  !origin ||
+  ALLOWED_ORIGINS.includes(origin) ||
+  /^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/.test(origin)
+
+const parseAllowedImageUrl = (value) => {
+  if (typeof value !== 'string' || !value) {
+    throw new Error('缺少图片 URL')
+  }
+
+  const targetUrl = new URL(value)
+  const allowedHost =
+    targetUrl.hostname === 'ehgt.org' || targetUrl.hostname.endsWith('.ehgt.org')
+  if (targetUrl.protocol !== 'https:' || !allowedHost) {
+    throw new Error('不允许代理该图片地址')
+  }
+  return targetUrl
+}
 
 // 配置 CORS（生产环境限制来源）
 app.use(
   cors({
-    origin: ALLOWED_ORIGINS,
+    origin(origin, callback) {
+      callback(null, isAllowedOrigin(origin))
+    },
     credentials: true, // 允许发送 Cookie
   }),
 )
@@ -44,6 +66,58 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Proxy server is running' })
 })
 
+// 封面图片代理 - 仅允许 EH 图片域名，防止成为任意 URL 代理
+app.get('/image-proxy', async (req, res) => {
+  let targetUrl
+  try {
+    targetUrl = parseAllowedImageUrl(req.query.url)
+  } catch (error) {
+    return res.status(400).json({ error: error.message })
+  }
+
+  try {
+    const response = await fetch(targetUrl, {
+      headers: {
+        Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+        'Accept-Language': 'en-US,en;q=0.5',
+        Referer: 'https://e-hentai.org/',
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      },
+      redirect: 'manual',
+      signal: AbortSignal.timeout(15000),
+    })
+    if (!response.ok) {
+      return res.status(502).json({ error: '图片源站请求失败', status: response.status })
+    }
+
+    const contentType = response.headers.get('content-type') || ''
+    const contentLength = Number(response.headers.get('content-length') || '0')
+    if (!contentType.toLowerCase().startsWith('image/')) {
+      return res.status(502).json({ error: '上游返回内容不是图片' })
+    }
+    if (contentLength > IMAGE_PROXY_MAX_BYTES) {
+      return res.status(413).json({ error: '图片体积超过限制' })
+    }
+
+    const body = await response.arrayBuffer()
+    if (body.byteLength > IMAGE_PROXY_MAX_BYTES) {
+      return res.status(413).json({ error: '图片体积超过限制' })
+    }
+
+    res.set({
+      'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+      'Content-Type': contentType,
+      'Cross-Origin-Resource-Policy': 'cross-origin',
+      'X-Content-Type-Options': 'nosniff',
+    })
+    return res.send(Buffer.from(body))
+  } catch (error) {
+    console.error('图片代理请求失败:', error)
+    return res.status(502).json({ error: '图片代理请求失败', message: error.message })
+  }
+})
+
 // 代理配置
 const createProxyOptions = () => ({
   target: 'https://e-hentai.org',
@@ -63,7 +137,6 @@ const createProxyOptions = () => ({
   on: {
     proxyReq: (proxyReq, req) => {
       // console.log('\n========== onProxyReq 被触发 ==========')
-      const targetUrl = `https://e-hentai.org${proxyReq.path}`
       // console.log('代理请求详情:', {
       //   原始URL: req.url,
       //   原始路径: req.path,
@@ -215,5 +288,6 @@ app.listen(PORT, () => {
   console.log(`允许的来源: ${ALLOWED_ORIGINS.join(', ')}`)
   console.log('路由配置:')
   console.log('  - GET /health (健康检查)')
+  console.log('  - GET /image-proxy?url=... (代理 ehgt.org 图片)')
   console.log('  - ALL /ehentai/* (代理到 e-hentai.org)')
 })
