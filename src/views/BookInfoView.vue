@@ -1,5 +1,14 @@
 <script lang="ts" setup>
-import { computed, onActivated, onDeactivated, onMounted, onUnmounted, reactive, ref } from 'vue'
+import {
+  computed,
+  onActivated,
+  onDeactivated,
+  onMounted,
+  onUnmounted,
+  reactive,
+  ref,
+  watch,
+} from 'vue'
 import { useRoute } from 'vue-router'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
 import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
@@ -19,19 +28,22 @@ import {
 } from '@element-plus/icons-vue'
 import router from '@/router'
 import { useLayoutMainScrollMemory } from '@/composables/useLayoutMainScrollMemory'
+import { useFloatingActions } from '@/composables/useFloatingActions'
 import { getTagCollectionDisplayName, getTagDisplayInfo } from '@/core/common/tagTranslations'
 
 const route = useRoute()
 const funcData = reactive({
-  bookQueryInfo: new bookInfoInput(),
   loading: true,
   readMode: false,
 })
 const pageData = ref(new bookInfoOutput())
 const shareVisible = ref(false)
+const shareCoverElement = ref<HTMLImageElement | null>(null)
 let loadingBookId = ''
+let bookRequestVersion = 0
 const { persistScrollPosition, bindScrollListener, unbindScrollListener } =
   useLayoutMainScrollMemory('bookinfo-scroll-position')
+const { addFloatingAction, removeFloatingAction } = useFloatingActions()
 
 defineOptions({
   name: 'BookInfoView',
@@ -94,17 +106,35 @@ onActivated(() => {
   bindScrollListener()
 
   const routeBookId = getRouteBookId()
+  if (!funcData.loading && pageData.value.bookId === routeBookId) {
+    registerShareAction()
+  }
+
   if (routeBookId && routeBookId !== pageData.value.bookId && routeBookId !== loadingBookId) {
     void fetchBookInfo()
   }
 })
 
+watch(
+  () => route.query.bookId,
+  (bookId, previousBookId) => {
+    if (bookId !== previousBookId) {
+      void fetchBookInfo()
+    }
+  },
+)
+
 onDeactivated(() => {
+  bookRequestVersion++
+  loadingBookId = ''
+  resetShareState()
   persistScrollPosition()
   unbindScrollListener()
 })
 
 onUnmounted(() => {
+  bookRequestVersion++
+  resetShareState()
   persistScrollPosition()
   unbindScrollListener()
 })
@@ -115,16 +145,27 @@ async function fetchBookInfo() {
     return
   }
 
+  const requestVersion = ++bookRequestVersion
   loadingBookId = routeBookId
   funcData.loading = true
+  resetShareState()
   try {
-    funcData.bookQueryInfo.bookId = routeBookId
-    pageData.value = await getBookInfoWithCache(funcData.bookQueryInfo, 'detail')
+    const requestInput = new bookInfoInput()
+    requestInput.bookId = routeBookId
+    const result = await getBookInfoWithCache(requestInput, 'detail')
+    if (requestVersion === bookRequestVersion && getRouteBookId() === routeBookId) {
+      pageData.value = result
+    }
   } catch (error) {
     console.error('获取书籍信息失败:', error)
   } finally {
-    loadingBookId = ''
-    funcData.loading = false
+    if (requestVersion === bookRequestVersion) {
+      loadingBookId = ''
+      funcData.loading = false
+      if (pageData.value.bookId === routeBookId && getRouteBookId() === routeBookId) {
+        registerShareAction()
+      }
+    }
   }
 }
 
@@ -134,7 +175,29 @@ function getRouteBookId(): string {
 }
 
 function openSharePreview() {
+  if (funcData.loading || pageData.value.bookId !== getRouteBookId()) return
+
+  shareCoverElement.value = document.querySelector<HTMLImageElement>(
+    '.bookinfo-view .cover-image img',
+  )
   shareVisible.value = true
+}
+
+function resetShareState() {
+  shareVisible.value = false
+  shareCoverElement.value = null
+  removeFloatingAction('book-share')
+}
+
+function registerShareAction() {
+  addFloatingAction({
+    key: 'book-share',
+    icon: Share,
+    onClick: openSharePreview,
+    active: true,
+    order: 10,
+    className: 'book-share-action',
+  })
 }
 
 async function toRead() {
@@ -285,7 +348,6 @@ async function toRead() {
               >
                 开始阅读
               </el-button>
-              <el-button size="large" :icon="Share" @click="openSharePreview">分享</el-button>
             </div>
           </div>
         </div>
@@ -366,7 +428,7 @@ async function toRead() {
       </el-card>
     </div>
   </div>
-  <BookShareOverlay v-model="shareVisible" :book="pageData" />
+  <BookShareOverlay v-model="shareVisible" :book="pageData" :cover-element="shareCoverElement" />
 </template>
 
 <style scoped>

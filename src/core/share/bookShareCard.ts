@@ -26,25 +26,39 @@ interface ShareCardData {
   favorited: number
   tags: ShareTag[]
   targetUrl: string
-  qrLabel: string
 }
 
-const CARD_WIDTH = 1200
+interface CoverDrawable {
+  image: CanvasImageSource
+  width: number
+  height: number
+  dispose: () => void
+}
+
+const CARD_WIDTH = 1280
 const CARD_HEIGHT = 680
 const CARD_FONT = '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif'
+const CARD_PRIMARY = '#409eff'
+const CARD_PRIMARY_DARK = '#337ecc'
+const CARD_TEXT = '#2c3e50'
+const CARD_MUTED = '#6b7280'
+const CARD_LINE = '#d9e2ef'
+const COVER_CACHE_NAME = 'eviewer-share-covers-v1'
+const MAX_CACHED_COVERS = 60
 
 export async function generateBookShareCard(
   book: bookInfoOutput,
   source: ShareQrSource,
+  pageCover?: HTMLImageElement | null,
 ): Promise<GeneratedShareCard> {
   const data = await buildShareCardData(book, source)
   const qrCanvas = document.createElement('canvas')
   const [cover] = await Promise.all([
-    loadCoverImage(data.coverUrl),
+    loadCoverImage(data.coverUrl, pageCover),
     QRCode.toCanvas(qrCanvas, data.targetUrl, {
-      width: 164,
+      width: 190,
       margin: 1,
-      color: { dark: '#152f32', light: '#ffffff' },
+      color: { dark: '#26384f', light: '#ffffff' },
       errorCorrectionLevel: 'M',
     }),
   ])
@@ -72,7 +86,7 @@ export async function generateBookShareCard(
       filename: `EViewer-${sanitizeFilename(data.title)}.png`,
     }
   } finally {
-    cover?.close()
+    cover?.dispose()
   }
 }
 
@@ -106,86 +120,200 @@ async function buildShareCardData(
     favorited: book.favorited,
     tags,
     targetUrl: source === 'source' ? sourceUrl : siteUrl.toString(),
-    qrLabel: source === 'source' ? '源站' : '本站',
   }
 }
 
-async function loadCoverImage(url: string): Promise<ImageBitmap | null> {
+async function loadCoverImage(
+  url: string,
+  pageCover?: HTMLImageElement | null,
+): Promise<CoverDrawable | null> {
   if (!url) return null
 
+  const pageImageBlob = await extractPageCoverBlob(pageCover)
+  if (pageImageBlob) {
+    void cacheCoverBlob(url, pageImageBlob)
+    return await createCoverDrawable(pageImageBlob)
+  }
+
   try {
-    const response = await fetch(url, { credentials: 'same-origin' })
+    if ('caches' in globalThis) {
+      const cache = await caches.open(COVER_CACHE_NAME)
+      const cachedResponse = await cache.match(url)
+      if (cachedResponse) {
+        const cachedCover = await createCoverDrawable(await cachedResponse.blob())
+        if (cachedCover) return cachedCover
+      }
+    }
+  } catch (error) {
+    console.debug('浏览器缓存中没有可复用的封面 Blob:', error)
+  }
+
+  try {
+    const response = await fetch(url, {
+      mode: 'cors',
+      credentials: 'omit',
+      cache: 'force-cache',
+    })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)
     const blob = await response.blob()
-    if (!blob.type.startsWith('image/')) throw new Error('封面返回内容不是图片')
-    return await createImageBitmap(blob)
+    const cover = await createCoverDrawable(blob)
+    if (cover) {
+      void cacheCoverBlob(url, blob)
+      return cover
+    }
   } catch (error) {
-    console.warn('分享卡封面读取失败，将使用占位图:', error)
+    console.debug(`封面跨域读取失败: ${url}`, error)
+  }
+
+  console.warn('分享卡无法读取封面，将使用占位图:', url)
+  return null
+}
+
+async function extractPageCoverBlob(pageCover?: HTMLImageElement | null): Promise<Blob | null> {
+  if (!pageCover?.complete || !pageCover.naturalWidth || !pageCover.naturalHeight) return null
+
+  try {
+    const maxWidth = 1200
+    const scale = Math.min(1, maxWidth / pageCover.naturalWidth)
+    const canvas = document.createElement('canvas')
+    canvas.width = Math.max(1, Math.round(pageCover.naturalWidth * scale))
+    canvas.height = Math.max(1, Math.round(pageCover.naturalHeight * scale))
+    const context = canvas.getContext('2d')
+    if (!context) return null
+    context.drawImage(pageCover, 0, 0, canvas.width, canvas.height)
+    const blob = await new Promise<Blob>((resolve, reject) => {
+      canvas.toBlob((result) => {
+        if (result) resolve(result)
+        else reject(new Error('页面封面 Blob 提取失败'))
+      }, 'image/png')
+    })
+    return blob
+  } catch (error) {
+    console.debug('页面封面受跨域保护，改用网络 Blob:', error)
     return null
+  }
+}
+
+async function cacheCoverBlob(url: string, blob: Blob) {
+  if (!('caches' in globalThis) || !/^https?:/i.test(url)) return
+
+  try {
+    const cache = await caches.open(COVER_CACHE_NAME)
+    await cache.put(
+      url,
+      new Response(blob, {
+        headers: { 'Content-Type': blob.type || 'image/jpeg' },
+      }),
+    )
+    const keys = await cache.keys()
+    const excessKeys = keys.slice(0, Math.max(0, keys.length - MAX_CACHED_COVERS))
+    await Promise.all(excessKeys.map((key) => cache.delete(key)))
+  } catch (error) {
+    console.debug('写入前端封面缓存失败:', error)
+  }
+}
+
+async function createCoverDrawable(blob: Blob): Promise<CoverDrawable | null> {
+  if (!blob.type.startsWith('image/')) return null
+
+  if (typeof createImageBitmap === 'function') {
+    const bitmap = await createImageBitmap(blob)
+    return {
+      image: bitmap,
+      width: bitmap.width,
+      height: bitmap.height,
+      dispose: () => bitmap.close(),
+    }
+  }
+
+  const objectUrl = URL.createObjectURL(blob)
+  const image = new Image()
+  try {
+    await new Promise<void>((resolve, reject) => {
+      image.onload = () => resolve()
+      image.onerror = () => reject(new Error('封面 Blob 解码失败'))
+      image.src = objectUrl
+    })
+    return {
+      image,
+      width: image.naturalWidth,
+      height: image.naturalHeight,
+      dispose: () => URL.revokeObjectURL(objectUrl),
+    }
+  } catch (error) {
+    URL.revokeObjectURL(objectUrl)
+    throw error
   }
 }
 
 function drawShareCard(
   context: CanvasRenderingContext2D,
   data: ShareCardData,
-  cover: ImageBitmap | null,
+  cover: CoverDrawable | null,
   qrCanvas: HTMLCanvasElement,
 ) {
-  context.fillStyle = '#dfe8e6'
-  context.fillRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
+  context.clearRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
 
   context.save()
-  context.shadowColor = 'rgba(22, 48, 50, 0.18)'
-  context.shadowBlur = 22
+  context.shadowColor = 'rgba(64, 158, 255, 0.18)'
+  context.shadowBlur = 20
   context.shadowOffsetY = 8
-  roundedRect(context, 20, 20, 1160, 640, 18)
-  context.fillStyle = '#fbfcfa'
+  roundedRect(context, 20, 20, 1240, 640, 18)
+  context.fillStyle = '#ffffff'
   context.fill()
   context.restore()
 
   context.save()
-  roundedRect(context, 42, 42, 350, 596, 10)
+  roundedRect(context, 42, 42, 420, 596, 10)
   context.clip()
   if (cover) {
-    drawImageCover(context, cover, 42, 42, 350, 596)
+    drawImageCover(context, cover, 42, 42, 420, 596)
   } else {
-    context.fillStyle = '#d5e0de'
-    context.fillRect(42, 42, 350, 596)
-    context.fillStyle = '#6b8584'
+    context.fillStyle = '#eef3f9'
+    context.fillRect(42, 42, 420, 596)
+    context.fillStyle = CARD_PRIMARY
     context.font = `600 28px ${CARD_FONT}`
     context.textAlign = 'center'
-    context.fillText('EViewer', 217, 324)
+    context.fillText('EViewer', 252, 324)
     context.font = `18px ${CARD_FONT}`
-    context.fillText('封面暂不可用', 217, 360)
+    context.fillText('封面暂不可用', 252, 360)
   }
   context.restore()
 
-  context.strokeStyle = '#b7c8c5'
-  context.lineWidth = 2
-  context.setLineDash([8, 10])
-  context.beginPath()
-  context.moveTo(426, 46)
-  context.lineTo(426, 634)
-  context.stroke()
-  context.setLineDash([])
+  context.save()
+  context.globalCompositeOperation = 'destination-out'
   for (let y = 64; y <= 616; y += 36) {
     context.beginPath()
-    context.fillStyle = '#dfe8e6'
-    context.arc(426, y, 4, 0, Math.PI * 2)
+    context.arc(490, y, 2.5, 0, Math.PI * 2)
     context.fill()
   }
+  for (const y of [20, 660]) {
+    context.beginPath()
+    context.arc(490, y, 12, 0, Math.PI * 2)
+    context.fill()
+  }
+  context.restore()
 
-  context.fillStyle = '#147a76'
+  context.strokeStyle = CARD_LINE
+  context.lineWidth = 1
+  context.setLineDash([3, 7])
+  context.beginPath()
+  context.moveTo(490, 46)
+  context.lineTo(490, 634)
+  context.stroke()
+  context.setLineDash([])
+
+  context.fillStyle = CARD_PRIMARY
   context.font = `700 22px ${CARD_FONT}`
   context.textAlign = 'left'
-  context.fillText('EVIEWER', 470, 76)
-  context.fillStyle = '#75908d'
+  context.fillText('EVIEWER', 530, 76)
+  context.fillStyle = CARD_MUTED
   context.font = `600 14px ${CARD_FONT}`
-  context.fillText('GALLERY PASS', 584, 75)
+  context.fillText('GALLERY PASS', 644, 75)
 
-  context.fillStyle = '#173436'
+  context.fillStyle = CARD_TEXT
   context.font = `700 40px ${CARD_FONT}`
-  drawWrappedText(context, data.title, 470, 120, 660, 50, 2)
+  drawWrappedText(context, data.title, 530, 120, 690, 50, 2)
 
   const metaY = 238
   const metadata = [
@@ -193,40 +321,40 @@ function drawShareCard(
     data.category || '未分类',
     `评分 ${data.rating}`,
   ]
-  let metaX = 470
+  let metaX = 530
   context.font = `600 18px ${CARD_FONT}`
   for (const item of metadata) {
     const width = Math.min(context.measureText(item).width + 30, 190)
     roundedRect(context, metaX, metaY, width, 40, 7)
-    context.fillStyle = '#e7f0ee'
+    context.fillStyle = '#edf3fb'
     context.fill()
-    context.fillStyle = '#345c5b'
+    context.fillStyle = CARD_PRIMARY_DARK
     context.fillText(trimToWidth(context, item, width - 28), metaX + 15, metaY + 27)
     metaX += width + 12
   }
 
-  context.fillStyle = '#6e8583'
+  context.fillStyle = CARD_MUTED
   context.font = `600 15px ${CARD_FONT}`
-  context.fillText('TAGS', 470, 316)
+  context.fillText('TAGS', 530, 316)
   const shownTags = data.tags.slice(0, data.tags.length > 6 ? 5 : 6)
-  let tagX = 470
+  let tagX = 530
   let tagY = 334
   context.font = `500 17px ${CARD_FONT}`
   for (const tag of shownTags) {
-    const maxTagWidth = 210
+    const maxTagWidth = 220
     const label = trimToWidth(context, tag.text, maxTagWidth - 28)
     const width = Math.min(context.measureText(label).width + 28, maxTagWidth)
-    if (tagX + width > 930) {
-      tagX = 470
+    if (tagX + width > 1000) {
+      tagX = 530
       tagY += 48
     }
     roundedRect(context, tagX, tagY, width, 36, 6)
-    context.fillStyle = tag.official ? '#dcefeb' : '#edf0ef'
+    context.fillStyle = tag.official ? '#eaf1fb' : '#f2f4f7'
     context.fill()
-    context.strokeStyle = tag.official ? '#8ebfba' : '#cbd3d1'
+    context.strokeStyle = tag.official ? '#9db9df' : '#d5dae1'
     context.lineWidth = 1
     context.stroke()
-    context.fillStyle = tag.official ? '#176d69' : '#586967'
+    context.fillStyle = tag.official ? CARD_PRIMARY : '#596579'
     context.fillText(label, tagX + 14, tagY + 24)
     tagX += width + 10
   }
@@ -234,50 +362,38 @@ function drawShareCard(
   if (hiddenTagCount > 0) {
     const label = `+${hiddenTagCount}`
     const width = context.measureText(label).width + 26
-    if (tagX + width > 930) {
-      tagX = 470
+    if (tagX + width > 1000) {
+      tagX = 530
       tagY += 48
     }
     roundedRect(context, tagX, tagY, width, 36, 6)
-    context.fillStyle = '#edf0ef'
+    context.fillStyle = '#f2f4f7'
     context.fill()
-    context.fillStyle = '#586967'
+    context.fillStyle = '#596579'
     context.fillText(label, tagX + 13, tagY + 24)
   }
 
-  context.fillStyle = '#78908e'
+  context.fillStyle = CARD_MUTED
   context.font = `500 15px ${CARD_FONT}`
-  context.fillText('语言', 470, 528)
-  context.fillText('收藏', 670, 528)
-  context.fillStyle = '#173436'
+  context.fillText('语言', 530, 528)
+  context.fillText('收藏', 760, 528)
+  context.fillStyle = CARD_TEXT
   context.font = `600 20px ${CARD_FONT}`
-  context.fillText(trimToWidth(context, data.language, 165), 470, 556)
-  context.fillText(data.favorited.toLocaleString(), 670, 556)
+  context.fillText(trimToWidth(context, data.language, 190), 530, 556)
+  context.fillText(data.favorited.toLocaleString(), 760, 556)
 
-  roundedRect(context, 966, 404, 184, 210, 8)
-  context.fillStyle = '#ffffff'
-  context.fill()
-  context.strokeStyle = '#d6e1df'
+  context.drawImage(qrCanvas, 1040, 394, 190, 190)
+
+  context.strokeStyle = CARD_LINE
+  context.lineWidth = 1
+  context.beginPath()
+  context.moveTo(530, 602)
+  context.lineTo(1230, 602)
   context.stroke()
-  context.drawImage(qrCanvas, 976, 414, 164, 164)
-  context.fillStyle = '#54706e'
-  context.font = `600 14px ${CARD_FONT}`
-  context.textAlign = 'center'
-  context.fillText(`二维码 · ${data.qrLabel}`, 1058, 599)
-
   context.textAlign = 'left'
-  context.fillStyle = '#78908e'
-  context.font = `500 15px ${CARD_FONT}`
-  context.fillText('Powered by EViewer · @JKRaks', 470, 615)
-  context.fillStyle = '#147a76'
-  context.fillRect(470, 630, 180, 4)
-
-  context.fillStyle = '#dfe8e6'
-  for (const y of [20, 660]) {
-    context.beginPath()
-    context.arc(426, y, 14, 0, Math.PI * 2)
-    context.fill()
-  }
+  context.fillStyle = CARD_MUTED
+  context.font = `500 14px ${CARD_FONT}`
+  context.fillText('Power By EViewer · @JKRaks', 530, 630)
 }
 
 function drawWrappedText(
@@ -316,26 +432,33 @@ function drawWrappedText(
 
 function drawImageCover(
   context: CanvasRenderingContext2D,
-  image: ImageBitmap,
+  cover: CoverDrawable,
   x: number,
   y: number,
   width: number,
   height: number,
 ) {
-  const scale = Math.max(width / image.width, height / image.height)
-  const sourceWidth = width / scale
-  const sourceHeight = height / scale
-  context.drawImage(
-    image,
-    (image.width - sourceWidth) / 2,
-    (image.height - sourceHeight) / 2,
-    sourceWidth,
-    sourceHeight,
-    x,
-    y,
-    width,
-    height,
-  )
+  const scale = width / cover.width
+  const renderedHeight = cover.height * scale
+  if (renderedHeight >= height) {
+    const sourceHeight = height / scale
+    context.drawImage(
+      cover.image,
+      0,
+      (cover.height - sourceHeight) / 2,
+      cover.width,
+      sourceHeight,
+      x,
+      y,
+      width,
+      height,
+    )
+    return
+  }
+
+  context.fillStyle = '#eef3f9'
+  context.fillRect(x, y, width, height)
+  context.drawImage(cover.image, x, y + (height - renderedHeight) / 2, width, renderedHeight)
 }
 
 function roundedRect(
