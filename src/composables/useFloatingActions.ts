@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { shallowRef } from 'vue'
 import type { Component } from 'vue'
 
 /**
@@ -24,7 +24,7 @@ export interface FloatingActionItem {
 /**
  * 当前页面注册的悬浮按钮列表（全局共享）。
  */
-const pageFloatingActions = ref<FloatingActionItem[]>([])
+const pageFloatingActions = shallowRef<FloatingActionItem[]>([])
 
 /**
  * 悬浮按钮注册 API。

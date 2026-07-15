@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { onBeforeUnmount, ref, watch } from 'vue'
 import { Close, Download, Loading, Share } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
@@ -13,6 +13,7 @@ import {
 const props = defineProps<{
   modelValue: boolean
   book: bookInfoOutput
+  coverElement?: HTMLImageElement | null
 }>()
 
 const emit = defineEmits<{
@@ -24,27 +25,23 @@ const generating = ref(false)
 const generationError = ref('')
 const generated = ref<GeneratedShareCard | null>(null)
 const previewUrl = ref('')
-const generatedCache = new Map<ShareQrSource, GeneratedShareCard>()
+const generatedCache = new Map<string, GeneratedShareCard>()
 let generationId = 0
-let previousBodyOverflow = ''
-
-const supportsSystemShare = computed(() => typeof navigator !== 'undefined' && !!navigator.share)
-const qrOptions = [
-  { label: '本站', value: 'site' },
-  { label: '源站', value: 'source' },
-]
+let lockedMainElement: HTMLElement | null = null
+let previousMainOverflowY = ''
 
 watch(
   () => props.modelValue,
   (visible) => {
     if (visible) {
-      previousBodyOverflow = document.body.style.overflow
-      document.body.style.overflow = 'hidden'
+      setBackgroundScrollLocked(true)
       window.addEventListener('keydown', handleKeydown)
+      window.addEventListener('pagehide', handlePageHide)
       void renderPreview()
     } else {
-      document.body.style.overflow = previousBodyOverflow
+      setBackgroundScrollLocked(false)
       window.removeEventListener('keydown', handleKeydown)
+      window.removeEventListener('pagehide', handlePageHide)
       generationId++
       generated.value = null
       releasePreviewUrl()
@@ -58,19 +55,30 @@ watch(qrSource, () => {
 
 watch(
   () => props.book.bookId,
-  () => clearGeneratedCache(),
+  () => {
+    clearGeneratedCache()
+    if (props.modelValue) void renderPreview()
+  },
 )
 
 onBeforeUnmount(() => {
-  document.body.style.overflow = previousBodyOverflow
+  setBackgroundScrollLocked(false)
   window.removeEventListener('keydown', handleKeydown)
+  window.removeEventListener('pagehide', handlePageHide)
   clearGeneratedCache()
 })
 
 async function renderPreview() {
   const source = qrSource.value
+  const bookId = props.book.bookId
+  if (!bookId) {
+    generationError.value = '画册信息尚未加载完成'
+    return
+  }
+
   const currentGeneration = ++generationId
-  const cached = generatedCache.get(source)
+  const cacheKey = `${bookId}\u0000${source}`
+  const cached = generatedCache.get(cacheKey)
   if (cached) {
     setGenerated(cached)
     generationError.value = ''
@@ -81,9 +89,11 @@ async function renderPreview() {
   generating.value = true
   generationError.value = ''
   try {
-    const result = await generateBookShareCard(props.book, source)
-    if (currentGeneration !== generationId || !props.modelValue) return
-    generatedCache.set(source, result)
+    const result = await generateBookShareCard(props.book, source, props.coverElement)
+    if (currentGeneration !== generationId || !props.modelValue || props.book.bookId !== bookId) {
+      return
+    }
+    generatedCache.set(cacheKey, result)
     setGenerated(result)
   } catch (error) {
     if (currentGeneration !== generationId) return
@@ -101,8 +111,10 @@ function setGenerated(result: GeneratedShareCard) {
 }
 
 function clearGeneratedCache() {
+  generationId++
   generatedCache.clear()
   generated.value = null
+  generating.value = false
   releasePreviewUrl()
 }
 
@@ -117,6 +129,27 @@ function close() {
 
 function handleKeydown(event: KeyboardEvent) {
   if (event.key === 'Escape') close()
+}
+
+function handlePageHide() {
+  setBackgroundScrollLocked(false)
+}
+
+function setBackgroundScrollLocked(locked: boolean) {
+  if (locked) {
+    if (lockedMainElement) return
+    lockedMainElement = document.querySelector<HTMLElement>('.layout-main')
+    if (!lockedMainElement) return
+    previousMainOverflowY = lockedMainElement.style.overflowY
+    lockedMainElement.style.overflowY = 'hidden'
+    return
+  }
+
+  if (lockedMainElement) {
+    lockedMainElement.style.overflowY = previousMainOverflowY
+  }
+  lockedMainElement = null
+  previousMainOverflowY = ''
 }
 
 function downloadImage() {
@@ -194,33 +227,36 @@ async function shareImage() {
           </div>
 
           <div class="share-controls">
-            <el-segmented
+            <el-radio-group
               v-model="qrSource"
-              :options="qrOptions"
               class="share-source-selector"
               aria-label="二维码链接来源"
-            />
-            <el-tooltip content="下载分享图" placement="top">
-              <el-button
-                class="share-control-button"
-                circle
-                :icon="Download"
-                :disabled="!generated || generating"
-                aria-label="下载分享图"
-                @click="downloadImage"
-              />
-            </el-tooltip>
-            <el-button
-              v-if="supportsSystemShare"
-              class="share-system-button"
-              type="primary"
-              round
-              :icon="Share"
-              :disabled="!generated || generating"
-              @click="shareImage"
             >
-              系统分享
-            </el-button>
+              <el-radio value="site">本站</el-radio>
+              <el-radio value="source">源站</el-radio>
+            </el-radio-group>
+            <div class="share-action-row">
+              <el-tooltip content="下载分享图" placement="top">
+                <el-button
+                  class="share-action-button"
+                  circle
+                  :icon="Download"
+                  :disabled="!generated || generating"
+                  aria-label="下载分享图"
+                  @click="downloadImage"
+                />
+              </el-tooltip>
+              <el-tooltip content="系统分享" placement="top">
+                <el-button
+                  class="share-action-button"
+                  circle
+                  :icon="Share"
+                  :disabled="!generated || generating"
+                  aria-label="系统分享"
+                  @click="shareImage"
+                />
+              </el-tooltip>
+            </div>
           </div>
         </div>
       </div>
@@ -237,7 +273,7 @@ async function shareImage() {
   place-items: center;
   padding: max(56px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
   overflow: auto;
-  background: rgba(7, 17, 18, 0.84);
+  background: rgba(18, 28, 45, 0.84);
   -webkit-backdrop-filter: blur(12px);
   backdrop-filter: blur(12px);
 }
@@ -251,7 +287,7 @@ async function shareImage() {
   height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   color: #fff;
-  background: rgba(12, 31, 32, 0.68);
+  background: rgba(32, 49, 75, 0.72);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(8px);
 }
@@ -260,7 +296,7 @@ async function shareImage() {
 .share-close:focus-visible {
   border-color: rgba(255, 255, 255, 0.7);
   color: #fff;
-  background: rgba(20, 69, 68, 0.9);
+  background: rgba(64, 158, 255, 0.9);
 }
 
 .share-floating-content {
@@ -303,47 +339,94 @@ async function shareImage() {
 
 .share-controls {
   display: flex;
-  min-height: 44px;
-  flex-wrap: wrap;
+  width: min(320px, 100%);
+  flex-direction: column;
   align-items: center;
-  justify-content: center;
   gap: 12px;
 }
 
 .share-source-selector {
-  --el-segmented-bg-color: rgba(245, 250, 249, 0.16);
-  --el-segmented-item-selected-bg-color: #f5faf9;
-  --el-segmented-item-selected-color: #176d69;
-  --el-segmented-item-hover-bg-color: rgba(245, 250, 249, 0.24);
-  padding: 4px;
-  color: rgba(255, 255, 255, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.22);
-  backdrop-filter: blur(8px);
+  display: flex;
+  width: 100%;
+  gap: 12px;
 }
 
-.share-control-button,
-.share-system-button {
+.share-source-selector :deep(.el-radio) {
+  display: flex;
+  min-width: 0;
   height: 44px;
+  flex: 1;
+  justify-content: center;
+  margin: 0;
+  padding: 0 16px;
+  border: 1px solid rgba(255, 255, 255, 0.26);
+  border-radius: 6px;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.08);
+  transition:
+    border-color 0.18s ease,
+    background-color 0.18s ease,
+    box-shadow 0.18s ease;
+}
+
+.share-source-selector :deep(.el-radio:hover) {
+  border-color: rgba(255, 255, 255, 0.52);
+  background: rgba(255, 255, 255, 0.13);
+}
+
+.share-source-selector :deep(.el-radio.is-checked) {
+  border-color: var(--el-color-primary);
+  background: rgba(64, 158, 255, 0.18);
+  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.16);
+}
+
+.share-source-selector :deep(.el-radio__inner) {
+  width: 18px;
+  height: 18px;
+}
+
+.share-source-selector :deep(.el-radio__inner::after) {
+  width: 6px;
+  height: 6px;
+}
+
+.share-source-selector :deep(.el-radio__label) {
+  padding-left: 8px;
+  color: inherit;
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.share-source-selector :deep(.el-radio__input.is-checked .el-radio__inner) {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary);
+}
+
+.share-source-selector :deep(.el-radio__input.is-checked + .el-radio__label) {
+  color: #fff;
+}
+
+.share-action-row {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.share-action-button {
+  width: 46px;
+  height: 46px;
+  border-color: var(--el-color-primary);
+  color: #fff;
+  background: var(--el-color-primary);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
-.share-control-button {
-  width: 44px;
-  border-color: rgba(255, 255, 255, 0.25);
+.share-action-button:hover,
+.share-action-button:focus-visible {
+  border-color: var(--el-color-primary-dark-2);
   color: #fff;
-  background: rgba(245, 250, 249, 0.14);
-  backdrop-filter: blur(8px);
-}
-
-.share-control-button:hover,
-.share-control-button:focus-visible {
-  border-color: rgba(255, 255, 255, 0.65);
-  color: #fff;
-  background: rgba(245, 250, 249, 0.24);
-}
-
-.share-system-button {
-  padding-inline: 18px;
+  background: var(--el-color-primary-dark-2);
 }
 
 .share-overlay-enter-active,
