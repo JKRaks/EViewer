@@ -55,6 +55,17 @@ export function onTagTranslationCacheRebuilt(listener: () => void) {
   cacheRebuiltListeners.add(listener)
 }
 
+export function resetTagTranslationRuntime() {
+  const error = new Error('标签翻译后台任务已重置')
+  pendingRequests.forEach((request) => request.reject(error))
+  pendingRequests.clear()
+  translationWorker?.terminate()
+  translationWorker = undefined
+  globalThis.setTimeout(() => {
+    cacheRebuiltListeners.forEach((listener) => listener())
+  }, 0)
+}
+
 function requestWorker<T>(
   payload:
     | Omit<Extract<TagTranslationWorkerRequest, { type: 'lookup' }>, 'id'>

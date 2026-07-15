@@ -1,4 +1,4 @@
-import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb'
 
 const databaseName = 'eviewer-cache'
 const databaseVersion = 1
@@ -110,6 +110,11 @@ export function openCacheDatabase(): Promise<IDBPDatabase<EViewerCacheDatabase>>
       terminated() {
         databasePromise = undefined
       },
+      blocking() {
+        const currentDatabase = databasePromise
+        databasePromise = undefined
+        void currentDatabase?.then((database) => database.close()).catch(() => undefined)
+      },
     })
 
     databasePromise = openWithTimeout(opening).catch((error) => {
@@ -193,4 +198,38 @@ export async function clearCacheStore(
 ) {
   const database = await openCacheDatabase()
   await database.clear(storeName)
+}
+
+export async function deleteCacheDatabase() {
+  const currentDatabase = databasePromise
+  databasePromise = undefined
+  if (currentDatabase) {
+    try {
+      const database = await currentDatabase
+      database.close()
+    } catch {
+      // The failed connection is already unusable and can be discarded.
+    }
+  }
+
+  await operationWithTimeout(deleteDB(databaseName), 'IndexedDB 完全清理超时')
+}
+
+function operationWithTimeout<T>(operation: Promise<T>, timeoutMessage: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeout = globalThis.setTimeout(
+      () => reject(new Error(timeoutMessage)),
+      databaseOpenTimeout,
+    )
+    operation.then(
+      (value) => {
+        globalThis.clearTimeout(timeout)
+        resolve(value)
+      },
+      (error) => {
+        globalThis.clearTimeout(timeout)
+        reject(error)
+      },
+    )
+  })
 }
