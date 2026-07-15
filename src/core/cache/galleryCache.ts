@@ -1,0 +1,307 @@
+import { bookInfoBusi } from '../busi/bookInfoBusi'
+import { bookInfoInput } from '../model/book/bookInfoInput'
+import { bookInfoOutput, userComment } from '../model/book/bookInfoOutput'
+import type { tagCollection } from '../model/book/tag'
+import { indexedDbCacheSettings } from './cacheSettings'
+import {
+  clearCacheStore,
+  openCacheDatabase,
+  type GalleryDetailRecord,
+  type GalleryImagePageRecord,
+} from './indexedDb'
+
+const pendingRequests = new Map<string, Promise<bookInfoOutput>>()
+
+interface CachedBookInfoPayload {
+  isSuccess: boolean
+  data?: string[]
+  msg: string
+  bookId: string
+  coverImage: string
+  imageCount: number
+  bookName: string
+  favorited: number
+  language: string
+  totalSize: string
+  publishDate?: string
+  rating: string
+  ratingCount: number
+  tags: tagCollection[]
+  visible: string
+  pageIndex: number
+  lastPageIndex: number
+  category: string
+  uploader: string
+  userComments?: Array<Omit<userComment, 'date'> & { date?: string }>
+}
+
+export type BookInfoCachePurpose = 'detail' | 'viewer'
+
+export function normalizeBookId(bookId: string): string {
+  return bookId.trim().replace('-', '/')
+}
+
+export async function getBookInfoWithCache(
+  input: bookInfoInput,
+  purpose: BookInfoCachePurpose,
+  forceRefresh = false,
+): Promise<bookInfoOutput> {
+  const bookId = normalizeBookId(input.bookId)
+  const pageIndex = input.page ?? 0
+  let staleDetail: GalleryDetailRecord | undefined
+
+  if (indexedDbCacheSettings.enabled) {
+    try {
+      const database = await openCacheDatabase()
+      if (purpose === 'detail' && indexedDbCacheSettings.cacheBookDetails && pageIndex === 0) {
+        staleDetail = await database.get('galleryDetails', bookId)
+        if (staleDetail && !forceRefresh) {
+          return hydrateBookInfo(staleDetail.payload)
+        }
+      }
+      if (
+        purpose === 'viewer' &&
+        indexedDbCacheSettings.cacheBookImageInfo &&
+        !forceRefresh
+      ) {
+        const cachedPage = await database.get('galleryImagePages', [bookId, pageIndex])
+        if (cachedPage) {
+          return hydrateImagePage(cachedPage)
+        }
+      }
+    } catch (error) {
+      console.warn('读取画册缓存失败，改用网络请求:', error)
+    }
+  }
+
+  const requestKey = `${bookId}\u0000${pageIndex}`
+  let request = pendingRequests.get(requestKey)
+  if (!request) {
+    const networkInput = new bookInfoInput()
+    Object.assign(networkInput, input, { bookId, page: pageIndex })
+    request = new bookInfoBusi().getBookInfo(networkInput).finally(() => {
+      pendingRequests.delete(requestKey)
+    })
+    pendingRequests.set(requestKey, request)
+  }
+
+  try {
+    const result = await request
+    if (result.isSuccess && indexedDbCacheSettings.enabled) {
+      await persistBookInfo(result, purpose)
+    } else if (!result.isSuccess && staleDetail) {
+      return hydrateBookInfo(staleDetail.payload)
+    }
+    return result
+  } catch (error) {
+    if (staleDetail) {
+      return hydrateBookInfo(staleDetail.payload)
+    }
+    throw error
+  }
+}
+
+export async function getCachedImagePages(bookId: string): Promise<GalleryImagePageRecord[]> {
+  if (
+    !indexedDbCacheSettings.enabled ||
+    !indexedDbCacheSettings.cacheBookImageInfo
+  ) {
+    return []
+  }
+  try {
+    const database = await openCacheDatabase()
+    const records = await database.getAllFromIndex(
+      'galleryImagePages',
+      'by-book',
+      normalizeBookId(bookId),
+    )
+    return records.sort((left, right) => left.pageIndex - right.pageIndex)
+  } catch (error) {
+    console.warn('读取图片分页缓存失败:', error)
+    return []
+  }
+}
+
+export async function updateImagePageProgress(
+  bookId: string,
+  pageIndex: number,
+  nextImageIndex: number,
+) {
+  if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo) {
+    return
+  }
+  try {
+    const database = await openCacheDatabase()
+    const key: [string, number] = [normalizeBookId(bookId), pageIndex]
+    const record = await database.get('galleryImagePages', key)
+    if (record) {
+      record.nextImageIndex = Math.min(Math.max(nextImageIndex, 0), record.imageIds.length)
+      record.updatedAt = Date.now()
+      await database.put('galleryImagePages', record)
+    }
+  } catch (error) {
+    console.warn('更新图片解析进度失败:', error)
+  }
+}
+
+export async function getCachedImageUrls(bookId: string) {
+  if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo) {
+    return new Map<string, string>()
+  }
+  try {
+    const database = await openCacheDatabase()
+    const records = await database.getAllFromIndex(
+      'galleryImageUrls',
+      'by-book',
+      normalizeBookId(bookId),
+    )
+    return new Map(records.map((record) => [record.imageId, record.url]))
+  } catch (error) {
+    console.warn('读取图片 URL 缓存失败:', error)
+    return new Map<string, string>()
+  }
+}
+
+export async function cacheImageUrl(bookId: string, imageId: string, url: string) {
+  if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo || !url) {
+    return
+  }
+  try {
+    const database = await openCacheDatabase()
+    await database.put('galleryImageUrls', {
+      bookId: normalizeBookId(bookId),
+      imageId,
+      url,
+      resolvedAt: Date.now(),
+    })
+  } catch (error) {
+    console.warn('保存图片 URL 缓存失败:', error)
+  }
+}
+
+export async function invalidateCachedImageUrl(bookId: string, imageId: string) {
+  if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo) {
+    return
+  }
+  try {
+    const database = await openCacheDatabase()
+    await database.delete('galleryImageUrls', [normalizeBookId(bookId), imageId])
+  } catch (error) {
+    console.warn('清除失效图片 URL 缓存失败:', error)
+  }
+}
+
+export async function clearGalleryDetailsCache() {
+  await clearCacheStore('galleryDetails')
+}
+
+export async function clearGalleryImageCache() {
+  await Promise.all([
+    clearCacheStore('galleryImagePages'),
+    clearCacheStore('galleryImageUrls'),
+  ])
+}
+
+async function persistBookInfo(result: bookInfoOutput, purpose: BookInfoCachePurpose) {
+  try {
+    const database = await openCacheDatabase()
+    const bookId = normalizeBookId(result.bookId)
+    const tasks: Promise<unknown>[] = []
+    if (
+      purpose === 'detail' &&
+      result.pageIndex === 0 &&
+      indexedDbCacheSettings.cacheBookDetails
+    ) {
+      tasks.push(
+        database.put('galleryDetails', {
+          bookId,
+          payload: serializeBookInfo(result),
+          updatedAt: Date.now(),
+        }),
+      )
+    }
+    if (indexedDbCacheSettings.cacheBookImageInfo) {
+      const imageIds = Array.isArray(result.data) ? result.data : []
+      const key: [string, number] = [bookId, result.pageIndex]
+      const existing = await database.get('galleryImagePages', key)
+      const sameImages =
+        existing?.imageIds.length === imageIds.length &&
+        existing.imageIds.every((imageId, index) => imageId === imageIds[index])
+      tasks.push(
+        database.put('galleryImagePages', {
+          bookId,
+          pageIndex: result.pageIndex,
+          imageIds,
+          nextImageIndex: sameImages ? existing.nextImageIndex : 0,
+          lastPageIndex: result.lastPageIndex,
+          updatedAt: Date.now(),
+        }),
+      )
+    }
+    await Promise.all(tasks)
+  } catch (error) {
+    console.warn('保存画册缓存失败:', error)
+  }
+}
+
+function serializeBookInfo(result: bookInfoOutput): CachedBookInfoPayload {
+  return {
+    isSuccess: result.isSuccess,
+    data: result.data ? [...result.data] : undefined,
+    msg: result.msg,
+    bookId: result.bookId,
+    coverImage: result.coverImage,
+    imageCount: result.imageCount,
+    bookName: result.bookName,
+    favorited: result.favorited,
+    language: result.language,
+    totalSize: result.totalSize,
+    publishDate: result.publishDate?.toISOString(),
+    rating: result.rating,
+    ratingCount: result.ratingCount,
+    tags: result.tags.map((collection) => ({
+      collection: collection.collection,
+      items: collection.items.map((tag) => ({ ...tag })),
+    })),
+    visible: result.visible,
+    pageIndex: result.pageIndex,
+    lastPageIndex: result.lastPageIndex,
+    category: result.category,
+    uploader: result.uploader,
+    userComments: result.userComments?.map((comment) => ({
+      username: comment.username,
+      comment: comment.comment,
+      date: comment.date?.toISOString(),
+      score: comment.score,
+      isUploader: comment.isUploader,
+    })),
+  }
+}
+
+function hydrateBookInfo(payload: unknown): bookInfoOutput {
+  const cached = payload as CachedBookInfoPayload
+  const result = Object.assign(new bookInfoOutput(), cached, {
+    data: cached.data ? [...cached.data] : undefined,
+    publishDate: cached.publishDate ? new Date(cached.publishDate) : undefined,
+    tags: (cached.tags ?? []).map((collection) => ({
+      collection: collection.collection,
+      items: collection.items.map((tag) => ({ ...tag })),
+    })),
+    userComments: cached.userComments?.map((cachedComment) =>
+      Object.assign(new userComment(), cachedComment, {
+        date: cachedComment.date ? new Date(cachedComment.date) : undefined,
+      }),
+    ),
+  })
+  return result
+}
+
+function hydrateImagePage(record: GalleryImagePageRecord): bookInfoOutput {
+  const result = new bookInfoOutput()
+  result.isSuccess = true
+  result.bookId = record.bookId
+  result.pageIndex = record.pageIndex
+  result.lastPageIndex = record.lastPageIndex
+  result.data = [...record.imageIds]
+  return result
+}

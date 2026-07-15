@@ -1,0 +1,408 @@
+{
+  "sourceMasterGroups": 29010,
+  "legacyOfficialTags": 1365,
+  "coveredOfficialMasterGroups": 1292,
+  "standaloneOfficialTags": 73,
+  "officialRecords": 1365,
+  "unofficialRecords": 27718,
+  "combinedRecords": 29083,
+  "officialByNamespace": {
+    "female": 612,
+    "language": 87,
+    "location": 7,
+    "male": 574,
+    "mixed": 23,
+    "other": 62
+  },
+  "unofficialByNamespace": {
+    "artist": 12147,
+    "character": 5326,
+    "cosplayer": 539,
+    "group": 6805,
+    "parody": 2891,
+    "reclass": 10
+  },
+  "workbookNamespaces": [
+    "artist",
+    "character",
+    "cosplayer",
+    "female",
+    "group",
+    "language",
+    "location",
+    "male",
+    "mixed",
+    "other",
+    "parody"
+  ],
+  "untranslatedNamespaces": [
+    "reclass"
+  ],
+  "standaloneOfficial": [
+    {
+      "namespace": "female",
+      "tag": "kangaroo girl",
+      "dispName": "袋鼠娘"
+    },
+    {
+      "namespace": "female",
+      "tag": "rhinoceros girl",
+      "dispName": "犀牛娘"
+    },
+    {
+      "namespace": "female",
+      "tag": "depth grading",
+      "dispName": "插入深度标记"
+    },
+    {
+      "namespace": "female",
+      "tag": "additional eyes",
+      "dispName": "多只眼睛"
+    },
+    {
+      "namespace": "female",
+      "tag": "penis bumps",
+      "dispName": "鸡巴有凸起"
+    },
+    {
+      "namespace": "female",
+      "tag": "penis reduction",
+      "dispName": "鸡巴缩小"
+    },
+    {
+      "namespace": "female",
+      "tag": "multiple tails",
+      "dispName": "多条尾巴"
+    },
+    {
+      "namespace": "female",
+      "tag": "nudism",
+      "dispName": "裸体主义"
+    },
+    {
+      "namespace": "female",
+      "tag": "multiple pairings",
+      "dispName": "多对多"
+    },
+    {
+      "namespace": "female",
+      "tag": "focus cunnilingus",
+      "dispName": "主要是舔逼"
+    },
+    {
+      "namespace": "female",
+      "tag": "focus rimjob",
+      "dispName": "主要是舔肛"
+    },
+    {
+      "namespace": "female",
+      "tag": "hippo girl",
+      "dispName": "河马娘"
+    },
+    {
+      "namespace": "male",
+      "tag": "kangaroo boy",
+      "dispName": "袋鼠男孩"
+    },
+    {
+      "namespace": "male",
+      "tag": "moth boy",
+      "dispName": "蛾男孩"
+    },
+    {
+      "namespace": "male",
+      "tag": "rhinoceros boy",
+      "dispName": "犀牛男孩"
+    },
+    {
+      "namespace": "male",
+      "tag": "depth grading",
+      "dispName": "插入深度标记"
+    },
+    {
+      "namespace": "male",
+      "tag": "additional eyes",
+      "dispName": "多只眼睛"
+    },
+    {
+      "namespace": "male",
+      "tag": "penis bumps",
+      "dispName": "鸡巴有凸起"
+    },
+    {
+      "namespace": "male",
+      "tag": "penis reduction",
+      "dispName": "鸡巴缩小"
+    },
+    {
+      "namespace": "male",
+      "tag": "multiple tails",
+      "dispName": "多条尾巴"
+    },
+    {
+      "namespace": "male",
+      "tag": "nudism",
+      "dispName": "裸体主义"
+    },
+    {
+      "namespace": "male",
+      "tag": "tabi socks",
+      "dispName": "足袋"
+    },
+    {
+      "namespace": "male",
+      "tag": "multiple pairings",
+      "dispName": "多对多"
+    },
+    {
+      "namespace": "male",
+      "tag": "focus rimjob",
+      "dispName": "主要是舔肛"
+    },
+    {
+      "namespace": "male",
+      "tag": "hippo boy",
+      "dispName": "河马男孩"
+    },
+    {
+      "namespace": "mixed",
+      "tag": "multiple pairings",
+      "dispName": "多对多"
+    },
+    {
+      "namespace": "other",
+      "tag": "ai generated",
+      "dispName": "AI生成"
+    },
+    {
+      "namespace": "other",
+      "tag": "original",
+      "dispName": "原创"
+    },
+    {
+      "namespace": "other",
+      "tag": "various",
+      "dispName": "多作品"
+    },
+    {
+      "namespace": "language",
+      "tag": "afrikaans",
+      "dispName": "南非语"
+    },
+    {
+      "namespace": "language",
+      "tag": "albanian",
+      "dispName": "阿尔巴尼亚语"
+    },
+    {
+      "namespace": "language",
+      "tag": "aramaic",
+      "dispName": "阿拉姆语"
+    },
+    {
+      "namespace": "language",
+      "tag": "armenian",
+      "dispName": "亚美尼亚语"
+    },
+    {
+      "namespace": "language",
+      "tag": "bengali",
+      "dispName": "孟加拉语"
+    },
+    {
+      "namespace": "language",
+      "tag": "bosnian",
+      "dispName": "波斯尼亚语"
+    },
+    {
+      "namespace": "language",
+      "tag": "burmese",
+      "dispName": "缅甸语"
+    },
+    {
+      "namespace": "language",
+      "tag": "croatian",
+      "dispName": "克罗地亚语"
+    },
+    {
+      "namespace": "language",
+      "tag": "esperanto",
+      "dispName": "世界语"
+    },
+    {
+      "namespace": "language",
+      "tag": "estonian",
+      "dispName": "爱沙尼亚语"
+    },
+    {
+      "namespace": "language",
+      "tag": "georgian",
+      "dispName": "格鲁吉亚语"
+    },
+    {
+      "namespace": "language",
+      "tag": "gujarati",
+      "dispName": "古吉拉特语"
+    },
+    {
+      "namespace": "language",
+      "tag": "hebrew",
+      "dispName": "希伯来语"
+    },
+    {
+      "namespace": "language",
+      "tag": "hmong",
+      "dispName": "苗语"
+    },
+    {
+      "namespace": "language",
+      "tag": "icelandic",
+      "dispName": "冰岛语"
+    },
+    {
+      "namespace": "language",
+      "tag": "javanese",
+      "dispName": "爪哇语"
+    },
+    {
+      "namespace": "language",
+      "tag": "kannada",
+      "dispName": "卡纳达语"
+    },
+    {
+      "namespace": "language",
+      "tag": "kazakh",
+      "dispName": "哈萨克语"
+    },
+    {
+      "namespace": "language",
+      "tag": "khmer",
+      "dispName": "高棉语"
+    },
+    {
+      "namespace": "language",
+      "tag": "kurdish",
+      "dispName": "库尔德语"
+    },
+    {
+      "namespace": "language",
+      "tag": "latin",
+      "dispName": "拉丁语"
+    },
+    {
+      "namespace": "language",
+      "tag": "latvian",
+      "dispName": "拉脱维亚语"
+    },
+    {
+      "namespace": "language",
+      "tag": "marathi",
+      "dispName": "马拉地语"
+    },
+    {
+      "namespace": "language",
+      "tag": "mongolian",
+      "dispName": "蒙古语"
+    },
+    {
+      "namespace": "language",
+      "tag": "ndebele",
+      "dispName": "恩德贝莱语"
+    },
+    {
+      "namespace": "language",
+      "tag": "nepali",
+      "dispName": "尼泊尔语"
+    },
+    {
+      "namespace": "language",
+      "tag": "oromo",
+      "dispName": "奥罗莫语"
+    },
+    {
+      "namespace": "language",
+      "tag": "papiamento",
+      "dispName": "帕皮阿门托语"
+    },
+    {
+      "namespace": "language",
+      "tag": "pashto",
+      "dispName": "普什图语"
+    },
+    {
+      "namespace": "language",
+      "tag": "punjabi",
+      "dispName": "旁遮普语"
+    },
+    {
+      "namespace": "language",
+      "tag": "sanskrit",
+      "dispName": "梵语"
+    },
+    {
+      "namespace": "language",
+      "tag": "serbian",
+      "dispName": "塞尔维亚语"
+    },
+    {
+      "namespace": "language",
+      "tag": "shona",
+      "dispName": "绍纳语"
+    },
+    {
+      "namespace": "language",
+      "tag": "slovak",
+      "dispName": "斯洛伐克语"
+    },
+    {
+      "namespace": "language",
+      "tag": "slovenian",
+      "dispName": "斯洛文尼亚语"
+    },
+    {
+      "namespace": "language",
+      "tag": "somali",
+      "dispName": "索马里语"
+    },
+    {
+      "namespace": "language",
+      "tag": "swahili",
+      "dispName": "斯瓦希里语"
+    },
+    {
+      "namespace": "language",
+      "tag": "tamil",
+      "dispName": "泰米尔语"
+    },
+    {
+      "namespace": "language",
+      "tag": "telugu",
+      "dispName": "泰卢固语"
+    },
+    {
+      "namespace": "language",
+      "tag": "tibetan",
+      "dispName": "藏语"
+    },
+    {
+      "namespace": "language",
+      "tag": "ukrainian",
+      "dispName": "乌克兰语"
+    },
+    {
+      "namespace": "language",
+      "tag": "urdu",
+      "dispName": "乌尔都语"
+    },
+    {
+      "namespace": "language",
+      "tag": "welsh",
+      "dispName": "威尔士语"
+    },
+    {
+      "namespace": "language",
+      "tag": "yiddish",
+      "dispName": "意第绪语"
+    }
+  ]
+}

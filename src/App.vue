@@ -11,6 +11,7 @@ import {
   Moon,
   Sunny,
   MoonNight,
+  Setting,
 } from '@element-plus/icons-vue'
 import { useFloatingActions } from '@/composables/useFloatingActions'
 import { useGlobalState } from './core/common/globalStore'
@@ -50,6 +51,12 @@ const activeThemeMode = computed(() => {
     : 'auto'
 })
 const menuItems = computed(() => [
+  {
+    key: 'settings',
+    path: '/settings',
+    label: '系统设置',
+    icon: Setting,
+  },
   {
     key: 'theme',
     label: themeModeMeta[activeThemeMode.value].label,

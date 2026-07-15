@@ -2,7 +2,6 @@
 import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { bookItem } from '@/core/model/book/bookOutput'
-import type { tagCollection } from '@/core/model/book/tag'
 import { getTagDisplayInfo } from '@/core/common/tagTranslations'
 import { Picture, Star, Clock } from '@element-plus/icons-vue'
 import CategoryTag from './CategoryTag.vue'
@@ -19,28 +18,45 @@ const imageCountText = computed(() => {
   return `${props.book.imgCount || 0} 张`
 })
 
-// 处理点击事件 - 跳转到详情页
-const formatTagText = (tag: tagCollection) => {
-  const officialTag = tag.items.find((item) => item.official)
-  const selectedTag = officialTag ?? tag.items[0]
+const displayTags = computed(() => {
+  const officialTags = props.book.tags.flatMap((collection) =>
+    collection.items
+      .filter((tag) => tag.official)
+      .map((tag) => ({
+        key: `${collection.collection}:${tag.name}`,
+        text: getTagDisplayInfo(collection.collection, tag).text,
+      })),
+  )
+  const currentFallbackTags = props.book.tags.flatMap((collection) => {
+    const selectedTag = collection.items.find((tag) => tag.official) ?? collection.items[0]
+    return selectedTag
+      ? [
+          {
+            key: `${collection.collection}:${selectedTag.name}`,
+            text: getTagDisplayInfo(collection.collection, selectedTag).text,
+          },
+        ]
+      : []
+  })
+  const seen = new Set<string>()
+  const candidates =
+    officialTags.length >= 3 ? officialTags : [...officialTags, ...currentFallbackTags]
 
-  if (!selectedTag) {
-    return ''
-  }
-
-  return getTagDisplayInfo(tag.collection, selectedTag).text
-}
-
-const validTagTexts = computed(() => {
-  return props.book.tags.map(formatTagText).filter(Boolean)
+  return candidates.filter((tag) => {
+    if (!tag.text || seen.has(tag.key)) {
+      return false
+    }
+    seen.add(tag.key)
+    return true
+  })
 })
 
 const visibleTags = computed(() => {
-  return validTagTexts.value.slice(0, 3)
+  return displayTags.value.slice(0, 3)
 })
 
 const hiddenTagCount = computed(() => {
-  return Math.max(validTagTexts.value.length - visibleTags.value.length, 0)
+  return Math.max(displayTags.value.length - visibleTags.value.length, 0)
 })
 
 const handleClick = () => {
@@ -87,15 +103,15 @@ const handleClick = () => {
       <!-- 标签 -->
       <div class="book-tags" v-if="visibleTags.length > 0">
         <el-tag
-          v-for="(tagText, index) in visibleTags"
-          :key="index"
+          v-for="tag in visibleTags"
+          :key="tag.key"
           size="small"
           type="info"
           class="tag-item"
           effect="plain"
         >
           <span class="tag-text">
-            {{ tagText }}
+            {{ tag.text }}
           </span>
         </el-tag>
         <el-tag
@@ -130,8 +146,7 @@ const handleClick = () => {
   border: 1px solid var(--el-border-color);
   cursor: pointer;
   transition: all 0.3s;
-  height: 160px;
-  overflow: hidden;
+  min-height: 160px;
 }
 
 .book-item:hover {
@@ -181,12 +196,6 @@ const handleClick = () => {
   font-weight: 600;
   color: var(--el-text-color-primary);
   line-height: 1.4;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-  text-overflow: ellipsis;
   word-break: break-word;
 }
 
@@ -215,29 +224,21 @@ const handleClick = () => {
   display: flex;
   gap: 6px;
   flex-wrap: wrap;
-  align-items: center;
-  /* 最多显示2行标签 */
-  max-height: 56px;
-  overflow: hidden;
+  align-items: flex-start;
   line-height: 1.4;
 }
 
 .tag-item {
-  /* 移除最大宽度限制,让标签自适应内容 */
   flex-shrink: 0;
-  /* 确保标签内容不被压缩 */
   min-width: 0;
-  /* 添加最大宽度,防止过长标签 */
   max-width: min(150px, 100%);
-  height: auto; /* 允许高度自适应 */
-  overflow: hidden;
+  height: auto;
 }
 
 .tag-item :deep(.el-tag__content) {
   display: block;
   min-width: 0;
   max-width: 100%;
-  overflow: hidden;
 }
 
 /* 标签内部文字样式 */
@@ -245,9 +246,8 @@ const handleClick = () => {
   display: block;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
+  white-space: normal;
   vertical-align: middle;
   line-height: 1.4;
 }
@@ -278,8 +278,7 @@ const handleClick = () => {
 /* 响应式适配 */
 @media (max-width: 768px) {
   .book-item {
-    height: auto; /* 改为自动高度 */
-    min-height: 140px; /* 设置最小高度 */
+    min-height: 140px;
     gap: 10px;
     padding: 10px;
   }
@@ -300,7 +299,6 @@ const handleClick = () => {
 
   .book-tags {
     gap: 4px;
-    max-height: 60px; /* 增加最大高度,允许多行 */
   }
 
   .tag-item {
@@ -318,8 +316,7 @@ const handleClick = () => {
 
 @media (max-width: 480px) {
   .book-item {
-    height: auto; /* 改为自动高度 */
-    min-height: 120px; /* 设置最小高度 */
+    min-height: 120px;
     gap: 8px;
     padding: 8px;
   }
@@ -331,8 +328,6 @@ const handleClick = () => {
 
   .book-title {
     font-size: 14px;
-    -webkit-line-clamp: 2;
-    line-clamp: 2;
     line-height: 1.5; /* 增加行高 */
   }
 
@@ -346,7 +341,6 @@ const handleClick = () => {
   }
 
   .book-tags {
-    max-height: 52px; /* 增加最大高度 */
     gap: 4px;
   }
 
@@ -372,10 +366,6 @@ const handleClick = () => {
 @media (max-width: 360px) {
   .book-item {
     min-height: 110px;
-  }
-
-  .book-tags {
-    max-height: 48px; /* 允许2行标签 */
   }
 
   .tag-item {
