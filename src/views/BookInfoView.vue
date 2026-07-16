@@ -107,7 +107,7 @@ onActivated(() => {
 
   const routeBookId = getRouteBookId()
   if (!funcData.loading && pageData.value.bookId === routeBookId) {
-    registerShareAction()
+    registerBookActions()
   }
 
   if (routeBookId && routeBookId !== pageData.value.bookId && routeBookId !== loadingBookId) {
@@ -127,14 +127,14 @@ watch(
 onDeactivated(() => {
   bookRequestVersion++
   loadingBookId = ''
-  resetShareState()
+  resetBookActions()
   persistScrollPosition()
   unbindScrollListener()
 })
 
 onUnmounted(() => {
   bookRequestVersion++
-  resetShareState()
+  resetBookActions()
   persistScrollPosition()
   unbindScrollListener()
 })
@@ -148,7 +148,7 @@ async function fetchBookInfo() {
   const requestVersion = ++bookRequestVersion
   loadingBookId = routeBookId
   funcData.loading = true
-  resetShareState()
+  resetBookActions()
   try {
     const requestInput = new bookInfoInput()
     requestInput.bookId = routeBookId
@@ -163,7 +163,7 @@ async function fetchBookInfo() {
       loadingBookId = ''
       funcData.loading = false
       if (pageData.value.bookId === routeBookId && getRouteBookId() === routeBookId) {
-        registerShareAction()
+        registerBookActions()
       }
     }
   }
@@ -183,20 +183,29 @@ function openSharePreview() {
   shareVisible.value = true
 }
 
-function resetShareState() {
+function resetBookActions() {
   shareVisible.value = false
   shareCoverElement.value = null
   removeFloatingAction('book-share')
+  removeFloatingAction('book-download')
 }
 
-function registerShareAction() {
+function registerBookActions() {
   addFloatingAction({
     key: 'book-share',
+    label: '分享',
     icon: Share,
     onClick: openSharePreview,
-    active: true,
+    placement: 'menu',
     order: 10,
-    className: 'book-share-action',
+  })
+  addFloatingAction({
+    key: 'book-download',
+    label: '下载',
+    icon: Download,
+    onClick: () => undefined,
+    placement: 'menu',
+    order: 20,
   })
 }
 

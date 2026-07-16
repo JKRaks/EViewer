@@ -7,10 +7,14 @@ import type { Component } from 'vue'
 export interface FloatingActionItem {
   /** 按钮唯一键，用于更新/删除。 */
   key: string
+  /** 二级菜单中的显示名称。 */
+  label?: string
   /** 按钮图标组件。 */
   icon: Component
   /** 按钮点击回调。 */
   onClick: () => void
+  /** 操作显示位置，默认显示在主按钮列。 */
+  placement?: 'primary' | 'menu'
   /** 是否显示，默认显示。 */
   show?: boolean
   /** 是否高亮。 */
