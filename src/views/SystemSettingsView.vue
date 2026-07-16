@@ -20,8 +20,10 @@ import {
   clearGalleryDetailsCache,
   clearGalleryImageCache,
 } from '@/core/cache/galleryCache'
+import { useShareSettings } from '@/core/share/shareSettings'
 
 const settings = useIndexedDbCacheSettings()
+const shareSettings = useShareSettings()
 const environmentStatus = ref<IndexedDbEnvironmentStatus>()
 const tagCacheStatus = ref<TagTranslationCacheStatus>({ available: false, count: 0 })
 const validationRunning = ref(false)
@@ -187,6 +189,20 @@ function formatDate(timestamp?: number) {
     <header class="settings-header">
       <h1>系统设置</h1>
     </header>
+
+    <section class="settings-section">
+      <h2>分享设置</h2>
+      <div class="setting-row setting-row--primary">
+        <div>
+          <div class="setting-name">默认链接类型</div>
+          <div class="setting-value">用于分享图片中的二维码链接</div>
+        </div>
+        <el-radio-group v-model="shareSettings.preferredLinkType" aria-label="默认分享链接类型">
+          <el-radio value="site">本站</el-radio>
+          <el-radio value="source">源站</el-radio>
+        </el-radio-group>
+      </div>
+    </section>
 
     <section class="settings-section">
       <h2>IndexedDB 缓存</h2>

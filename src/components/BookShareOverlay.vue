@@ -9,6 +9,7 @@ import {
   type GeneratedShareCard,
   type ShareQrSource,
 } from '@/core/share/bookShareCard'
+import { useShareSettings } from '@/core/share/shareSettings'
 
 const props = defineProps<{
   modelValue: boolean
@@ -20,7 +21,8 @@ const emit = defineEmits<{
   'update:modelValue': [value: boolean]
 }>()
 
-const qrSource = ref<ShareQrSource>('site')
+const shareSettings = useShareSettings()
+const qrSource = ref<ShareQrSource>(shareSettings.preferredLinkType)
 const generating = ref(false)
 const generationError = ref('')
 const generated = ref<GeneratedShareCard | null>(null)
@@ -37,7 +39,11 @@ watch(
       setBackgroundScrollLocked(true)
       window.addEventListener('keydown', handleKeydown)
       window.addEventListener('pagehide', handlePageHide)
-      void renderPreview()
+      if (qrSource.value === shareSettings.preferredLinkType) {
+        void renderPreview()
+      } else {
+        qrSource.value = shareSettings.preferredLinkType
+      }
     } else {
       setBackgroundScrollLocked(false)
       window.removeEventListener('keydown', handleKeydown)
@@ -454,7 +460,7 @@ async function shareImage() {
 
   .share-floating-content {
     width: calc(100vw - 24px);
-    gap: 16px;
+    gap: 64px;
   }
 
   .share-preview-stage {
@@ -467,6 +473,8 @@ async function shareImage() {
 
   .share-controls {
     width: 100%;
+    gap: 56px;
+    padding-inline: 48px;
   }
 
   .share-action-row {

@@ -3,8 +3,9 @@ import type { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { getCategoryDisplayName } from '@/core/common/category'
 import { resolveTagDisplayInfos } from '@/core/common/tagTranslations'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
+import type { ShareQrSource } from '@/core/share/shareSettings'
 
-export type ShareQrSource = 'site' | 'source'
+export type { ShareQrSource } from '@/core/share/shareSettings'
 
 export interface GeneratedShareCard {
   blob: Blob
