@@ -2,7 +2,7 @@
 import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
-import { bookImageBusi } from '@/core/busi/bookImgBusi'
+import { bookImageBusi } from '@/core/books/bookImgBusi'
 import { bookImgInput } from '@/core/model/book/bookImgInput'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
 import { Loading, RefreshRight } from '@element-plus/icons-vue'
@@ -12,6 +12,7 @@ import {
   getCachedImagePages,
   getCachedImageUrls,
   invalidateCachedImageUrl,
+  isCachedImageUrlValid,
   updateImagePageProgress,
 } from '@/core/cache/galleryCache'
 import type { GalleryImagePageRecord } from '@/core/cache/indexedDb'
@@ -22,6 +23,7 @@ interface ViewerImageItem {
   url: string
   loading: boolean
   failed: boolean
+  autoRetryAttempted: boolean
 }
 
 interface PageImageQueue {
@@ -158,9 +160,14 @@ async function appendPageInOrder(current: bookInfoOutput): Promise<void> {
   const sameCachedPage =
     cachedPage?.imageIds.length === imageIds.length &&
     cachedPage.imageIds.every((imageId, index) => imageId === imageIds[index])
-  const attemptedImageCount = sameCachedPage
+  const cachedAttemptedImageCount = sameCachedPage
     ? Math.min(cachedPage.nextImageIndex, imageIds.length)
     : 0
+  const firstInvalidCachedIndex = imageIds
+    .slice(0, cachedAttemptedImageCount)
+    .findIndex((imageId) => !getReusableCachedImageUrl(imageId))
+  const attemptedImageCount =
+    firstInvalidCachedIndex === -1 ? cachedAttemptedImageCount : firstInvalidCachedIndex
 
   currentPageQueue = {
     bookId: current.bookId,
@@ -171,13 +178,14 @@ async function appendPageInOrder(current: bookInfoOutput): Promise<void> {
 
   bookImages.value.push(
     ...imageIds.slice(0, attemptedImageCount).map((imageId, index) => {
-      const url = cachedImageUrls.get(imageId) ?? ''
+      const url = getReusableCachedImageUrl(imageId)
       return {
         key: `${current.bookId}-${current.pageIndex}-${index}`,
         imageId,
         url,
         loading: false,
         failed: !url,
+        autoRetryAttempted: false,
       }
     }),
   )
@@ -208,9 +216,10 @@ async function loadNextImageBatch(): Promise<void> {
       ...batchImageIds.map((imageId, index) => ({
         key: `${queue.bookId}-${queue.pageIndex}-${batchStart + index}`,
         imageId,
-        url: cachedImageUrls.get(imageId) ?? '',
+        url: getReusableCachedImageUrl(imageId),
         loading: false,
         failed: false,
+        autoRetryAttempted: false,
       })),
     )
 
@@ -278,19 +287,36 @@ async function loadImageItem(target: ViewerImageItem): Promise<void> {
 }
 
 async function retryImage(image: ViewerImageItem) {
+  image.autoRetryAttempted = false
   await loadImageItem(image)
 }
 
-function handleImageLoadError(image: ViewerImageItem) {
-  if (isViewUnmounted) {
+async function handleImageLoadError(image: ViewerImageItem) {
+  if (isViewUnmounted || image.loading) {
     return
   }
 
+  const shouldAutoRetry = !image.autoRetryAttempted
+  image.autoRetryAttempted = true
   image.url = ''
-  image.loading = false
-  image.failed = true
+  image.loading = shouldAutoRetry
+  image.failed = !shouldAutoRetry
   cachedImageUrls.delete(image.imageId)
-  void invalidateCachedImageUrl(bookId ?? '', image.imageId)
+  await invalidateCachedImageUrl(bookId ?? '', image.imageId)
+
+  if (shouldAutoRetry && !isViewUnmounted) {
+    image.loading = false
+    await loadImageItem(image)
+  }
+}
+
+function getReusableCachedImageUrl(imageId: string): string {
+  const url = cachedImageUrls.get(imageId) ?? ''
+  if (!url || isCachedImageUrlValid(url)) return url
+
+  cachedImageUrls.delete(imageId)
+  void invalidateCachedImageUrl(bookId ?? '', imageId)
+  return ''
 }
 
 async function loadNextPage(): Promise<bookInfoOutput> {

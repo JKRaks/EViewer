@@ -203,7 +203,7 @@ function registerBookActions() {
     key: 'book-download',
     label: '下载',
     icon: Download,
-    onClick: () => undefined,
+    onClick: toDownload,
     placement: 'menu',
     order: 20,
   })
@@ -212,6 +212,15 @@ function registerBookActions() {
 async function toRead() {
   router.push({
     name: 'viewerview',
+    query: {
+      bookId: pageData.value.bookId,
+    },
+  })
+}
+
+function toDownload() {
+  router.push({
+    name: 'download',
     query: {
       bookId: pageData.value.bookId,
     },

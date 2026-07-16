@@ -1,4 +1,4 @@
-import { bookInfoBusi } from '../busi/bookInfoBusi'
+import { bookInfoBusi } from '../books/bookInfoBusi'
 import { bookInfoInput } from '../model/book/bookInfoInput'
 import { bookInfoOutput, userComment } from '../model/book/bookInfoOutput'
 import type { tagCollection } from '../model/book/tag'
@@ -11,6 +11,7 @@ import {
 } from './indexedDb'
 
 const pendingRequests = new Map<string, Promise<bookInfoOutput>>()
+const imageUrlExpiryBufferMs = 30_000
 
 interface CachedBookInfoPayload {
   isSuccess: boolean
@@ -59,11 +60,7 @@ export async function getBookInfoWithCache(
           return hydrateBookInfo(staleDetail.payload)
         }
       }
-      if (
-        purpose === 'viewer' &&
-        indexedDbCacheSettings.cacheBookImageInfo &&
-        !forceRefresh
-      ) {
+      if (purpose === 'viewer' && indexedDbCacheSettings.cacheBookImageInfo && !forceRefresh) {
         const cachedPage = await database.get('galleryImagePages', [bookId, pageIndex])
         if (cachedPage) {
           return hydrateImagePage(cachedPage)
@@ -102,10 +99,7 @@ export async function getBookInfoWithCache(
 }
 
 export async function getCachedImagePages(bookId: string): Promise<GalleryImagePageRecord[]> {
-  if (
-    !indexedDbCacheSettings.enabled ||
-    !indexedDbCacheSettings.cacheBookImageInfo
-  ) {
+  if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo) {
     return []
   }
   try {
@@ -155,11 +149,37 @@ export async function getCachedImageUrls(bookId: string) {
       'by-book',
       normalizeBookId(bookId),
     )
-    return new Map(records.map((record) => [record.imageId, record.url]))
+    const validRecords: typeof records = []
+    const expiredRecords: typeof records = []
+    for (const record of records) {
+      if (isCachedImageUrlValid(record.url)) {
+        validRecords.push(record)
+      } else {
+        expiredRecords.push(record)
+      }
+    }
+    if (expiredRecords.length > 0) {
+      await Promise.all(
+        expiredRecords.map((record) =>
+          database.delete('galleryImageUrls', [record.bookId, record.imageId]),
+        ),
+      )
+    }
+    return new Map(validRecords.map((record) => [record.imageId, record.url]))
   } catch (error) {
     console.warn('读取图片 URL 缓存失败:', error)
     return new Map<string, string>()
   }
+}
+
+export function isCachedImageUrlValid(url: string, now = Date.now()): boolean {
+  if (!url) return false
+
+  const keystamp = url.match(/keystamp=(\d+)/)?.[1]
+  if (!keystamp) return true
+
+  const expiresAt = Number(keystamp) * 1000
+  return Number.isFinite(expiresAt) && expiresAt > now + imageUrlExpiryBufferMs
 }
 
 export async function cacheImageUrl(bookId: string, imageId: string, url: string) {
@@ -196,10 +216,7 @@ export async function clearGalleryDetailsCache() {
 }
 
 export async function clearGalleryImageCache() {
-  await Promise.all([
-    clearCacheStore('galleryImagePages'),
-    clearCacheStore('galleryImageUrls'),
-  ])
+  await Promise.all([clearCacheStore('galleryImagePages'), clearCacheStore('galleryImageUrls')])
 }
 
 async function persistBookInfo(result: bookInfoOutput, purpose: BookInfoCachePurpose) {
@@ -207,11 +224,7 @@ async function persistBookInfo(result: bookInfoOutput, purpose: BookInfoCachePur
     const database = await openCacheDatabase()
     const bookId = normalizeBookId(result.bookId)
     const tasks: Promise<unknown>[] = []
-    if (
-      purpose === 'detail' &&
-      result.pageIndex === 0 &&
-      indexedDbCacheSettings.cacheBookDetails
-    ) {
+    if (purpose === 'detail' && result.pageIndex === 0 && indexedDbCacheSettings.cacheBookDetails) {
       tasks.push(
         database.put('galleryDetails', {
           bookId,

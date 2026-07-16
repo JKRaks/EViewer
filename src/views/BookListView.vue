@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
-import { bookListBusi } from '@/core/busi/bookListBusi'
+import { bookListBusi } from '@/core/books/bookListBusi'
 import { bookInput } from '@/core/model/book/bookInput'
 import { bookOutput, bookItem } from '@/core/model/book/bookOutput'
 import { categoryEnum } from '@/core/common/enum/categoryEnum'

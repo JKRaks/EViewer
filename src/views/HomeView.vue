@@ -2,7 +2,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { Refresh, TrendCharts, Warning } from '@element-plus/icons-vue'
 import BookItem from '@/components/BookItem.vue'
-import { bookListBusi } from '@/core/busi/bookListBusi'
+import { bookListBusi } from '@/core/books/bookListBusi'
 import type { bookItem } from '@/core/model/book/bookOutput'
 import { popularInput } from '@/core/model/book/popularInput'
 
