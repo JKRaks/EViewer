@@ -273,9 +273,7 @@ async function shareImage() {
   place-items: center;
   padding: max(56px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
   overflow: auto;
-  background: rgba(18, 28, 45, 0.84);
-  -webkit-backdrop-filter: blur(12px);
-  backdrop-filter: blur(12px);
+  background: var(--el-overlay-color-lighter);
 }
 
 .share-close {
@@ -475,6 +473,19 @@ async function shareImage() {
 
   .share-controls {
     width: 100%;
+  }
+
+  .share-action-row {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .share-action-button {
+    justify-self: center;
+  }
+
+  .share-action-button + .share-action-button {
+    margin-left: 0;
   }
 }
 

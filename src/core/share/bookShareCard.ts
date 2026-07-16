@@ -413,7 +413,7 @@ function drawShareCard(
   context.textAlign = 'left'
   context.fillStyle = CARD_MUTED
   context.font = `500 14px ${CARD_FONT}`
-  context.fillText('Power By EViewer · @JKRaks', 530, 630)
+  context.fillText('Powered By EViewer · @JKRaks', 530, 630)
 }
 
 function drawWrappedText(
