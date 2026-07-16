@@ -13,8 +13,19 @@ import {
   MoonNight,
   Setting,
 } from '@element-plus/icons-vue'
+import type { Component } from 'vue'
 import { useFloatingActions } from '@/composables/useFloatingActions'
 import { useGlobalState } from './core/common/globalStore'
+
+interface FloatingMenuItem {
+  key: string
+  path?: string
+  label: string
+  icon: Component
+  active?: boolean
+  onClick?: () => void
+  className?: string
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -50,7 +61,25 @@ const activeThemeMode = computed(() => {
     ? (globalState.theme as (typeof themeModeList)[number])
     : 'auto'
 })
-const menuItems = computed(() => [
+const visiblePageActions = computed(() => {
+  return pageFloatingActions.value
+    .filter((item) => item.show !== false && item.placement !== 'menu')
+    .slice()
+    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+})
+const menuItems = computed<FloatingMenuItem[]>(() => [
+  ...pageFloatingActions.value
+    .filter((item) => item.show !== false && item.placement === 'menu')
+    .slice()
+    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+    .map((item) => ({
+      key: item.key,
+      label: item.label ?? item.key,
+      icon: item.icon,
+      active: item.active,
+      onClick: item.onClick,
+      className: item.className,
+    })),
   {
     key: 'settings',
     path: '/settings',
@@ -71,12 +100,6 @@ const menuItems = computed(() => [
     icon: UserFilled,
   },
 ])
-const visiblePageActions = computed(() => {
-  return pageFloatingActions.value
-    .filter((item) => item.show !== false)
-    .slice()
-    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
-})
 
 const showBackButton = computed(() => {
   return route.name !== 'home'
@@ -303,7 +326,10 @@ onUnmounted(() => {
               v-for="item in menuItems"
               :key="item.key"
               class="floating-btn floating-sub-btn"
-              :class="{ 'is-active': item.active || activeMenu === item.path }"
+              :class="[
+                { 'is-active': item.active || activeMenu === item.path },
+                item.className,
+              ]"
               @click="goMenuItem(item)"
             >
               <el-icon>

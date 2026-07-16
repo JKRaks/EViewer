@@ -227,14 +227,17 @@ async function shareImage() {
           </div>
 
           <div class="share-controls">
-            <el-radio-group
-              v-model="qrSource"
-              class="share-source-selector"
-              aria-label="二维码链接来源"
-            >
-              <el-radio value="site">本站</el-radio>
-              <el-radio value="source">源站</el-radio>
-            </el-radio-group>
+            <div class="share-source-control">
+              <span class="share-source-label">链接类型</span>
+              <el-radio-group
+                v-model="qrSource"
+                class="share-source-selector"
+                aria-label="链接类型"
+              >
+                <el-radio value="site">本站</el-radio>
+                <el-radio value="source">源站</el-radio>
+              </el-radio-group>
+            </div>
             <div class="share-action-row">
               <el-tooltip content="下载分享图" placement="top">
                 <el-button
@@ -343,39 +346,30 @@ async function shareImage() {
   gap: 12px;
 }
 
-.share-source-selector {
+.share-source-control {
   display: flex;
   width: 100%;
-  gap: 12px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.share-source-label {
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.share-source-selector {
+  display: flex;
+  gap: 24px;
 }
 
 .share-source-selector :deep(.el-radio) {
   display: flex;
-  min-width: 0;
-  height: 44px;
-  flex: 1;
-  justify-content: center;
+  height: 32px;
   margin: 0;
-  padding: 0 16px;
-  border: 1px solid rgba(255, 255, 255, 0.26);
-  border-radius: 6px;
   color: rgba(255, 255, 255, 0.9);
-  background: rgba(255, 255, 255, 0.08);
-  transition:
-    border-color 0.18s ease,
-    background-color 0.18s ease,
-    box-shadow 0.18s ease;
-}
-
-.share-source-selector :deep(.el-radio:hover) {
-  border-color: rgba(255, 255, 255, 0.52);
-  background: rgba(255, 255, 255, 0.13);
-}
-
-.share-source-selector :deep(.el-radio.is-checked) {
-  border-color: var(--el-color-primary);
-  background: rgba(64, 158, 255, 0.18);
-  box-shadow: 0 0 0 1px rgba(64, 158, 255, 0.16);
 }
 
 .share-source-selector :deep(.el-radio__inner) {
