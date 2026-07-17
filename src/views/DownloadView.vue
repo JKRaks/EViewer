@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Download, RefreshRight } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
 import { useRoute } from 'vue-router'
 import { bookFileBusi } from '@/core/books/bookFileBusi'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
@@ -18,6 +20,7 @@ const errorMessage = ref('')
 const bookName = ref('')
 const torrentItems = ref<galleryTorrentItem[]>([])
 const fileBusi = new bookFileBusi()
+const useAppleWebAppDownload = isAppleStandaloneWebApp()
 let requestVersion = 0
 
 onMounted(() => {
@@ -82,6 +85,64 @@ function resolveDownloadUrl(url: string) {
   const relativePath = url.startsWith('/') ? url : `/${url}`
   return new URL(`${proxyPath}${relativePath}`, proxyBase.origin).toString()
 }
+
+async function handleTorrentDownload(event: MouseEvent, item: galleryTorrentItem) {
+  if (!useAppleWebAppDownload) return
+
+  event.preventDefault()
+  const url = resolveDownloadUrl(item.downloadUrl)
+  if (navigator.share) {
+    try {
+      await navigator.share({
+        title: item.fileName || '画册种子下载',
+        url,
+      })
+      return
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return
+      console.warn('iOS 系统分享调起失败，改为复制下载链接:', error)
+    }
+  }
+
+  try {
+    await copyDownloadUrl(url)
+    ElMessage.success('下载链接已复制，请在 Safari 中打开')
+  } catch (error) {
+    console.error('复制下载链接失败:', error)
+    ElMessage.error('无法打开下载链接，请长按下载按钮复制链接')
+  }
+}
+
+async function copyDownloadUrl(url: string) {
+  try {
+    await navigator.clipboard?.writeText(url)
+    if (navigator.clipboard) return
+  } catch {
+    // Older iOS Web Apps can expose Clipboard API but reject writes.
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = url
+  textarea.readOnly = true
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  textarea.setSelectionRange(0, url.length)
+  const copied = document.execCommand('copy')
+  textarea.remove()
+  if (!copied) throw new Error('浏览器拒绝复制下载链接')
+}
+
+function isAppleStandaloneWebApp() {
+  const appleNavigator = navigator as Navigator & { standalone?: boolean }
+  const isAppleMobile =
+    /iPad|iPhone|iPod/i.test(navigator.userAgent) ||
+    (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1)
+  const isStandalone =
+    window.matchMedia('(display-mode: standalone)').matches || appleNavigator.standalone === true
+  return isAppleMobile && isStandalone
+}
 </script>
 
 <template>
@@ -141,8 +202,9 @@ function resolveDownloadUrl(url: string) {
               :icon="Download"
               tag="a"
               :href="resolveDownloadUrl(item.downloadUrl)"
-              target="_blank"
+              :target="useAppleWebAppDownload ? '_self' : '_blank'"
               rel="noopener noreferrer"
+              @click="handleTorrentDownload($event, item)"
             >
               下载
             </el-button>
