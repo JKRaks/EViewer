@@ -1,0 +1,294 @@
+{
+  "Ads-Be-Gone": {
+    "name": "广告退散",
+    "description": "移除画廊中的广告。"
+  },
+  "Source Nexus": {
+    "name": "原图核心",
+    "description": "解锁 E-Hentai 画廊的原始图片功能，可以浏览大多数文件未经缩放的原图。"
+  },
+  "Multi-Page Viewer": {
+    "name": "多页查看器",
+    "description": "解锁多页查看器，可在同一页面查看画册中的全部图片。"
+  },
+  "More Thumbs": {
+    "name": "更多缩略图",
+    "description": "缩略图最大行数翻倍。"
+  },
+  "Thumbs Up": {
+    "name": "缩略图扩容",
+    "description": "将缩略图最大行数进一步提高到 20 行。"
+  },
+  "All Thumbs": {
+    "name": "全部缩略图",
+    "description": "将缩略图最大行数进一步提高到 40 行。"
+  },
+  "More Pages": {
+    "name": "更多页面",
+    "description": "所有页面浏览数量上限提高到原来的 2 倍。"
+  },
+  "Lots of Pages": {
+    "name": "大量页面",
+    "description": "所有页面浏览数量上限提高到原来的 5 倍。"
+  },
+  "Too Many Pages": {
+    "name": "超多页面",
+    "description": "所有页面浏览数量上限提高到原来的 10 倍。"
+  },
+  "More Favorite Notes I": {
+    "name": "更多收藏备注 I",
+    "description": "将收藏备注栏位增加到 10,000 个。"
+  },
+  "More Favorite Notes II": {
+    "name": "更多收藏备注 II",
+    "description": "将收藏备注栏位增加到 25,000 个。"
+  },
+  "Paging Enlargement I": {
+    "name": "单页扩容 I",
+    "description": "首页、搜索页和种子页每页最多可显示 50 条结果。"
+  },
+  "Paging Enlargement II": {
+    "name": "单页扩容 II",
+    "description": "首页、搜索页和种子页每页最多可显示 100 条结果。"
+  },
+  "Postage Paid": {
+    "name": "邮费已付",
+    "description": "通过 MoogleMail 发送消息时，不再需要支付邮费或货到付款手续费。"
+  },
+  "Vigorous Vitality": {
+    "name": "旺盛活力",
+    "description": "基础生命值提高 10%。"
+  },
+  "Effluent Ether": {
+    "name": "充盈以太",
+    "description": "基础魔力值提高 10%。"
+  },
+  "Suffusive Spirit": {
+    "name": "充沛精神",
+    "description": "基础精神值提高 10%。"
+  },
+  "Resplendent Regeneration": {
+    "name": "辉煌再生",
+    "description": "战斗中的自然恢复效果提高 50%。"
+  },
+  "Enigma Energizer": {
+    "name": "谜题增幅器",
+    "description": "谜题大师奖励翻倍，并将持续时间延长到 50 回合。"
+  },
+  "Yakety Sax": {
+    "name": "逃跑神曲",
+    "description": "逃跑时怪物永远追不上你。"
+  },
+  "Soul Catcher": {
+    "name": "灵魂捕手",
+    "description": "每天免费获得 10 个灵魂碎片。只要过去 30 天内打开过 HentaiVerse，就会自动发放。"
+  },
+  "Extra Strength Formula": {
+    "name": "加强配方",
+    "description": "快乐药丸提升怪物士气的效果翻倍。"
+  },
+  "That's Good Eatin'": {
+    "name": "真香",
+    "description": "怪物食物的恢复量提高 20%。"
+  },
+  "Coupon Clipper": {
+    "name": "优惠券达人",
+    "description": "道具商店中的所有商品享受九折优惠。"
+  },
+  "Long Gone Before Daylight": {
+    "name": "天亮前溜之大吉",
+    "description": "每天使用的第一瓶能量饮料会恢复双倍耐力。"
+  },
+  "Dark Descent": {
+    "name": "黑暗降临",
+    "description": "提高高级竞技场中世界之种的掉落数量。"
+  },
+  "Eminent Elementalist": {
+    "name": "卓越元素使",
+    "description": "有效元素魔法熟练度提高，数值相当于自然基础熟练度的 10%。"
+  },
+  "Divine Warmage": {
+    "name": "神圣战法师",
+    "description": "有效神圣魔法熟练度提高，数值相当于自然基础熟练度的 10%。"
+  },
+  "Death and Decay": {
+    "name": "死亡与腐朽",
+    "description": "有效禁断魔法熟练度提高，数值相当于自然基础熟练度的 10%。"
+  },
+  "Evil Enchantress": {
+    "name": "邪恶魔女",
+    "description": "有效弱化魔法熟练度提高，数值相当于自然基础熟练度的 10%。"
+  },
+  "Force of Nature": {
+    "name": "自然之力",
+    "description": "有效辅助魔法熟练度提高，数值相当于自然基础熟练度的 10%。"
+  },
+  "Manehattan Project": {
+    "name": "马哈顿计划",
+    "description": "大幅提高轨道友谊炮的伤害。"
+  },
+  "Follower of Snowflake": {
+    "name": "雪花的追随者",
+    "description": "彰显你对战利品与丰收女神雪花坚定不移的信仰。"
+  },
+  "Limit Breaker I": {
+    "name": "突破极限 I",
+    "description": "献给相信力量只是数字的人：装备属性融合上限提高到 210。"
+  },
+  "Limit Breaker II": {
+    "name": "突破极限 II",
+    "description": "装备属性融合上限进一步提高到 220。"
+  },
+  "Limit Breaker III": {
+    "name": "突破极限 III",
+    "description": "装备属性融合上限进一步提高到 230。"
+  },
+  "Limit Breaker IV": {
+    "name": "突破极限 IV",
+    "description": "装备属性融合上限进一步提高到 240。"
+  },
+  "Limit Breaker V": {
+    "name": "突破极限 V",
+    "description": "装备属性融合上限进一步提高到 250。"
+  },
+  "Thinking Cap": {
+    "name": "思考帽",
+    "description": "经验值获取量提高 25%。计算时，该加成会与 HentaiVerse 训练加成相加。"
+  },
+  "Mentats": {
+    "name": "敏达",
+    "description": "经验值加成提高到 50%。"
+  },
+  "Learning Chip": {
+    "name": "学习芯片",
+    "description": "经验值加成提高到 75%。"
+  },
+  "Cybernetic Implants": {
+    "name": "义体植入",
+    "description": "经验值加成提高到 100%。"
+  },
+  "Innate Arcana I": {
+    "name": "天生奥术 I",
+    "description": "自动施放法术的维持消耗降低 10%。"
+  },
+  "Innate Arcana II": {
+    "name": "天生奥术 II",
+    "description": "自动施放法术的维持消耗降低 20%。"
+  },
+  "Innate Arcana III": {
+    "name": "天生奥术 III",
+    "description": "自动施放法术的维持消耗降低 30%。"
+  },
+  "Innate Arcana IV": {
+    "name": "天生奥术 IV",
+    "description": "自动施放法术的维持消耗降低 40%。"
+  },
+  "Innate Arcana V": {
+    "name": "天生奥术 V",
+    "description": "自动施放法术的维持消耗降低 50%。"
+  },
+  "Crystarium I": {
+    "name": "水晶盘 I",
+    "description": "HentaiVerse 中的怪物掉落水晶时，你会额外获得 1 个奖励水晶。"
+  },
+  "Crystarium II": {
+    "name": "水晶盘 II",
+    "description": "每次掉落获得的水晶数量进一步提高到 3 个。"
+  },
+  "Crystarium III": {
+    "name": "水晶盘 III",
+    "description": "每次掉落获得的水晶数量进一步提高到 5 个。"
+  },
+  "Crystarium IV": {
+    "name": "水晶盘 IV",
+    "description": "每次掉落获得的水晶数量进一步提高到 7 个。"
+  },
+  "Crystarium V": {
+    "name": "水晶盘 V",
+    "description": "每次掉落获得的水晶数量进一步提高到 10 个。"
+  },
+  "Tokenizer I": {
+    "name": "代币增幅 I",
+    "description": "普通怪物随机掉落代币的概率翻倍。"
+  },
+  "Tokenizer II": {
+    "name": "代币增幅 II",
+    "description": "普通怪物随机掉落代币的概率提高到 3 倍。"
+  },
+  "Tokenizer III": {
+    "name": "代币增幅 III",
+    "description": "普通怪物随机掉落代币的概率提高到 4 倍。"
+  },
+  "Hoarder I": {
+    "name": "囤积者 I",
+    "description": "存入仓库的前 200 件装备不计入装备数量上限。"
+  },
+  "Hoarder II": {
+    "name": "囤积者 II",
+    "description": "装备仓库存放额度提高到 400 件。"
+  },
+  "Hoarder III": {
+    "name": "囤积者 III",
+    "description": "装备仓库存放额度提高到 600 件。"
+  },
+  "Hoarder IV": {
+    "name": "囤积者 IV",
+    "description": "装备仓库存放额度提高到 800 件。"
+  },
+  "Hoarder V": {
+    "name": "囤积者 V",
+    "description": "装备仓库存放额度提高到 1,000 件。"
+  },
+  "Repair Bear Mk.1": {
+    "name": "维修熊 Mk.1",
+    "description": "Moogle Dynamics 的最新发明。维修熊会随时帮你保养装备，使装备的实际磨损减半，但不影响护符。"
+  },
+  "Repair Bear Mk.2": {
+    "name": "维修熊 Mk.2",
+    "description": "进一步提升维修熊的保养能力，使装备的实际磨损降低到正常值的 25%。"
+  },
+  "Repair Bear Mk.3": {
+    "name": "维修熊 Mk.3",
+    "description": "将维修熊训练到接近最高水平，锻造铺维修几乎成为过去。装备的实际磨损降低到正常值的 10%。"
+  },
+  "Repair Bear Mk.4": {
+    "name": "维修熊 Mk.4",
+    "description": "维修熊技术的最高形态，彻底消除装备磨损，并使战败时损失的装备耐久减半。"
+  },
+  "Dæmon Duality I": {
+    "name": "恶魔双生 I",
+    "description": "攻击伤害和魔法伤害提高 10%。"
+  },
+  "Dæmon Duality II": {
+    "name": "恶魔双生 II",
+    "description": "攻击伤害和魔法伤害提高 15%。"
+  },
+  "Dæmon Duality III": {
+    "name": "恶魔双生 III",
+    "description": "攻击伤害和魔法伤害提高 20%。"
+  },
+  "Dæmon Duality IV": {
+    "name": "恶魔双生 IV",
+    "description": "攻击伤害和魔法伤害提高 25%。"
+  },
+  "Dæmon Duality V": {
+    "name": "恶魔双生 V",
+    "description": "攻击伤害和魔法伤害提高 30%。"
+  },
+  "Dæmon Duality VI": {
+    "name": "恶魔双生 VI",
+    "description": "攻击伤害和魔法伤害提高 35%。"
+  },
+  "Dæmon Duality VII": {
+    "name": "恶魔双生 VII",
+    "description": "攻击伤害和魔法伤害提高 40%。"
+  },
+  "Dæmon Duality VIII": {
+    "name": "恶魔双生 VIII",
+    "description": "攻击伤害和魔法伤害提高 45%。"
+  },
+  "Dæmon Duality IX": {
+    "name": "恶魔双生 IX",
+    "description": "攻击伤害和魔法伤害提高 50%。"
+  }
+}

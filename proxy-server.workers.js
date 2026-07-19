@@ -29,6 +29,8 @@ const ORIGIN_MAP = [
 ]
 
 const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024
+const AUTH_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+const AUTH_COOKIE_NAMES = ['ipb_member_id', 'ipb_pass_hash']
 
 function parseAllowedImageUrl(value) {
   if (!value) {
@@ -42,6 +44,104 @@ function parseAllowedImageUrl(value) {
     throw new Error('不允许代理该图片地址')
   }
   return targetUrl
+}
+
+function isAllowedRequesterOrigin(origin) {
+  if (!origin) return true
+  if (/^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/.test(origin)) return true
+  return ORIGIN_MAP.some((config) => config.allowedOrigins.includes(origin))
+}
+
+function normalizeAuthInput(value, cookieName) {
+  if (typeof value !== 'string') return ''
+  const input = value.trim()
+  const cookiePart = input
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${cookieName}=`))
+  return (cookiePart ? cookiePart.slice(cookieName.length + 1) : input).trim()
+}
+
+function isValidPassHash(value) {
+  return (
+    typeof value === 'string' &&
+    value.length >= 8 &&
+    value.length <= 256 &&
+    !/[;\r\n\0]/.test(value)
+  )
+}
+
+function buildAuthCookie(name, value, requestUrl, clear = false) {
+  const attributes = [
+    `${name}=${clear ? '' : encodeURIComponent(value)}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    'Path=/ehentai',
+    clear ? 'Max-Age=0' : `Max-Age=${AUTH_COOKIE_MAX_AGE}`,
+  ]
+  if (requestUrl.protocol === 'https:') attributes.push('Secure')
+  return attributes.join('; ')
+}
+
+function jsonResponse(request, payload, status = 200, cookies = []) {
+  const headers = new Headers({
+    'Cache-Control': 'no-store',
+    'Content-Type': 'application/json',
+  })
+  const requesterOrigin = getRequesterOrigin(request)
+  if (requesterOrigin && isAllowedRequesterOrigin(requesterOrigin)) {
+    headers.set('Access-Control-Allow-Origin', requesterOrigin)
+    headers.set('Access-Control-Allow-Credentials', 'true')
+    headers.set('Vary', 'Origin')
+  }
+  cookies.forEach((cookie) => headers.append('Set-Cookie', cookie))
+  return new Response(JSON.stringify(payload), { status, headers })
+}
+
+async function handleAuthRequest(request, requestUrl) {
+  const requesterOrigin = getRequesterOrigin(request)
+  if (!isAllowedRequesterOrigin(requesterOrigin)) {
+    return jsonResponse(request, { success: false, message: '不允许的请求来源' }, 403)
+  }
+
+  if (requestUrl.pathname === '/auth/logout') {
+    return jsonResponse(
+      request,
+      { success: true },
+      200,
+      AUTH_COOKIE_NAMES.map((name) => buildAuthCookie(name, '', requestUrl, true)),
+    )
+  }
+
+  const contentLength = Number(request.headers.get('content-length') || '0')
+  if (contentLength > 4096) {
+    return jsonResponse(request, { success: false, message: '请求内容过大' }, 413)
+  }
+
+  let body
+  try {
+    body = await request.json()
+  } catch {
+    return jsonResponse(request, { success: false, message: '请求格式不正确' }, 400)
+  }
+  const memberId = normalizeAuthInput(body?.memberId, 'ipb_member_id')
+  const passHash = normalizeAuthInput(body?.passHash, 'ipb_pass_hash')
+  if (!/^[1-9]\d{0,19}$/.test(memberId)) {
+    return jsonResponse(request, { success: false, message: 'ipb_member_id 格式不正确' }, 400)
+  }
+  if (!isValidPassHash(passHash)) {
+    return jsonResponse(request, { success: false, message: 'ipb_pass_hash 格式不正确' }, 400)
+  }
+
+  return jsonResponse(
+    request,
+    { success: true, memberId, expiresAt: Date.now() + AUTH_COOKIE_MAX_AGE * 1000 },
+    200,
+    [
+      buildAuthCookie('ipb_member_id', memberId, requestUrl),
+      buildAuthCookie('ipb_pass_hash', passHash, requestUrl),
+    ],
+  )
 }
 
 /**
@@ -95,7 +195,7 @@ function logRequest(request, config = null) {
       host: request.headers.get('host'),
       origin: request.headers.get('origin'),
       referer: request.headers.get('referer'),
-      cookie: request.headers.get('cookie'),
+      cookie: request.headers.get('cookie') ? '[present]' : undefined,
     },
   })
 }
@@ -270,6 +370,11 @@ async function handleProxyRequest(request, config, pathname) {
   console.log(`匹配到 ${config.path} 路径:`, pathname)
   console.log('完整 URL:', request.url)
 
+  const requesterOrigin = getRequesterOrigin(request)
+  if (!isAllowedRequesterOrigin(requesterOrigin)) {
+    return jsonResponse(request, { error: '不允许的请求来源' }, 403)
+  }
+
   // 移除路径前缀，获取真实路径
   const realPath = pathname.replace(new RegExp(`^${escapeRegExp(config.path)}`), '') || '/'
 
@@ -283,7 +388,7 @@ async function handleProxyRequest(request, config, pathname) {
     原始路径: pathname,
     目标URL: targetUrl.toString(),
     目标路径: realPath,
-    Cookie: request.headers.get('cookie'),
+    Cookie: request.headers.get('cookie') ? '[present]' : undefined,
   })
 
   // 构建代理请求头
@@ -316,7 +421,7 @@ async function handleProxyRequest(request, config, pathname) {
     状态码: response.status,
     Location: response.headers.get('location'),
     ContentType: response.headers.get('content-type'),
-    SetCookie: response.headers.get('set-cookie'),
+    SetCookie: response.headers.has('set-cookie') ? '[present]' : undefined,
   })
 
   // 创建响应
@@ -331,11 +436,9 @@ async function handleProxyRequest(request, config, pathname) {
   // 修改 Set-Cookie 头
   if (responseHeaders.has('set-cookie')) {
     const setCookieHeader = responseHeaders.get('set-cookie')
-    console.log('原始 Set-Cookie:', setCookieHeader)
 
     const modifiedSetCookie = modifySetCookieHeaders(setCookieHeader, serverHost, config.host)
     responseHeaders.set('set-cookie', modifiedSetCookie)
-    console.log('修改后的 Set-Cookie:', modifiedSetCookie)
   }
 
   // 如果是重定向，修改 Location 头
@@ -347,7 +450,6 @@ async function handleProxyRequest(request, config, pathname) {
   }
 
   // 设置 CORS 头：回传请求方来源，解决跨域访问
-  const requesterOrigin = getRequesterOrigin(request)
   if (requesterOrigin) {
     responseHeaders.set('Access-Control-Allow-Origin', requesterOrigin)
     responseHeaders.set('Access-Control-Allow-Credentials', 'true')
@@ -373,7 +475,7 @@ async function handleProxyRequest(request, config, pathname) {
  */
 function handleCorsPreFlight(request) {
   const requesterOrigin = getRequesterOrigin(request)
-  if (!requesterOrigin) {
+  if (!requesterOrigin || !isAllowedRequesterOrigin(requesterOrigin)) {
     return new Response('Forbidden', { status: 403 })
   }
 
@@ -428,6 +530,10 @@ async function handleRequest(request) {
   // 健康检查路由
   if (pathname === '/health') {
     return handleHealthCheck()
+  }
+
+  if (request.method === 'POST' && (pathname === '/auth/cookies' || pathname === '/auth/logout')) {
+    return handleAuthRequest(request, url)
   }
 
   // CORS 预检

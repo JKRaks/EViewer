@@ -39,6 +39,19 @@ export class parserClass {
   }
 
   /**
+   * 判断文档元素是否包含指定属性
+   * @param key 属性名
+   * @returns 是否包含该属性
+   */
+  hasAttribute(key: string): boolean {
+    if (this.invalid) {
+      return false
+    } else {
+      return this.element?.hasAttribute(key) ?? false
+    }
+  }
+
+  /**
    * 通过选择器获取文档元素
    * @param selector 选择器
    * @returns 文档元素
