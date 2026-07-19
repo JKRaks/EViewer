@@ -6,11 +6,39 @@ const app = express()
 const PORT = process.env.PORT || 3000
 const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173']
 const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024
+const AUTH_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
 
 const isAllowedOrigin = (origin) =>
   !origin ||
   ALLOWED_ORIGINS.includes(origin) ||
   /^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/.test(origin)
+
+const normalizeAuthInput = (value, cookieName) => {
+  if (typeof value !== 'string') return ''
+  const input = value.trim()
+  const cookiePart = input
+    .split(';')
+    .map((part) => part.trim())
+    .find((part) => part.startsWith(`${cookieName}=`))
+  return (cookiePart ? cookiePart.slice(cookieName.length + 1) : input).trim()
+}
+
+const isValidPassHash = (value) =>
+  typeof value === 'string' && value.length >= 8 && value.length <= 256 && !/[;\r\n\0]/.test(value)
+
+const buildAuthCookie = (name, value, req, clear = false) => {
+  const forwardedProtocol = String(req.headers['x-forwarded-proto'] || '').split(',')[0]?.trim()
+  const secure = req.secure || forwardedProtocol === 'https'
+  const attributes = [
+    `${name}=${clear ? '' : encodeURIComponent(value)}`,
+    'HttpOnly',
+    'SameSite=Lax',
+    'Path=/ehentai',
+    clear ? 'Max-Age=0' : `Max-Age=${AUTH_COOKIE_MAX_AGE}`,
+  ]
+  if (secure) attributes.push('Secure')
+  return attributes.join('; ')
+}
 
 const parseAllowedImageUrl = (value) => {
   if (typeof value !== 'string' || !value) {
@@ -35,6 +63,7 @@ app.use(
     credentials: true, // 允许发送 Cookie
   }),
 )
+app.use(express.json({ limit: '4kb' }))
 
 // 添加请求日志中间件
 app.use((req, res, next) => {
@@ -48,7 +77,7 @@ app.use((req, res, next) => {
       host: req.headers.host,
       origin: req.headers.origin,
       referer: req.headers.referer,
-      cookie: req.headers.cookie,
+      cookie: req.headers.cookie ? '[present]' : undefined,
     },
   })
   next()
@@ -64,6 +93,37 @@ const getServerHost = (req) => {
 app.get('/health', (req, res) => {
   console.log('健康检查请求')
   res.json({ status: 'ok', message: 'Proxy server is running' })
+})
+
+app.post('/auth/cookies', (req, res) => {
+  if (!isAllowedOrigin(req.headers.origin)) {
+    return res.status(403).json({ success: false, message: '不允许的请求来源' })
+  }
+
+  const memberId = normalizeAuthInput(req.body?.memberId, 'ipb_member_id')
+  const passHash = normalizeAuthInput(req.body?.passHash, 'ipb_pass_hash')
+  if (!/^[1-9]\d{0,19}$/.test(memberId)) {
+    return res.status(400).json({ success: false, message: 'ipb_member_id 格式不正确' })
+  }
+  if (!isValidPassHash(passHash)) {
+    return res.status(400).json({ success: false, message: 'ipb_pass_hash 格式不正确' })
+  }
+
+  res.set('Cache-Control', 'no-store')
+  res.append('Set-Cookie', buildAuthCookie('ipb_member_id', memberId, req))
+  res.append('Set-Cookie', buildAuthCookie('ipb_pass_hash', passHash, req))
+  return res.json({ success: true, memberId, expiresAt: Date.now() + AUTH_COOKIE_MAX_AGE * 1000 })
+})
+
+app.post('/auth/logout', (req, res) => {
+  if (!isAllowedOrigin(req.headers.origin)) {
+    return res.status(403).json({ success: false, message: '不允许的请求来源' })
+  }
+
+  res.set('Cache-Control', 'no-store')
+  res.append('Set-Cookie', buildAuthCookie('ipb_member_id', '', req, true))
+  res.append('Set-Cookie', buildAuthCookie('ipb_pass_hash', '', req, true))
+  return res.json({ success: true })
 })
 
 // 封面图片代理 - 仅允许 EH 图片域名，防止成为任意 URL 代理
@@ -145,10 +205,8 @@ const createProxyOptions = () => ({
       //   Cookie: req.headers.cookie,
       // })
 
-      // 转发客户端的 Cookie
       if (req.headers.cookie) {
         proxyReq.setHeader('Cookie', req.headers.cookie)
-        // console.log('转发 Cookie:', req.headers.cookie)
       }
 
       proxyReq.setHeader(
@@ -236,12 +294,17 @@ const createProxyOptions = () => ({
       }
 
       // 设置 CORS 头，允许 Cookie
-      const origin = req.headers.origin || ALLOWED_ORIGINS[0]
-      proxyRes.headers['Access-Control-Allow-Origin'] = origin
-      proxyRes.headers['Access-Control-Allow-Credentials'] = 'true'
-      proxyRes.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
-      proxyRes.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Cookie'
-      proxyRes.headers['Access-Control-Expose-Headers'] = 'Set-Cookie'
+      const origin = req.headers.origin
+      delete proxyRes.headers['access-control-allow-origin']
+      delete proxyRes.headers['access-control-allow-credentials']
+      if (origin && isAllowedOrigin(origin)) {
+        proxyRes.headers['Access-Control-Allow-Origin'] = origin
+        proxyRes.headers['Access-Control-Allow-Credentials'] = 'true'
+        proxyRes.headers['Access-Control-Allow-Methods'] = 'GET, POST, PUT, DELETE, OPTIONS'
+        proxyRes.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization, Cookie'
+        proxyRes.headers['Access-Control-Expose-Headers'] = 'Set-Cookie'
+        proxyRes.headers.Vary = 'Origin'
+      }
 
       console.log('已设置 CORS 头')
 
@@ -269,6 +332,9 @@ const createProxyOptions = () => ({
 app.use(
   '/ehentai',
   (req, res, next) => {
+    if (!isAllowedOrigin(req.headers.origin)) {
+      return res.status(403).json({ error: '不允许的请求来源' })
+    }
     // console.log('========== 进入 /ehentai 代理中间件 ==========')
     // console.log('匹配到 /ehentai 路径:', req.path)
     // console.log('完整 URL:', req.url)
@@ -288,6 +354,8 @@ app.listen(PORT, () => {
   console.log(`允许的来源: ${ALLOWED_ORIGINS.join(', ')}`)
   console.log('路由配置:')
   console.log('  - GET /health (健康检查)')
+  console.log('  - POST /auth/cookies (保存用户认证 Cookie)')
+  console.log('  - POST /auth/logout (清除用户认证 Cookie)')
   console.log('  - GET /image-proxy?url=... (代理 ehgt.org 图片)')
   console.log('  - ALL /ehentai/* (代理到 e-hentai.org)')
 })

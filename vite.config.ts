@@ -10,6 +10,12 @@ import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
 
 // https://vite.dev/config/
 export default defineConfig({
+  build: {
+    sourcemap: true,
+  },
+  server: {
+    sourcemapIgnoreList: false,
+  },
   worker: {
     format: 'es',
   },
@@ -52,14 +58,10 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,ico,png,webp,json}'],
-        globIgnores: [
-          '**/tagTranslation.worker-*.js',
-          '**/unofficialTagTranslations-*.js',
-        ],
+        globIgnores: ['**/tagTranslation.worker-*.js', '**/unofficialTagTranslations-*.js'],
         runtimeCaching: [
           {
-            urlPattern:
-              /\/assets\/(?:tagTranslation\.worker|unofficialTagTranslations)-[^/]+\.js$/,
+            urlPattern: /\/assets\/(?:tagTranslation\.worker|unofficialTagTranslations)-[^/]+\.js$/,
             handler: 'CacheFirst',
             options: {
               cacheName: 'tag-translation-data',
