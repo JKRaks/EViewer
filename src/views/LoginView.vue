@@ -3,6 +3,7 @@ import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
 import { ArrowRight, Key, RefreshRight, SwitchButton } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
+import UserConfigPanel from '@/components/UserConfigPanel.vue'
 import { clearAuthCookies, saveAuthCookies, useAuthState } from '@/core/auth/authState'
 import { userInfoBusi } from '@/core/auth/userInfoBusi'
 import hathPerkTranslationData from '@/core/data/hathPerkTranslations.json'
@@ -21,7 +22,7 @@ defineOptions({
 })
 
 type AccountDataSection = 'overview' | 'donation' | 'hathPerks'
-type AccountTab = 'authentication' | AccountDataSection
+type AccountTab = 'authentication' | 'userConfig' | AccountDataSection
 type AuthInputMode = 'cookie' | 'fields'
 
 interface ModuleState {
@@ -204,12 +205,16 @@ const hathPerkGroups = computed<HathPerkGroup[]>(() => {
 watch(
   activeTab,
   (tab) => {
-    if (tab !== 'authentication' && authState.loggedIn) {
+    if (isAccountDataSection(tab) && authState.loggedIn) {
       void loadAccountSection(tab)
     }
   },
   { immediate: true },
 )
+
+function isAccountDataSection(tab: AccountTab): tab is AccountDataSection {
+  return tab === 'overview' || tab === 'donation' || tab === 'hathPerks'
+}
 
 async function submitCookies() {
   const credentials = resolveAuthCredentials()
@@ -780,6 +785,12 @@ onBeforeUnmount(resetAccountData)
               <el-empty v-else :image-size="56" description="暂无 Hath 特权数据" />
             </section>
           </template>
+        </section>
+      </el-tab-pane>
+
+      <el-tab-pane label="用户配置" name="userConfig" :disabled="!authState.loggedIn" lazy>
+        <section class="data-section">
+          <UserConfigPanel />
         </section>
       </el-tab-pane>
 

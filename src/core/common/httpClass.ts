@@ -211,6 +211,6 @@ export class httpClass {
 
   // 构建请求体对象（用于 POST 请求）
   private static buildParamObject<T extends R>(param: T): Record<string, unknown> {
-    return jsonClass.serialize(param)
+    return param.getRequestData() ?? jsonClass.serialize(param)
   }
 }
