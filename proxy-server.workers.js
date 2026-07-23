@@ -12,19 +12,19 @@ const ORIGIN_MAP = [
     path: '/ehentai',
     host: 'e-hentai.org',
     schema: 'https',
-    allowedOrigins: ['http://localhost:5173', 'https://yourdomain.com'],
+    allowedOrigins: ['*'],
   },
   {
     path: '/exhentai',
     host: 'exhentai.org',
     schema: 'https',
-    allowedOrigins: ['http://localhost:5173', 'https://yourdomain.com'],
+    allowedOrigins: ['*'],
   },
   {
     path: '/github',
     host: 'github.com',
     schema: 'https',
-    allowedOrigins: ['http://localhost:5173', 'https://yourdomain.com'],
+    allowedOrigins: ['*'],
   },
 ]
 
@@ -49,7 +49,9 @@ function parseAllowedImageUrl(value) {
 function isAllowedRequesterOrigin(origin) {
   if (!origin) return true
   if (/^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/.test(origin)) return true
-  return ORIGIN_MAP.some((config) => config.allowedOrigins.includes(origin))
+  return ORIGIN_MAP.some(
+    (config) => config.allowedOrigins.includes('*') || config.allowedOrigins.includes(origin),
+  )
 }
 
 function normalizeAuthInput(value, cookieName) {
@@ -72,14 +74,15 @@ function isValidPassHash(value) {
 }
 
 function buildAuthCookie(name, value, requestUrl, clear = false) {
+  const secure = requestUrl.protocol === 'https:'
   const attributes = [
     `${name}=${clear ? '' : encodeURIComponent(value)}`,
     'HttpOnly',
-    'SameSite=Lax',
+    secure ? 'SameSite=None' : 'SameSite=Lax',
     'Path=/ehentai',
     clear ? 'Max-Age=0' : `Max-Age=${AUTH_COOKIE_MAX_AGE}`,
   ]
-  if (requestUrl.protocol === 'https:') attributes.push('Secure')
+  if (secure) attributes.push('Secure')
   return attributes.join('; ')
 }
 

@@ -20,6 +20,7 @@ declare module 'vue' {
     ElBacktop: typeof import('element-plus/es')['ElBacktop']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCard: typeof import('element-plus/es')['ElCard']
+    ElCheckbox: typeof import('element-plus/es')['ElCheckbox']
     ElCollapseTransition: typeof import('element-plus/es')['ElCollapseTransition']
     ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
     ElContainer: typeof import('element-plus/es')['ElContainer']
@@ -48,6 +49,7 @@ declare module 'vue' {
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
+    UserConfigPanel: typeof import('./src/components/UserConfigPanel.vue')['default']
   }
   export interface GlobalDirectives {
     vInfiniteScroll: typeof import('element-plus/es')['ElInfiniteScroll']
@@ -65,6 +67,7 @@ declare global {
   const ElBacktop: typeof import('element-plus/es')['ElBacktop']
   const ElButton: typeof import('element-plus/es')['ElButton']
   const ElCard: typeof import('element-plus/es')['ElCard']
+  const ElCheckbox: typeof import('element-plus/es')['ElCheckbox']
   const ElCollapseTransition: typeof import('element-plus/es')['ElCollapseTransition']
   const ElConfigProvider: typeof import('element-plus/es')['ElConfigProvider']
   const ElContainer: typeof import('element-plus/es')['ElContainer']
@@ -93,4 +96,5 @@ declare global {
   const ElTooltip: typeof import('element-plus/es')['ElTooltip']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
+  const UserConfigPanel: typeof import('./src/components/UserConfigPanel.vue')['default']
 }

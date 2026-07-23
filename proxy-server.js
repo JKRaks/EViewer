@@ -4,12 +4,17 @@ import cors from 'cors'
 
 const app = express()
 const PORT = process.env.PORT || 3000
-const ALLOWED_ORIGINS = process.env.ALLOWED_ORIGINS?.split(',') || ['http://localhost:5173']
+const configuredAllowedOrigins =
+  process.env.ALLOWED_ORIGINS?.split(',')
+    .map((origin) => origin.trim())
+    .filter(Boolean) || []
+const ALLOWED_ORIGINS = configuredAllowedOrigins.length ? configuredAllowedOrigins : ['*']
 const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024
 const AUTH_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
 
 const isAllowedOrigin = (origin) =>
   !origin ||
+  ALLOWED_ORIGINS.includes('*') ||
   ALLOWED_ORIGINS.includes(origin) ||
   /^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/.test(origin)
 
@@ -32,7 +37,7 @@ const buildAuthCookie = (name, value, req, clear = false) => {
   const attributes = [
     `${name}=${clear ? '' : encodeURIComponent(value)}`,
     'HttpOnly',
-    'SameSite=Lax',
+    secure ? 'SameSite=None' : 'SameSite=Lax',
     'Path=/ehentai',
     clear ? 'Max-Age=0' : `Max-Age=${AUTH_COOKIE_MAX_AGE}`,
   ]
