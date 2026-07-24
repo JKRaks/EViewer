@@ -1,5 +1,6 @@
 import { reactive } from 'vue'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
+import { clearUserConfigCache } from './userConfigCache'
 
 interface AuthState {
   loggedIn: boolean
@@ -45,11 +46,14 @@ function loadAuthState(): AuthState {
 export const authState = reactive(loadAuthState())
 
 export async function saveAuthCookies(memberId: string, passHash: string) {
+  const previousMemberId = authState.memberId
   const response = await requestAuth('/auth/cookies', { memberId, passHash })
   const now = Date.now()
+  const nextMemberId = response.memberId ?? memberId
+  if (previousMemberId && previousMemberId !== nextMemberId) clearUserConfigCache()
   Object.assign(authState, {
     loggedIn: true,
-    memberId: response.memberId ?? memberId,
+    memberId: nextMemberId,
     expiresAt: response.expiresAt,
     lastLoginAt: now,
   })
@@ -58,6 +62,7 @@ export async function saveAuthCookies(memberId: string, passHash: string) {
 
 export async function clearAuthCookies() {
   await requestAuth('/auth/logout')
+  clearUserConfigCache()
   Object.assign(authState, defaultState, { expiresAt: undefined, lastLoginAt: undefined })
   localStorage.removeItem(storageKey)
 }

@@ -36,23 +36,8 @@ export class bookListBusi {
         '>tr',
       ])
       for (const element of elements) {
-        const item = new bookItem()
-        item.bookTitle = this.getBookTitle(element)
-        item.bookUrl = this.getBookUrl(element)
-        const urlParts = item.bookUrl.match(/\/g\/(.+)$/)
-        item.bookId = (urlParts ? urlParts[1] || '' : '').replace('/', '-')
-        item.thumbnailUrl = this.getThumbnailUrl(element)
-        item.category = this.getCategory(element)
-        item.downloadUrl = this.getDownloadUrl(element)
-        item.imgCount = this.getPicCount(element)
-        item.publishDate = this.getPublishDate(element)
-        item.rate = 0
-        item.tags = this.getTags(element)
-        item.uploader = this.getUploader(element)
-        if (!this.validBookItem(item)) {
-          continue
-        }
-        result.data.push(item)
+        const item = this.parseBookItem(element)
+        if (item) result.data.push(item)
       }
       result.nxtPage = this.getNextPage(bodyParser)
       result.prvPage = this.getLastPage(bodyParser)
@@ -86,23 +71,8 @@ export class bookListBusi {
         '>tr',
       ])
       for (const element of elements) {
-        const item = new bookItem()
-        item.bookTitle = this.getBookTitle(element)
-        item.bookUrl = this.getBookUrl(element)
-        const urlParts = item.bookUrl.match(/\/g\/(.+)$/)
-        item.bookId = (urlParts ? urlParts[1] || '' : '').replace('/', '-')
-        item.thumbnailUrl = this.getThumbnailUrl(element)
-        item.category = this.getCategory(element)
-        item.downloadUrl = this.getDownloadUrl(element)
-        item.imgCount = this.getPicCount(element)
-        item.publishDate = this.getPublishDate(element)
-        item.rate = 0
-        item.tags = this.getTags(element)
-        item.uploader = this.getUploader(element)
-        if (!this.validBookItem(item)) {
-          continue
-        }
-        result.data.push(item)
+        const item = this.parseBookItem(element)
+        if (item) result.data.push(item)
       }
       result.isSuccess = true
       result.msg = '获取画册列表成功'
@@ -110,6 +80,28 @@ export class bookListBusi {
       result.msg = htmlResult.msg
     }
     return result
+  }
+
+  /**
+   * 解析 Extended 模式中的单个画册列表项。
+   * @param element 画册列表行
+   * @returns 有效的画册数据；无法识别标题或地址时返回 undefined
+   */
+  parseBookItem(element: parserClass): bookItem | undefined {
+    const item = new bookItem()
+    item.bookTitle = this.getBookTitle(element)
+    item.bookUrl = this.getBookUrl(element)
+    const urlParts = item.bookUrl.match(/\/g\/(.+)$/)
+    item.bookId = (urlParts ? urlParts[1] || '' : '').replace('/', '-')
+    item.thumbnailUrl = this.getThumbnailUrl(element)
+    item.category = this.getCategory(element)
+    item.downloadUrl = this.getDownloadUrl(element)
+    item.imgCount = this.getPicCount(element)
+    item.publishDate = this.getPublishDate(element)
+    item.rate = 0
+    item.tags = this.getTags(element)
+    item.uploader = this.getUploader(element)
+    return this.validBookItem(item) ? item : undefined
   }
 
   /**

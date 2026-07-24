@@ -3,14 +3,25 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { bookItem } from '@/core/model/book/bookOutput'
 import { getTagDisplayInfo } from '@/core/common/tagTranslations'
-import { Picture, Star, Clock } from '@element-plus/icons-vue'
+import { Picture, Star, StarFilled, Clock } from '@element-plus/icons-vue'
 import CategoryTag from './CategoryTag.vue'
 
 interface Props {
   book: bookItem
+  selectable?: boolean
+  selected?: boolean
+  favoritedAt?: Date
+  favoriteCategoryName?: string
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  selectable: false,
+  selected: false,
+  favoriteCategoryName: '',
+})
+const emit = defineEmits<{
+  'update:selected': [value: boolean]
+}>()
 const router = useRouter()
 
 // 格式化图片数量
@@ -59,16 +70,39 @@ const hiddenTagCount = computed(() => {
   return Math.max(displayTags.value.length - visibleTags.value.length, 0)
 })
 
+const favoritedTimeText = computed(() => {
+  if (!props.favoritedAt) return ''
+  return props.favoritedAt.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+})
+
 const handleClick = () => {
   router.push({
     name: 'bookinfo',
     query: { bookId: props.book.bookId },
   })
 }
+
+const handleSelectionChange = (value: boolean | string | number) => {
+  emit('update:selected', Boolean(value))
+}
 </script>
 
 <template>
-  <div class="book-item" @click="handleClick">
+  <div class="book-item" :class="{ 'is-selected': selected }" @click="handleClick">
+    <el-checkbox
+      v-if="selectable"
+      class="book-selection"
+      :model-value="selected"
+      aria-label="选择画册"
+      @click.stop
+      @change="handleSelectionChange"
+    />
     <!-- 左侧封面图片 -->
     <div class="book-cover">
       <el-image :src="book.thumbnailUrl" fit="cover" class="cover-image" lazy> </el-image>
@@ -126,11 +160,19 @@ const handleClick = () => {
       </div>
 
       <!-- 上传时间 -->
-      <div class="book-time" v-if="book.publishDate">
-        <el-icon :size="12">
-          <Clock />
-        </el-icon>
-        <span>{{ book.publishDate.toLocaleDateString() }}</span>
+      <div v-if="book.publishDate || favoritedTimeText" class="book-time-row">
+        <div class="book-time" v-if="book.publishDate">
+          <el-icon :size="12">
+            <Clock />
+          </el-icon>
+          <span>{{ book.publishDate.toLocaleDateString() }}</span>
+        </div>
+        <div v-if="favoritedTimeText" class="book-time favorite-time" :title="favoriteCategoryName">
+          <el-icon :size="12">
+            <StarFilled />
+          </el-icon>
+          <span>{{ favoritedTimeText }}</span>
+        </div>
       </div>
     </div>
   </div>
@@ -138,6 +180,7 @@ const handleClick = () => {
 
 <style scoped>
 .book-item {
+  position: relative;
   display: flex;
   gap: 12px;
   padding: 12px;
@@ -147,6 +190,26 @@ const handleClick = () => {
   cursor: pointer;
   transition: all 0.3s;
   min-height: 160px;
+}
+
+.book-item.is-selected {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 1px var(--el-color-primary-light-5);
+}
+
+.book-selection {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  height: 24px;
+  padding: 0 5px;
+  border-radius: 4px;
+  background-color: color-mix(in srgb, var(--el-bg-color) 88%, transparent);
+}
+
+.book-item:has(.book-selection) .book-title {
+  padding-right: 28px;
 }
 
 .book-item:hover {
@@ -266,17 +329,32 @@ const handleClick = () => {
 }
 
 /* 时间 */
+.book-time-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  margin-top: auto;
+}
+
 .book-time {
   display: flex;
   align-items: center;
   gap: 4px;
   font-size: 12px;
   color: var(--el-text-color-secondary);
-  margin-top: auto;
 }
 
 .book-time .el-icon {
   color: var(--el-text-color-placeholder);
+}
+
+.favorite-time {
+  color: var(--el-color-primary);
+}
+
+.favorite-time .el-icon {
+  color: currentColor;
 }
 
 /* 响应式适配 */

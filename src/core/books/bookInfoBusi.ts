@@ -70,6 +70,13 @@ export class bookInfoBusi {
         'div.cs',
       ]).text
 
+      const favoriteLinkText = bookInfo.getElementBySelector('a#favoritelink').text.trim()
+      if (favoriteLinkText) {
+        result.personalFavoriteStatus = /^Add to Favorites$/i.test(favoriteLinkText)
+          ? 'none'
+          : 'favorited'
+      }
+
       result.rating =
         bookInfo
           .getElementBySelector([

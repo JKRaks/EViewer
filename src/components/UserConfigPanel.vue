@@ -5,6 +5,8 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import 'element-plus/es/components/message-box/style/css'
 import { userInfoBusi } from '@/core/auth/userInfoBusi'
+import { useAuthState } from '@/core/auth/authState'
+import { getUserConfigWithCache, updateUserConfigCache } from '@/core/auth/userConfigCache'
 import {
   userConfigInput,
   userConfigProfileInput,
@@ -26,6 +28,7 @@ interface SelectOption {
 }
 
 const infoBusi = new userInfoBusi()
+const authState = useAuthState()
 const config = ref<userConfigData>()
 const baseline = ref<userConfigData>()
 const loading = ref(false)
@@ -140,7 +143,7 @@ async function loadConfig(confirmDiscard = false) {
   loading.value = true
   error.value = ''
   try {
-    const result = await infoBusi.getUserConfig(new userConfigInput())
+    const result = await getUserConfigWithCache(authState.memberId, confirmDiscard)
     if (!result.isSuccess || !result.data) throw new Error(result.msg || '用户配置获取失败')
     applyConfig(result.data)
   } catch (loadError) {
@@ -164,6 +167,7 @@ async function saveConfig() {
     if (!latestResult.isSuccess || !latestResult.data) {
       throw new Error(latestResult.msg || '保存前校验 Profile 失败')
     }
+    updateUserConfigCache(authState.memberId, latestResult.data)
     const latestProfile = latestResult.data.profiles.find(
       (profile) => profile.slot === latestResult.data?.selectedProfileSlot,
     )
@@ -186,6 +190,7 @@ async function saveConfig() {
     )
     const result = await infoBusi.updateUserConfig(new userConfigUpdateInput(payload))
     if (!result.isSuccess || !result.data) throw new Error(result.msg || '用户配置保存失败')
+    updateUserConfigCache(authState.memberId, result.data)
     applyConfig(result.data)
     ElMessage.success('用户配置已保存')
   } catch (saveError) {
@@ -296,6 +301,7 @@ async function runProfileAction(
       new userConfigProfileInput(action, slot, name),
     )
     if (!result.isSuccess || !result.data) throw new Error(result.msg || 'Profile 操作失败')
+    updateUserConfigCache(authState.memberId, result.data)
     applyConfig(result.data)
     ElMessage.success(successMessage)
   } catch (actionError) {
