@@ -12,9 +12,13 @@ import {
   Sunny,
   MoonNight,
   Setting,
+  StarFilled,
 } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
 import type { Component } from 'vue'
 import { useFloatingActions } from '@/composables/useFloatingActions'
+import { useAuthState } from '@/core/auth/authState'
 import { useGlobalState } from './core/common/globalStore'
 
 interface FloatingMenuItem {
@@ -25,6 +29,7 @@ interface FloatingMenuItem {
   active?: boolean
   onClick?: () => void
   className?: string
+  requiresAuth?: boolean
 }
 
 const route = useRoute()
@@ -36,10 +41,11 @@ const lastScrollTop = ref(0)
 const scrollThreshold = 48
 const { pageFloatingActions, clearFloatingActions } = useFloatingActions()
 const globalState = useGlobalState()
+const authState = useAuthState()
 const themeModeList = ['auto', 'dark', 'light'] as const
 let systemThemeMedia: MediaQueryList | null = null
 
-const cachedViews = ref<string[]>(['HomeView', 'BookList', 'BookInfoView'])
+const cachedViews = ref<string[]>(['HomeView', 'BookList', 'BookInfoView', 'FavoritesView'])
 const themeModeMeta = {
   auto: {
     label: '自动主题',
@@ -87,6 +93,13 @@ const menuItems = computed<FloatingMenuItem[]>(() => [
     icon: Setting,
   },
   {
+    key: 'favorites',
+    path: '/favorites',
+    label: '个人收藏',
+    icon: StarFilled,
+    requiresAuth: true,
+  },
+  {
     key: 'theme',
     label: themeModeMeta[activeThemeMode.value].label,
     icon: themeModeMeta[activeThemeMode.value].icon,
@@ -132,7 +145,8 @@ const restoreRouteScroll = async (routePath = route.fullPath) => {
 
   const storedPosition = Number(sessionStorage.getItem(getRouteScrollKey(routePath)) || '0')
   const routePathname = routePath.split('?')[0]
-  const shouldRestorePosition = routePathname === '/' || routePathname === '/booklist'
+  const shouldRestorePosition =
+    routePathname === '/' || routePathname === '/booklist' || routePathname === '/favorites'
   const targetPosition = shouldRestorePosition ? storedPosition : 0
   lastScrollTop.value = targetPosition
 
@@ -184,6 +198,12 @@ const toggleThemeMode = () => {
 
 const goMenuItem = (item: (typeof menuItems.value)[number]) => {
   menuExpanded.value = false
+
+  if (item.requiresAuth && !authState.loggedIn) {
+    ElMessage.warning('请先维护认证信息后再查看个人收藏')
+    if (route.path !== '/login') void router.push('/login')
+    return
+  }
 
   if (item.onClick) {
     item.onClick()
@@ -326,10 +346,7 @@ onUnmounted(() => {
               v-for="item in menuItems"
               :key="item.key"
               class="floating-btn floating-sub-btn"
-              :class="[
-                { 'is-active': item.active || activeMenu === item.path },
-                item.className,
-              ]"
+              :class="[{ 'is-active': item.active || activeMenu === item.path }, item.className]"
               @click="goMenuItem(item)"
             >
               <el-icon>

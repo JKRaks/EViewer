@@ -23,13 +23,29 @@ import {
   View,
   Download,
   ChatLineRound,
+  Star,
   StarFilled,
   Share,
 } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import 'element-plus/es/components/message/style/css'
+import 'element-plus/es/components/message-box/style/css'
 import router from '@/router'
 import { useLayoutMainScrollMemory } from '@/composables/useLayoutMainScrollMemory'
-import { useFloatingActions } from '@/composables/useFloatingActions'
 import { getTagCollectionDisplayName, getTagDisplayInfo } from '@/core/common/tagTranslations'
+import { useAuthState } from '@/core/auth/authState'
+import {
+  getFavoriteCategoryOptionsCached,
+  seedFavoriteCategoryCache,
+  type FavoriteCategoryOption,
+} from '@/core/auth/userConfigCache'
+import { favoriteBusi } from '@/core/books/favoriteBusi'
+import { markFavoriteDataChanged } from '@/core/books/favoriteRevision'
+import { galleryFavoriteInput, galleryFavoriteUpdateInput } from '@/core/model/book/favoriteInput'
+import {
+  galleryFavoriteStateData,
+  type galleryFavoriteStatus,
+} from '@/core/model/book/favoriteOutput'
 
 const route = useRoute()
 const funcData = reactive({
@@ -39,11 +55,19 @@ const funcData = reactive({
 const pageData = ref(new bookInfoOutput())
 const shareVisible = ref(false)
 const shareCoverElement = ref<HTMLImageElement | null>(null)
+const favoriteDialogVisible = ref(false)
+const favoriteLoading = ref(false)
+const favoriteUpdating = ref(false)
+const favoriteCategories = ref<FavoriteCategoryOption[]>([])
+const selectedFavoriteCategory = ref<number>()
+const galleryFavoriteState = ref(new galleryFavoriteStateData())
 let loadingBookId = ''
 let bookRequestVersion = 0
+let favoriteRequestVersion = 0
 const { persistScrollPosition, bindScrollListener, unbindScrollListener } =
   useLayoutMainScrollMemory('bookinfo-scroll-position')
-const { addFloatingAction, removeFloatingAction } = useFloatingActions()
+const authState = useAuthState()
+const galleryFavoriteBusi = new favoriteBusi()
 
 defineOptions({
   name: 'BookInfoView',
@@ -52,6 +76,13 @@ defineOptions({
 // 计算评分星星
 const ratingStars = computed(() => {
   return parseFloat(pageData.value.rating)
+})
+
+const isGalleryFavorited = computed(() => pageData.value.personalFavoriteStatus === 'favorited')
+const favoriteButtonLabel = computed(() => {
+  if (!authState.loggedIn) return '登录后收藏'
+  if (favoriteLoading.value) return '正在读取收藏状态'
+  return isGalleryFavorited.value ? '管理收藏' : '添加收藏'
 })
 
 const tagGroups = computed(() => {
@@ -106,8 +137,8 @@ onActivated(() => {
   bindScrollListener()
 
   const routeBookId = getRouteBookId()
-  if (!funcData.loading && pageData.value.bookId === routeBookId) {
-    registerBookActions()
+  if (!funcData.loading && pageData.value.bookId === routeBookId && authState.loggedIn) {
+    void refreshGalleryFavoriteState(routeBookId)
   }
 
   if (routeBookId && routeBookId !== pageData.value.bookId && routeBookId !== loadingBookId) {
@@ -120,6 +151,21 @@ watch(
   (bookId, previousBookId) => {
     if (bookId !== previousBookId) {
       void fetchBookInfo()
+    }
+  },
+)
+
+watch(
+  () => [authState.loggedIn, authState.memberId] as const,
+  ([loggedIn]) => {
+    favoriteRequestVersion += 1
+    favoriteDialogVisible.value = false
+    galleryFavoriteState.value = new galleryFavoriteStateData()
+    favoriteCategories.value = []
+    pageData.value.personalFavoriteStatus = 'unknown'
+    pageData.value.personalFavoriteCategoryIndex = undefined
+    if (loggedIn && pageData.value.bookId === getRouteBookId()) {
+      void refreshGalleryFavoriteState(pageData.value.bookId)
     }
   },
 )
@@ -155,6 +201,7 @@ async function fetchBookInfo() {
     const result = await getBookInfoWithCache(requestInput, 'detail')
     if (requestVersion === bookRequestVersion && getRouteBookId() === routeBookId) {
       pageData.value = result
+      if (authState.loggedIn) void refreshGalleryFavoriteState(routeBookId)
     }
   } catch (error) {
     console.error('获取书籍信息失败:', error)
@@ -162,9 +209,6 @@ async function fetchBookInfo() {
     if (requestVersion === bookRequestVersion) {
       loadingBookId = ''
       funcData.loading = false
-      if (pageData.value.bookId === routeBookId && getRouteBookId() === routeBookId) {
-        registerBookActions()
-      }
     }
   }
 }
@@ -184,29 +228,147 @@ function openSharePreview() {
 }
 
 function resetBookActions() {
+  favoriteRequestVersion += 1
   shareVisible.value = false
   shareCoverElement.value = null
-  removeFloatingAction('book-share')
-  removeFloatingAction('book-download')
+  favoriteDialogVisible.value = false
+  favoriteLoading.value = false
+  favoriteUpdating.value = false
+  favoriteCategories.value = []
+  selectedFavoriteCategory.value = undefined
+  galleryFavoriteState.value = new galleryFavoriteStateData()
 }
 
-function registerBookActions() {
-  addFloatingAction({
-    key: 'book-share',
-    label: '分享',
-    icon: Share,
-    onClick: openSharePreview,
-    placement: 'menu',
-    order: 10,
+async function refreshGalleryFavoriteState(bookId: string, showError = false) {
+  if (!authState.loggedIn || !authState.memberId || bookId !== getRouteBookId()) return false
+
+  const requestVersion = ++favoriteRequestVersion
+  favoriteLoading.value = true
+  const categoryRequest = getFavoriteCategoryOptionsCached(authState.memberId).catch((error) => {
+    console.warn('读取收藏分类缓存失败，使用画册弹窗分类:', error)
+    return []
   })
-  addFloatingAction({
-    key: 'book-download',
-    label: '下载',
-    icon: Download,
-    onClick: toDownload,
-    placement: 'menu',
-    order: 20,
-  })
+  try {
+    const result = await galleryFavoriteBusi.getGalleryFavoriteState(
+      new galleryFavoriteInput(bookId),
+    )
+    if (requestVersion !== favoriteRequestVersion || bookId !== getRouteBookId()) return false
+    if (result.authenticationRequired) throw new Error(result.msg)
+    if (!result.isSuccess || !result.data) {
+      throw new Error(result.msg || '画册收藏状态获取失败')
+    }
+
+    let cachedCategories: FavoriteCategoryOption[] = await categoryRequest
+    if (requestVersion !== favoriteRequestVersion || bookId !== getRouteBookId()) return false
+
+    if (cachedCategories.length === 0) {
+      cachedCategories = result.data.categories.map((category) => ({
+        index: category.index,
+        name: category.name,
+      }))
+      seedFavoriteCategoryCache(authState.memberId, cachedCategories)
+    }
+    favoriteCategories.value = cachedCategories
+    applyGalleryFavoriteState(result.data)
+    return true
+  } catch (error) {
+    if (showError && requestVersion === favoriteRequestVersion) {
+      ElMessage.error(error instanceof Error ? error.message : '画册收藏状态获取失败')
+    }
+    return false
+  } finally {
+    if (requestVersion === favoriteRequestVersion) favoriteLoading.value = false
+  }
+}
+
+async function openFavoriteDialog() {
+  if (!authState.loggedIn) {
+    ElMessage.warning('请先维护认证信息后再收藏画册')
+    void router.push('/login')
+    return
+  }
+  if (funcData.loading || pageData.value.bookId !== getRouteBookId()) return
+
+  const ready =
+    galleryFavoriteState.value.status !== 'unknown' && favoriteCategories.value.length > 0
+      ? true
+      : await refreshGalleryFavoriteState(pageData.value.bookId, true)
+  if (!ready) return
+
+  selectedFavoriteCategory.value =
+    galleryFavoriteState.value.selectedCategoryIndex ?? favoriteCategories.value[0]?.index
+  favoriteDialogVisible.value = true
+}
+
+async function saveGalleryFavorite() {
+  if (selectedFavoriteCategory.value === undefined) {
+    ElMessage.warning('请选择收藏分类')
+    return
+  }
+  await updateGalleryFavorite(String(selectedFavoriteCategory.value))
+}
+
+async function removeGalleryFavorite() {
+  if (!galleryFavoriteState.value.removeValue) {
+    ElMessage.error('源站未提供取消收藏操作')
+    return
+  }
+  try {
+    await ElMessageBox.confirm('确定取消收藏当前画册吗？', '取消收藏', {
+      type: 'warning',
+      confirmButtonText: '取消收藏',
+      cancelButtonText: '返回',
+    })
+    await updateGalleryFavorite(galleryFavoriteState.value.removeValue)
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') throw error
+  }
+}
+
+async function updateGalleryFavorite(categoryValue: string) {
+  if (favoriteUpdating.value || pageData.value.bookId !== getRouteBookId()) return
+  const previousStatus = pageData.value.personalFavoriteStatus
+  const bookId = pageData.value.bookId
+  const requestVersion = ++favoriteRequestVersion
+  favoriteUpdating.value = true
+  try {
+    const result = await galleryFavoriteBusi.updateGalleryFavorite(
+      new galleryFavoriteUpdateInput(
+        bookId,
+        categoryValue,
+        galleryFavoriteState.value.note,
+        galleryFavoriteState.value.applyValue,
+      ),
+    )
+    if (requestVersion !== favoriteRequestVersion || bookId !== getRouteBookId()) return
+    if (!result.isSuccess || !result.data) throw new Error(result.msg || '画册收藏更新失败')
+
+    applyGalleryFavoriteState(result.data)
+    updateFavoriteCount(previousStatus, result.data.status)
+    markFavoriteDataChanged()
+    favoriteDialogVisible.value = false
+    ElMessage.success(result.data.status === 'favorited' ? '收藏已更新' : '已取消收藏')
+  } catch (error) {
+    if (requestVersion === favoriteRequestVersion) {
+      ElMessage.error(error instanceof Error ? error.message : '画册收藏更新失败')
+    }
+  } finally {
+    if (requestVersion === favoriteRequestVersion) favoriteUpdating.value = false
+  }
+}
+
+function applyGalleryFavoriteState(state: galleryFavoriteStateData) {
+  galleryFavoriteState.value = state
+  pageData.value.personalFavoriteStatus = state.status
+  pageData.value.personalFavoriteCategoryIndex = state.selectedCategoryIndex
+  selectedFavoriteCategory.value = state.selectedCategoryIndex ?? favoriteCategories.value[0]?.index
+}
+
+function updateFavoriteCount(previous: galleryFavoriteStatus, current: galleryFavoriteStatus) {
+  if (previous !== 'favorited' && current === 'favorited') pageData.value.favorited += 1
+  if (previous === 'favorited' && current === 'none') {
+    pageData.value.favorited = Math.max(0, pageData.value.favorited - 1)
+  }
 }
 
 async function toRead() {
@@ -358,6 +520,7 @@ function toDownload() {
             <!-- 操作按钮 -->
             <div class="action-buttons">
               <el-button
+                class="read-button"
                 type="primary"
                 size="large"
                 :icon="View"
@@ -366,6 +529,37 @@ function toDownload() {
               >
                 开始阅读
               </el-button>
+              <div class="secondary-action-buttons">
+                <el-tooltip :content="favoriteButtonLabel" placement="bottom">
+                  <el-button
+                    class="detail-action-button"
+                    :class="{ 'is-active': isGalleryFavorited }"
+                    :icon="isGalleryFavorited ? StarFilled : Star"
+                    circle
+                    :loading="favoriteLoading"
+                    :aria-label="favoriteButtonLabel"
+                    @click="openFavoriteDialog"
+                  />
+                </el-tooltip>
+                <el-tooltip content="分享" placement="bottom">
+                  <el-button
+                    class="detail-action-button"
+                    :icon="Share"
+                    circle
+                    aria-label="分享"
+                    @click="openSharePreview"
+                  />
+                </el-tooltip>
+                <el-tooltip content="下载" placement="bottom">
+                  <el-button
+                    class="detail-action-button"
+                    :icon="Download"
+                    circle
+                    aria-label="下载"
+                    @click="toDownload"
+                  />
+                </el-tooltip>
+              </div>
             </div>
           </div>
         </div>
@@ -447,6 +641,47 @@ function toDownload() {
     </div>
   </div>
   <BookShareOverlay v-model="shareVisible" :book="pageData" :cover-element="shareCoverElement" />
+  <el-dialog
+    v-model="favoriteDialogVisible"
+    class="favorite-dialog"
+    :title="isGalleryFavorited ? '管理收藏' : '添加收藏'"
+    width="min(460px, calc(100vw - 32px))"
+    :close-on-click-modal="!favoriteUpdating"
+  >
+    <div class="favorite-dialog-content" v-loading="favoriteLoading || favoriteUpdating">
+      <p>选择收藏夹</p>
+      <el-radio-group v-model="selectedFavoriteCategory" class="favorite-category-grid">
+        <el-radio
+          v-for="category in favoriteCategories"
+          :key="category.index"
+          :value="category.index"
+          border
+        >
+          {{ category.name }}
+        </el-radio>
+      </el-radio-group>
+    </div>
+    <template #footer>
+      <div class="favorite-dialog-actions">
+        <el-button
+          v-if="isGalleryFavorited"
+          type="danger"
+          plain
+          :disabled="favoriteUpdating"
+          @click="removeGalleryFavorite"
+        >
+          取消收藏
+        </el-button>
+        <span class="favorite-dialog-actions__spacer"></span>
+        <el-button :disabled="favoriteUpdating" @click="favoriteDialogVisible = false">
+          返回
+        </el-button>
+        <el-button type="primary" :loading="favoriteUpdating" @click="saveGalleryFavorite">
+          {{ isGalleryFavorited ? '更新分类' : '确认收藏' }}
+        </el-button>
+      </div>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -621,8 +856,74 @@ function toDownload() {
 /* 操作按钮 */
 .action-buttons {
   display: flex;
+  align-items: flex-start;
+  flex-direction: column;
   gap: 12px;
   margin-top: auto;
+}
+
+.secondary-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.secondary-action-buttons :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.detail-action-button {
+  width: 42px;
+  height: 42px;
+  min-width: 42px;
+  min-height: 42px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.detail-action-button.is-active {
+  border-color: var(--el-color-primary);
+  color: #fff;
+  background-color: var(--el-color-primary);
+}
+
+.favorite-dialog-content > p {
+  margin: 0 0 12px;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+}
+
+.favorite-category-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: 100%;
+}
+
+.favorite-category-grid :deep(.el-radio) {
+  width: 100%;
+  min-width: 0;
+  margin: 0;
+}
+
+.favorite-category-grid :deep(.el-radio__label) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.favorite-dialog-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.favorite-dialog-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.favorite-dialog-actions__spacer {
+  flex: 1;
 }
 
 /* 标签卡片 */
@@ -813,10 +1114,15 @@ function toDownload() {
 
   .action-buttons {
     flex-direction: column;
+    align-items: stretch;
   }
 
-  .action-buttons .el-button {
+  .read-button {
     width: 100%;
+  }
+
+  .secondary-action-buttons {
+    justify-content: center;
   }
 
   .meta-info {
@@ -841,6 +1147,10 @@ function toDownload() {
 
   .content-wrapper {
     gap: 12px;
+  }
+
+  .favorite-category-grid {
+    grid-template-columns: 1fr;
   }
 
   .book-title {

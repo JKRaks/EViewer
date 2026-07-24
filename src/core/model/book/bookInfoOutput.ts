@@ -1,5 +1,6 @@
 import { P } from '../P'
 import { tagCollection } from './tag'
+import type { galleryFavoriteStatus } from './favoriteOutput'
 
 export class bookInfoOutput extends P<string[]> {
   /**
@@ -22,6 +23,10 @@ export class bookInfoOutput extends P<string[]> {
    * 被收藏次数
    */
   favorited: number = 0
+  /** 当前登录用户对该画册的收藏状态；不会写入公共详情缓存。 */
+  personalFavoriteStatus: galleryFavoriteStatus = 'unknown'
+  /** 当前登录用户选择的收藏分类。 */
+  personalFavoriteCategoryIndex: number | undefined = undefined
   /**
    * 画册语言
    */

@@ -16,18 +16,28 @@ import {
   resetTagTranslationRuntime,
 } from '@/core/common/tagTranslationWorkerClient'
 import type { TagTranslationCacheStatus } from '@/core/common/tagTranslationProtocol'
-import {
-  clearGalleryDetailsCache,
-  clearGalleryImageCache,
-} from '@/core/cache/galleryCache'
+import { clearGalleryDetailsCache, clearGalleryImageCache } from '@/core/cache/galleryCache'
 import { useShareSettings } from '@/core/share/shareSettings'
+import { useAuthState } from '@/core/auth/authState'
+import {
+  getUserConfigCacheStatus,
+  rebuildUserConfigCache,
+  type UserConfigCacheStatus,
+} from '@/core/auth/userConfigCache'
 
 const settings = useIndexedDbCacheSettings()
 const shareSettings = useShareSettings()
+const authState = useAuthState()
 const environmentStatus = ref<IndexedDbEnvironmentStatus>()
 const tagCacheStatus = ref<TagTranslationCacheStatus>({ available: false, count: 0 })
+const userConfigCacheStatus = ref<UserConfigCacheStatus>({
+  available: false,
+  memberId: '',
+  favoriteCategoryCount: 0,
+})
 const validationRunning = ref(false)
 const fullClearRunning = ref(false)
+const userConfigRebuildRunning = ref(false)
 const rebuildState = reactive({
   running: false,
   completed: 0,
@@ -47,8 +57,35 @@ const rebuildPercentage = computed(() => {
 let indexedDbRefreshPromise: Promise<IndexedDbEnvironmentStatus> | undefined
 
 onMounted(() => {
+  refreshUserConfigCacheStatus()
   window.setTimeout(() => void refreshIndexedDbInformation(), 0)
 })
+
+function refreshUserConfigCacheStatus() {
+  userConfigCacheStatus.value = getUserConfigCacheStatus(authState.memberId)
+}
+
+async function rebuildUserConfiguration() {
+  if (!authState.loggedIn || !authState.memberId) {
+    ElMessage.warning('请先维护认证信息')
+    return
+  }
+
+  userConfigRebuildRunning.value = true
+  try {
+    const result = await rebuildUserConfigCache(authState.memberId)
+    if (!result.isSuccess || !result.data) {
+      throw new Error(result.msg || '用户配置缓存重建失败')
+    }
+    refreshUserConfigCacheStatus()
+    ElMessage.success('用户配置缓存已重建')
+  } catch (error) {
+    console.error('重建用户配置缓存失败:', error)
+    ElMessage.error(error instanceof Error ? error.message : '用户配置缓存重建失败')
+  } finally {
+    userConfigRebuildRunning.value = false
+  }
+}
 
 async function handleIndexedDbToggle() {
   if (!settings.enabled) {
@@ -79,10 +116,7 @@ async function refreshTagCacheStatus() {
 
 async function refreshIndexedDbInformation(showResult = false) {
   if (!indexedDbRefreshPromise) {
-    indexedDbRefreshPromise = Promise.all([
-      runIndexedDbValidation(),
-      refreshTagCacheStatus(),
-    ])
+    indexedDbRefreshPromise = Promise.all([runIndexedDbValidation(), refreshTagCacheStatus()])
       .then(([status]) => status)
       .finally(() => {
         indexedDbRefreshPromise = undefined
@@ -229,6 +263,44 @@ function formatDate(timestamp?: number) {
     </section>
 
     <section class="settings-section">
+      <h2>用户配置缓存</h2>
+      <div class="setting-row setting-row--primary">
+        <div>
+          <div class="setting-name">
+            {{
+              userConfigCacheStatus.available
+                ? `${userConfigCacheStatus.favoriteCategoryCount} 个收藏分类`
+                : '尚未建立'
+            }}
+          </div>
+          <div class="setting-value">
+            {{
+              authState.loggedIn
+                ? `用户 ${authState.memberId} · ${formatDate(userConfigCacheStatus.updatedAt)}`
+                : '登录后可缓存当前用户配置和收藏分类'
+            }}
+          </div>
+        </div>
+        <el-button
+          type="primary"
+          :icon="RefreshRight"
+          :loading="userConfigRebuildRunning"
+          :disabled="!authState.loggedIn"
+          @click="rebuildUserConfiguration"
+        >
+          重建
+        </el-button>
+      </div>
+      <el-alert
+        class="setting-tip"
+        title="收藏分类优先读取当前用户缓存；切换账号或退出登录时会自动清理。"
+        type="info"
+        :closable="false"
+        show-icon
+      />
+    </section>
+
+    <section class="settings-section">
       <h2>环境校验</h2>
       <div class="setting-row">
         <div class="status-content">
@@ -263,7 +335,11 @@ function formatDate(timestamp?: number) {
       <div class="setting-row">
         <div>
           <div class="setting-name">
-            {{ tagCacheStatus.available ? `${tagCacheStatus.count.toLocaleString()} 条索引` : '尚未建立' }}
+            {{
+              tagCacheStatus.available
+                ? `${tagCacheStatus.count.toLocaleString()} 条索引`
+                : '尚未建立'
+            }}
           </div>
           <div class="setting-value">{{ formatDate(tagCacheStatus.updatedAt) }}</div>
         </div>
@@ -271,19 +347,13 @@ function formatDate(timestamp?: number) {
           type="primary"
           :icon="RefreshRight"
           :loading="rebuildState.running"
-          :disabled="
-            !settings.enabled || !settings.cacheTagTranslations || fullClearRunning
-          "
+          :disabled="!settings.enabled || !settings.cacheTagTranslations || fullClearRunning"
           @click="rebuildTranslations"
         >
           重建
         </el-button>
       </div>
-      <el-progress
-        v-if="rebuildState.running"
-        :percentage="rebuildPercentage"
-        :stroke-width="8"
-      />
+      <el-progress v-if="rebuildState.running" :percentage="rebuildPercentage" :stroke-width="8" />
     </section>
 
     <section class="settings-section">
