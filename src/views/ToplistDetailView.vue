@@ -98,8 +98,7 @@ function handlePageChange(page: number) {
 }
 
 function openContributor(entry: contributorToplistEntry) {
-  const escapedName = entry.username.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-  void router.push({ name: 'booklist', query: { keyword: `uploader:"${escapedName}"` } })
+  void router.push({ name: 'booklist', query: { uploader: entry.username } })
 }
 
 watch(

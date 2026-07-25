@@ -57,8 +57,7 @@ function openEntry(entry: toplistEntry) {
     void router.push({ name: 'bookinfo', query: { bookId: entry.book.bookId } })
     return
   }
-  const escapedName = entry.username.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
-  void router.push({ name: 'booklist', query: { keyword: `uploader:"${escapedName}"` } })
+  void router.push({ name: 'booklist', query: { uploader: entry.username } })
 }
 
 onMounted(() => void fetchOverview())

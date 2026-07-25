@@ -29,6 +29,7 @@ const ORIGIN_MAP = [
 ]
 
 const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024
+const IMAGE_LOOKUP_MAX_BYTES = IMAGE_PROXY_MAX_BYTES + 1024 * 1024
 const AUTH_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
 const AUTH_COOKIE_NAMES = ['ipb_member_id', 'ipb_pass_hash']
 
@@ -38,8 +39,7 @@ function parseAllowedImageUrl(value) {
   }
 
   const targetUrl = new URL(value)
-  const allowedHost =
-    targetUrl.hostname === 'ehgt.org' || targetUrl.hostname.endsWith('.ehgt.org')
+  const allowedHost = targetUrl.hostname === 'ehgt.org' || targetUrl.hostname.endsWith('.ehgt.org')
   if (targetUrl.protocol !== 'https:' || !allowedHost) {
     throw new Error('不允许代理该图片地址')
   }
@@ -322,10 +322,10 @@ async function handleImageProxy(request, requestUrl) {
     redirect: 'manual',
   })
   if (!response.ok) {
-    return new Response(
-      JSON.stringify({ error: '图片源站请求失败', status: response.status }),
-      { status: 502, headers: { 'Content-Type': 'application/json' } },
-    )
+    return new Response(JSON.stringify({ error: '图片源站请求失败', status: response.status }), {
+      status: 502,
+      headers: { 'Content-Type': 'application/json' },
+    })
   }
 
   const contentType = response.headers.get('content-type') || ''
@@ -364,6 +364,77 @@ async function handleImageProxy(request, requestUrl) {
   }
 
   return new Response(body, { status: 200, headers })
+}
+
+/** 仅将受限 multipart 图片请求转发到源站图片检索入口。 */
+async function handleImageLookup(request) {
+  const requesterOrigin = getRequesterOrigin(request)
+  if (!isAllowedRequesterOrigin(requesterOrigin)) {
+    return jsonResponse(request, { error: '不允许的请求来源' }, 403)
+  }
+  if (request.method !== 'POST') {
+    return jsonResponse(request, { error: 'Method not allowed' }, 405)
+  }
+  const contentType = (request.headers.get('content-type') || '').toLowerCase()
+  const contentLength = Number(request.headers.get('content-length') || '0')
+  if (!contentType.startsWith('multipart/form-data;') || !contentType.includes('boundary=')) {
+    return jsonResponse(request, { error: '仅支持 multipart 图片上传' }, 415)
+  }
+  if (contentLength > IMAGE_LOOKUP_MAX_BYTES) {
+    return jsonResponse(request, { error: '上传图片体积超过限制' }, 413)
+  }
+
+  const allowedHosts = new Set(['upload.e-hentai.org', 'e-hentai.org'])
+  let targetUrl = new URL('https://upload.e-hentai.org/image_lookup.php')
+  let method = 'POST'
+  let body = request.body
+  let response
+
+  for (let redirectCount = 0; redirectCount <= 6; redirectCount++) {
+    const headers = new Headers(request.headers)
+    headers.delete('origin')
+    headers.set('Host', targetUrl.host)
+    headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
+    headers.set('Referer', method === 'POST' ? 'https://e-hentai.org/' : `${targetUrl.origin}/`)
+    if (method === 'GET') {
+      headers.delete('content-type')
+      headers.delete('content-length')
+    }
+    response = await fetch(targetUrl, {
+      method,
+      headers,
+      body: method === 'POST' ? body : undefined,
+      redirect: 'manual',
+    })
+    if (response.status < 300 || response.status >= 400) break
+
+    const location = response.headers.get('location')
+    if (!location) break
+    targetUrl = new URL(location, targetUrl)
+    if (!allowedHosts.has(targetUrl.hostname) || targetUrl.protocol !== 'https:') {
+      return jsonResponse(request, { error: '图片搜索返回了不允许的重定向地址' }, 502)
+    }
+    method = 'GET'
+    body = undefined
+  }
+
+  if (!response || (response.status >= 300 && response.status < 400)) {
+    return jsonResponse(request, { error: '图片搜索重定向次数过多' }, 502)
+  }
+  const responseHeaders = new Headers(response.headers)
+  responseHeaders.set('Cache-Control', 'no-store')
+  responseHeaders.delete('content-security-policy')
+  responseHeaders.delete('x-frame-options')
+  if (requesterOrigin) {
+    responseHeaders.set('Access-Control-Allow-Origin', requesterOrigin)
+    responseHeaders.set('Access-Control-Allow-Credentials', 'true')
+    responseHeaders.set('Vary', 'Origin')
+  }
+  return new Response(response.body, {
+    status: response.status,
+    statusText: response.statusText,
+    headers: responseHeaders,
+  })
 }
 
 /**
@@ -549,10 +620,19 @@ async function handleRequest(request) {
       return await handleImageProxy(request, url)
     } catch (error) {
       console.error('图片代理请求失败:', error)
-      return new Response(
-        JSON.stringify({ error: '图片代理请求失败', message: error.message }),
-        { status: 502, headers: { 'Content-Type': 'application/json' } },
-      )
+      return new Response(JSON.stringify({ error: '图片代理请求失败', message: error.message }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      })
+    }
+  }
+
+  if (pathname === '/ehentai/image-lookup') {
+    try {
+      return await handleImageLookup(request)
+    } catch (error) {
+      console.error('图片搜索代理请求失败:', error)
+      return jsonResponse(request, { error: error.message || '图片搜索代理请求失败' }, 502)
     }
   }
 
