@@ -42,6 +42,11 @@ const router = createRouter({
       component: () => import('@/views/FavoritesView.vue'),
     },
     {
+      path: '/toplists',
+      name: 'toplists',
+      component: () => import('@/views/ToplistDetailView.vue'),
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/views/LoginView.vue'),

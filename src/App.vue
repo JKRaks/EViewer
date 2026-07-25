@@ -45,7 +45,13 @@ const authState = useAuthState()
 const themeModeList = ['auto', 'dark', 'light'] as const
 let systemThemeMedia: MediaQueryList | null = null
 
-const cachedViews = ref<string[]>(['HomeView', 'BookList', 'BookInfoView', 'FavoritesView'])
+const cachedViews = ref<string[]>([
+  'HomeView',
+  'BookList',
+  'BookInfoView',
+  'FavoritesView',
+  'ToplistDetailView',
+])
 const themeModeMeta = {
   auto: {
     label: '自动主题',
@@ -146,7 +152,10 @@ const restoreRouteScroll = async (routePath = route.fullPath) => {
   const storedPosition = Number(sessionStorage.getItem(getRouteScrollKey(routePath)) || '0')
   const routePathname = routePath.split('?')[0]
   const shouldRestorePosition =
-    routePathname === '/' || routePathname === '/booklist' || routePathname === '/favorites'
+    routePathname === '/' ||
+    routePathname === '/booklist' ||
+    routePathname === '/favorites' ||
+    routePathname === '/toplists'
   const targetPosition = shouldRestorePosition ? storedPosition : 0
   lastScrollTop.value = targetPosition
 

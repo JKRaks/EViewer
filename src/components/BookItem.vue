@@ -3,7 +3,7 @@ import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { bookItem } from '@/core/model/book/bookOutput'
 import { getTagDisplayInfo } from '@/core/common/tagTranslations'
-import { Picture, Star, StarFilled, Clock } from '@element-plus/icons-vue'
+import { Picture, Star, StarFilled, Clock, TrendCharts } from '@element-plus/icons-vue'
 import CategoryTag from './CategoryTag.vue'
 
 interface Props {
@@ -12,6 +12,8 @@ interface Props {
   selected?: boolean
   favoritedAt?: Date
   favoriteCategoryName?: string
+  rank?: number
+  score?: number
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -70,6 +72,10 @@ const hiddenTagCount = computed(() => {
   return Math.max(displayTags.value.length - visibleTags.value.length, 0)
 })
 
+const scoreText = computed(() => {
+  return props.score === undefined ? '' : props.score.toLocaleString('zh-CN')
+})
+
 const favoritedTimeText = computed(() => {
   if (!props.favoritedAt) return ''
   return props.favoritedAt.toLocaleString('zh-CN', {
@@ -105,6 +111,7 @@ const handleSelectionChange = (value: boolean | string | number) => {
     />
     <!-- 左侧封面图片 -->
     <div class="book-cover">
+      <span v-if="rank" class="book-rank">#{{ rank }}</span>
       <el-image :src="book.thumbnailUrl" fit="cover" class="cover-image" lazy> </el-image>
     </div>
 
@@ -131,6 +138,13 @@ const handleSelectionChange = (value: boolean | string | number) => {
             <Star />
           </el-icon>
           <span>{{ book.rate?.toFixed(1) }}</span>
+        </div>
+
+        <div v-if="score !== undefined" class="meta-item ranking-score">
+          <el-icon :size="14">
+            <TrendCharts />
+          </el-icon>
+          <span>{{ scoreText }}</span>
         </div>
       </div>
 
@@ -220,12 +234,29 @@ const handleSelectionChange = (value: boolean | string | number) => {
 
 /* 左侧封面 */
 .book-cover {
+  position: relative;
   flex-shrink: 0;
   width: 100px;
   height: 136px;
   border-radius: 6px;
   overflow: hidden;
   background-color: var(--el-fill-color-light);
+}
+
+.book-rank {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  min-width: 34px;
+  padding: 3px 7px;
+  color: var(--el-color-white);
+  background-color: color-mix(in srgb, var(--el-color-primary) 88%, transparent);
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.2;
+  text-align: center;
 }
 
 .cover-image {
@@ -280,6 +311,11 @@ const handleSelectionChange = (value: boolean | string | number) => {
 
 .meta-item .el-icon {
   color: var(--el-text-color-secondary);
+}
+
+.ranking-score {
+  color: var(--el-color-primary);
+  font-weight: 600;
 }
 
 /* 标签 */

@@ -541,7 +541,7 @@ function toDownload() {
                     @click="openFavoriteDialog"
                   />
                 </el-tooltip>
-                <el-tooltip content="分享" placement="bottom">
+                <el-tooltip content="分享" placement="bottom" :disabled="shareVisible">
                   <el-button
                     class="detail-action-button"
                     :icon="Share"

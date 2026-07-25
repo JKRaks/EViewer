@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onActivated, onDeactivated, onMounted, onUnmounted } from 'vue'
-import { onBeforeRouteLeave } from 'vue-router'
+import { ref, onActivated, onDeactivated, onMounted, onUnmounted, watch } from 'vue'
+import { onBeforeRouteLeave, useRoute } from 'vue-router'
 import { bookListBusi } from '@/core/books/bookListBusi'
 import { bookInput } from '@/core/model/book/bookInput'
 import { bookOutput, bookItem } from '@/core/model/book/bookOutput'
@@ -17,6 +17,7 @@ const loadingMore = ref(false)
 const allBooks = ref<bookItem[]>([])
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
+const route = useRoute()
 
 // 分类选项
 const categoryOptions = [
@@ -138,6 +139,18 @@ const toggleAdvanced = () => {
 defineOptions({
   name: 'BookList',
 })
+
+watch(
+  () => route.query.keyword,
+  (keyword) => {
+    if (route.name !== 'booklist') return
+    const normalizedKeyword = Array.isArray(keyword) ? keyword[0] : keyword
+    if (!normalizedKeyword || normalizedKeyword === bookInputs.value.keyword) return
+    bookInputs.value.keyword = normalizedKeyword
+    void fetchBookList()
+  },
+  { immediate: true },
+)
 
 // 挂载时设置 observer
 onMounted(() => {
