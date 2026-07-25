@@ -1,14 +1,24 @@
 import { P } from '../model/P'
-import axios, { type AxiosInstance, type AxiosResponse } from 'axios'
-import type { R } from '../model/R'
+import axios, {
+  type AxiosInstance,
+  type AxiosProgressEvent,
+  type AxiosRequestConfig,
+  type AxiosResponse,
+} from 'axios'
+import type { R, requestEncoding } from '../model/R'
 import { jsonClass } from './decorator/jsonProperty'
+
+export interface HttpRequestOptions {
+  signal?: AbortSignal
+  timeout?: number
+  onUploadProgress?: (loaded: number, total?: number) => void
+}
 
 export class httpClass {
   // 创建全局 axios 实例
   private static axiosInstance: AxiosInstance = axios.create({
     withCredentials: true,
     headers: {
-      'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
       Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     },
     timeout: 30000,
@@ -20,7 +30,10 @@ export class httpClass {
     },
   })
 
-  static async sendRequest<T extends R>(param: T): Promise<P<string>> {
+  static async sendRequest<T extends R>(
+    param: T,
+    options: HttpRequestOptions = {},
+  ): Promise<P<string>> {
     const url = this.getUrl(param)
     const method = param.getMethod()
     const result: P<string> = new P<string>()
@@ -32,11 +45,23 @@ export class httpClass {
         const queryString = this.buildParam(param)
         const fullUrl = queryString ? `${url}?${queryString}` : url
         console.log('发送 GET 请求:', fullUrl)
-        response = await this.followRedirects(fullUrl, 'GET')
+        response = await this.followRedirects(
+          fullUrl,
+          'GET',
+          undefined,
+          param.getRequestEncoding(),
+          options,
+        )
       } else {
-        const data = this.buildParamObject(param)
-        console.log('发送 POST 请求:', url, '数据:', data)
-        response = await this.followRedirects(url, 'POST', data)
+        const data = param.getRequestData() ?? jsonClass.serialize(param)
+        console.log('发送 POST 请求:', url)
+        response = await this.followRedirects(
+          url,
+          'POST',
+          data,
+          param.getRequestEncoding(),
+          options,
+        )
       }
 
       // console.log('最终响应状态:', response.status)
@@ -45,7 +70,7 @@ export class httpClass {
       result.data = response.data
       result.isSuccess = true
     } catch (error: unknown) {
-      console.error('请求失败:', error)
+      if (!axios.isCancel(error)) console.error('请求失败:', error)
       result.msg = (error as Error).message
     }
     return result
@@ -55,10 +80,14 @@ export class httpClass {
   private static async followRedirects(
     url: string,
     method: 'GET' | 'POST',
-    data?: Record<string, unknown>,
+    data: Record<string, unknown> | FormData | undefined,
+    encoding: requestEncoding,
+    options: HttpRequestOptions,
     maxRedirects: number = 10,
   ): Promise<AxiosResponse<string>> {
     let currentUrl = url
+    let currentMethod = method
+    let currentData = data
     let redirectCount = 0
     let accumulatedCookies: string[] = []
 
@@ -67,7 +96,7 @@ export class httpClass {
       // console.log('请求 URL:', currentUrl)
       // console.log('当前累积的 Cookies:', accumulatedCookies.join('; '))
 
-      const config = {
+      const config: AxiosRequestConfig = {
         headers: {
           ...(accumulatedCookies.length > 0 && {
             Cookie: accumulatedCookies.join('; '),
@@ -75,21 +104,33 @@ export class httpClass {
         },
         maxRedirects: 0,
         validateStatus: () => true, // 接受所有状态码
+        signal: options.signal,
+        timeout: options.timeout,
+        onUploadProgress: options.onUploadProgress
+          ? (event: AxiosProgressEvent) => options.onUploadProgress?.(event.loaded, event.total)
+          : undefined,
       }
 
       let response: AxiosResponse<string>
 
       try {
-        if (method === 'POST' && data && redirectCount === 0) {
-          // 只在第一次请求时使用 POST，重定向后使用 GET
-          // console.log('发送 POST 请求，数据:', data)
-          response = await this.axiosInstance.post<string>(currentUrl, data, config)
+        if (currentMethod === 'POST') {
+          const requestBody = this.buildRequestBody(currentData, encoding)
+          if (encoding === 'urlencoded') {
+            config.headers = {
+              ...config.headers,
+              'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+            }
+          } else if (encoding === 'json') {
+            config.headers = { ...config.headers, 'Content-Type': 'application/json' }
+          }
+          response = await this.axiosInstance.post<string>(currentUrl, requestBody, config)
         } else {
           // console.log('发送 GET 请求')
           response = await this.axiosInstance.get<string>(currentUrl, config)
         }
       } catch (error) {
-        console.error('请求错误:', error)
+        if (!axios.isCancel(error)) console.error('请求错误:', error)
         throw error
       }
 
@@ -117,6 +158,10 @@ export class httpClass {
 
         // 处理相对路径和绝对路径
         currentUrl = this.resolveUrl(currentUrl, location)
+        if ([301, 302, 303].includes(response.status)) {
+          currentMethod = 'GET'
+          currentData = undefined
+        }
         redirectCount++
 
         // console.log('跟随重定向到:', currentUrl)
@@ -209,8 +254,20 @@ export class httpClass {
     return params.toString()
   }
 
-  // 构建请求体对象（用于 POST 请求）
-  private static buildParamObject<T extends R>(param: T): Record<string, unknown> {
-    return param.getRequestData() ?? jsonClass.serialize(param)
+  private static buildRequestBody(
+    data: Record<string, unknown> | FormData | undefined,
+    encoding: requestEncoding,
+  ): Record<string, unknown> | FormData | URLSearchParams | undefined {
+    if (!data || data instanceof FormData || encoding !== 'urlencoded') {
+      return data
+    }
+
+    const params = new URLSearchParams()
+    for (const [key, value] of Object.entries(data)) {
+      if (value === undefined || value === null) continue
+      const values = Array.isArray(value) ? value : [value]
+      values.forEach((item) => params.append(key, String(item)))
+    }
+    return params
   }
 }

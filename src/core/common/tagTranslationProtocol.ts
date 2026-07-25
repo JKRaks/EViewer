@@ -32,9 +32,54 @@ export interface TagTranslationCacheStatus {
   datasetVersion?: string
 }
 
+export interface SearchableTag {
+  namespace: string
+  master: string
+  displayName: string
+  aliases: string[]
+  source: 'official' | 'unofficial'
+}
+
+export interface TagNamespaceSummary {
+  namespace: string
+  displayName: string
+  count: number
+}
+
+export interface TagMasterPage {
+  namespace: string
+  total: number
+  offset: number
+  items: SearchableTag[]
+}
+
 export type TagTranslationWorkerRequest =
   | { id: number; type: 'lookup'; queries: TagTranslationLookup[] }
   | { id: number; type: 'rebuild' }
+  | { id: number; type: 'list-namespaces'; useCache: boolean }
+  | {
+      id: number
+      type: 'list-master-tags'
+      namespace: string
+      offset: number
+      limit: number
+      useCache: boolean
+    }
+  | {
+      id: number
+      type: 'search-master-tags'
+      keyword: string
+      namespace?: string
+      limit: number
+      useCache: boolean
+    }
+  | {
+      id: number
+      type: 'resolve-tag'
+      namespace: string
+      value: string
+      useCache: boolean
+    }
 
 export type TagTranslationWorkerResponse =
   | {
@@ -44,6 +89,10 @@ export type TagTranslationWorkerResponse =
     }
   | { id: number; type: 'rebuild-progress'; completed: number; total: number }
   | { id: number; type: 'rebuild-complete'; count: number }
+  | { id: number; type: 'namespaces-complete'; namespaces: TagNamespaceSummary[] }
+  | { id: number; type: 'master-tags-complete'; page: TagMasterPage }
+  | { id: number; type: 'search-complete'; results: SearchableTag[] }
+  | { id: number; type: 'resolve-complete'; result: SearchableTag | null }
   | { id: number; type: 'error'; message: string }
 
 export const tagTranslationDatasetVersion = '2026-07-15-15bdf67e-v1'

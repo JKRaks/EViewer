@@ -17,8 +17,26 @@ export class bookInput extends R {
   pagePrev: number | undefined = undefined
   @jsonClass.property('f_srdd')
   minRating: number | undefined = undefined
+  @jsonClass.property('f_sr')
+  minRatingEnabled: string | undefined = undefined
+  @jsonClass.property('f_spf')
+  minPages: number | undefined = undefined
+  @jsonClass.property('f_spt')
+  maxPages: number | undefined = undefined
+  @jsonClass.property('f_sp')
+  pageRangeEnabled: string | undefined = undefined
+  @jsonClass.property('f_sto')
+  requireTorrent: string | undefined = undefined
   @jsonClass.property('f_sh')
-  showHide: boolean | undefined = undefined
+  showHide: string | undefined = undefined
+  @jsonClass.property('f_sfl')
+  disableLanguageFilter: string | undefined = undefined
+  @jsonClass.property('f_sfu')
+  disableUploaderFilter: string | undefined = undefined
+  @jsonClass.property('f_sft')
+  disableTagFilter: string | undefined = undefined
+  @jsonClass.property('f_shash')
+  fileHash: string | undefined = undefined
   @jsonClass.property('inline_set')
   readonly showType: string = 'dm_e'
 }

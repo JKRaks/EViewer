@@ -7,6 +7,7 @@ import { bookOutput, bookItem } from '../model/book/bookOutput'
 import type { tagCollection } from '../model/book/tag'
 import { popularInput } from '../model/book/popularInput'
 import { popularOutput } from '../model/book/popularOutput'
+import type { HttpRequestOptions } from '../common/httpClass'
 
 export class bookListBusi {
   /**
@@ -14,7 +15,7 @@ export class bookListBusi {
    * @param param 画册列表参数
    * @returns 画册列表
    */
-  async getBookPageList(param: bookInput): Promise<bookOutput> {
+  async getBookPageList(param: bookInput, options: HttpRequestOptions = {}): Promise<bookOutput> {
     const result: bookOutput = new bookOutput()
     result.data = []
     const queryParams = Object.create(param)
@@ -24,29 +25,36 @@ export class bookListBusi {
     if (queryParams.category !== categoryEnum.All) {
       queryParams.category = categoryEnum.All - queryParams.category
     }
-    const htmlResult = await httpClass.sendRequest(queryParams)
+    const htmlResult = await httpClass.sendRequest(queryParams, options)
     if (htmlResult.isSuccess) {
-      const bodyParser = parserClass.loadBody(htmlResult.data!)
-      //解析画册列表
-      const elements = bodyParser.getElementsBySelector([
-        'div.ido',
-        'div',
-        'table.itg.glte',
-        '>tbody',
-        '>tr',
-      ])
-      for (const element of elements) {
-        const item = this.parseBookItem(element)
-        if (item) result.data.push(item)
-      }
-      result.nxtPage = this.getNextPage(bodyParser)
-      result.prvPage = this.getLastPage(bodyParser)
-      result.totalCount = this.getTotalCount(bodyParser)
-      result.isSuccess = true
-      result.msg = '获取画册列表成功'
+      return this.parseBookPageHtml(htmlResult.data!)
     } else {
       result.msg = htmlResult.msg
     }
+    return result
+  }
+
+  /** 解析搜索结果 HTML，供普通搜索与图片搜索复用。 */
+  parseBookPageHtml(html: string): bookOutput {
+    const result = new bookOutput()
+    result.data = []
+    const bodyParser = parserClass.loadBody(html)
+    const elements = bodyParser.getElementsBySelector([
+      'div.ido',
+      'div',
+      'table.itg.glte',
+      '>tbody',
+      '>tr',
+    ])
+    for (const element of elements) {
+      const item = this.parseBookItem(element)
+      if (item) result.data.push(item)
+    }
+    result.nxtPage = this.getNextPage(bodyParser)
+    result.prvPage = this.getLastPage(bodyParser)
+    result.totalCount = this.getTotalCount(bodyParser)
+    result.isSuccess = true
+    result.msg = '获取画册列表成功'
     return result
   }
 

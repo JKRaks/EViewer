@@ -1,6 +1,7 @@
 ﻿import express from 'express'
 import { createProxyMiddleware } from 'http-proxy-middleware'
 import cors from 'cors'
+import { Transform } from 'node:stream'
 
 const app = express()
 const PORT = process.env.PORT || 3000
@@ -10,6 +11,7 @@ const configuredAllowedOrigins =
     .filter(Boolean) || []
 const ALLOWED_ORIGINS = configuredAllowedOrigins.length ? configuredAllowedOrigins : ['*']
 const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024
+const IMAGE_LOOKUP_MAX_BYTES = IMAGE_PROXY_MAX_BYTES + 1024 * 1024
 const AUTH_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
 
 const isAllowedOrigin = (origin) =>
@@ -32,7 +34,9 @@ const isValidPassHash = (value) =>
   typeof value === 'string' && value.length >= 8 && value.length <= 256 && !/[;\r\n\0]/.test(value)
 
 const buildAuthCookie = (name, value, req, clear = false) => {
-  const forwardedProtocol = String(req.headers['x-forwarded-proto'] || '').split(',')[0]?.trim()
+  const forwardedProtocol = String(req.headers['x-forwarded-proto'] || '')
+    .split(',')[0]
+    ?.trim()
   const secure = req.secure || forwardedProtocol === 'https'
   const attributes = [
     `${name}=${clear ? '' : encodeURIComponent(value)}`,
@@ -51,8 +55,7 @@ const parseAllowedImageUrl = (value) => {
   }
 
   const targetUrl = new URL(value)
-  const allowedHost =
-    targetUrl.hostname === 'ehgt.org' || targetUrl.hostname.endsWith('.ehgt.org')
+  const allowedHost = targetUrl.hostname === 'ehgt.org' || targetUrl.hostname.endsWith('.ehgt.org')
   if (targetUrl.protocol !== 'https:' || !allowedHost) {
     throw new Error('不允许代理该图片地址')
   }
@@ -146,8 +149,7 @@ app.get('/image-proxy', async (req, res) => {
         Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
         'Accept-Language': 'en-US,en;q=0.5',
         Referer: 'https://e-hentai.org/',
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
       redirect: 'manual',
       signal: AbortSignal.timeout(15000),
@@ -180,6 +182,97 @@ app.get('/image-proxy', async (req, res) => {
   } catch (error) {
     console.error('图片代理请求失败:', error)
     return res.status(502).json({ error: '图片代理请求失败', message: error.message })
+  }
+})
+
+const createSizeLimitedStream = (source, maxBytes) => {
+  let received = 0
+  const limiter = new Transform({
+    transform(chunk, encoding, callback) {
+      received += chunk.length
+      if (received > maxBytes) {
+        const error = new Error('上传图片体积超过限制')
+        error.code = 'PAYLOAD_TOO_LARGE'
+        callback(error)
+        return
+      }
+      callback(null, chunk)
+    },
+  })
+  source.pipe(limiter)
+  return limiter
+}
+
+const requestImageLookup = async (req) => {
+  const allowedHosts = new Set(['upload.e-hentai.org', 'e-hentai.org'])
+  const cookie = req.headers.cookie || ''
+  let targetUrl = new URL('https://upload.e-hentai.org/image_lookup.php')
+  let method = 'POST'
+  let body = createSizeLimitedStream(req, IMAGE_LOOKUP_MAX_BYTES)
+
+  for (let redirectCount = 0; redirectCount <= 6; redirectCount++) {
+    const headers = {
+      Accept: 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+      'Accept-Language': 'en-US,en;q=0.5',
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+      Referer: method === 'POST' ? 'https://e-hentai.org/' : `${targetUrl.origin}/`,
+      ...(cookie && { Cookie: cookie }),
+      ...(method === 'POST' && {
+        'Content-Type': req.headers['content-type'],
+        ...(req.headers['content-length'] && { 'Content-Length': req.headers['content-length'] }),
+      }),
+    }
+    const response = await fetch(targetUrl, {
+      method,
+      headers,
+      body: method === 'POST' ? body : undefined,
+      duplex: method === 'POST' ? 'half' : undefined,
+      redirect: 'manual',
+      signal: AbortSignal.timeout(60000),
+    })
+    if (response.status < 300 || response.status >= 400) return response
+
+    const location = response.headers.get('location')
+    if (!location) return response
+    targetUrl = new URL(location, targetUrl)
+    if (!allowedHosts.has(targetUrl.hostname) || targetUrl.protocol !== 'https:') {
+      throw new Error('图片搜索返回了不允许的重定向地址')
+    }
+    method = 'GET'
+    body = undefined
+  }
+  throw new Error('图片搜索重定向次数过多')
+}
+
+app.all('/ehentai/image-lookup', (req, res, next) => {
+  if (req.method === 'POST') return next()
+  return res.status(405).json({ error: 'Method not allowed' })
+})
+
+app.post('/ehentai/image-lookup', async (req, res) => {
+  if (!isAllowedOrigin(req.headers.origin)) {
+    return res.status(403).json({ error: '不允许的请求来源' })
+  }
+  const contentType = String(req.headers['content-type'] || '').toLowerCase()
+  const contentLength = Number(req.headers['content-length'] || '0')
+  if (!contentType.startsWith('multipart/form-data;') || !contentType.includes('boundary=')) {
+    return res.status(415).json({ error: '仅支持 multipart 图片上传' })
+  }
+  if (contentLength > IMAGE_LOOKUP_MAX_BYTES) {
+    return res.status(413).json({ error: '上传图片体积超过限制' })
+  }
+
+  try {
+    const response = await requestImageLookup(req)
+    const content = Buffer.from(await response.arrayBuffer())
+    res.status(response.status)
+    res.set('Cache-Control', 'no-store')
+    res.set('Content-Type', response.headers.get('content-type') || 'text/html; charset=UTF-8')
+    return res.send(content)
+  } catch (error) {
+    const status = error.code === 'PAYLOAD_TOO_LARGE' ? 413 : 502
+    console.error('图片搜索代理请求失败:', error)
+    return res.status(status).json({ error: error.message || '图片搜索代理请求失败' })
   }
 })
 
