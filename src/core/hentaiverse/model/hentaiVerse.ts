@@ -58,6 +58,8 @@ export interface HentaiVerseOption {
 export interface HentaiVerseFormControl {
   name: string
   label: string
+  group?: string
+  groupLabel?: string
   type: 'text' | 'number' | 'password' | 'select' | 'textarea' | 'checkbox' | 'radio'
   value: string
   checked?: boolean
@@ -72,6 +74,13 @@ export interface HentaiVerseFormAction {
   value: string
   label: string
   danger?: boolean
+  disabled?: boolean
+}
+
+export interface HentaiVerseFormGroup {
+  key: string
+  title: string
+  description: string
 }
 
 export interface HentaiVerseFormBlock {
@@ -82,6 +91,7 @@ export interface HentaiVerseFormBlock {
   hidden: Record<string, string>
   controls: HentaiVerseFormControl[]
   actions: HentaiVerseFormAction[]
+  groups?: HentaiVerseFormGroup[]
 }
 
 export interface HentaiVerseEquipmentSet {
@@ -97,6 +107,7 @@ export interface HentaiVerseEquipmentSlot {
   equipmentName: string
   description: string
   active: boolean
+  disabled: boolean
 }
 
 export interface HentaiVerseEquipmentCandidate {
@@ -223,8 +234,17 @@ export type HentaiVerseBattleMode = 'attack' | 'magic' | 'items' | 'spirit' | 'd
 
 export interface HentaiVerseBattleAction {
   label: string
+  description: string
   mode: HentaiVerseBattleMode
   skill: number
+  target: 'enemy' | 'self' | 'none'
+}
+
+export interface HentaiVerseBattleVital {
+  key: 'health' | 'magic' | 'spirit'
+  label: string
+  value: string
+  percent: number
 }
 
 export interface HentaiVerseBattleMonster {
@@ -237,7 +257,7 @@ export interface HentaiVerseBattleMonster {
 export interface HentaiVerseBattleSnapshot {
   token: string
   title: string
-  vitals: string[]
+  vitals: HentaiVerseBattleVital[]
   effects: string[]
   monsters: HentaiVerseBattleMonster[]
   actions: HentaiVerseBattleAction[]

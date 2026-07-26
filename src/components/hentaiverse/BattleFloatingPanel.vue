@@ -1,7 +1,21 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
-import { Close, Lightning, Minus, Refresh } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import {
+  Aim,
+  Box,
+  CircleCheck,
+  Close,
+  FirstAidKit,
+  Lightning,
+  Lock,
+  MagicStick,
+  Minus,
+  Position,
+  Promotion,
+  Refresh,
+  Search,
+} from '@element-plus/icons-vue'
+import { ElMessage, ElNotification } from 'element-plus'
 import {
   enterHentaiVerseBattle,
   hentaiVerseState,
@@ -9,11 +23,16 @@ import {
   performHentaiVerseBattleAction,
   showHentaiVerseBattle,
 } from '@/core/hentaiverse/hentaiVerseStore'
-import type { HentaiVerseBattleAction } from '@/core/hentaiverse/model/hentaiVerse'
+import type { HentaiVerseBattleAction, HentaiVerseBattleVital } from '@/core/hentaiverse/model/hentaiVerse'
 
 const selectedTarget = ref(1)
 const battle = computed(() => hentaiVerseState.battle)
 const livingMonsters = computed(() => battle.value?.monsters.filter((monster) => !monster.defeated) || [])
+const vitalColors: Record<HentaiVerseBattleVital['key'], string> = {
+  health: '#4f9f64',
+  magic: '#4f7fc4',
+  spirit: '#c65d6f',
+}
 
 watch(
   livingMonsters,
@@ -23,12 +42,39 @@ watch(
   { immediate: true },
 )
 
+watch(
+  () => battle.value?.completed,
+  (completed, wasCompleted) => {
+    if (!completed || wasCompleted) return
+    ElNotification.success({
+      title: '战斗已结束',
+      message: '战斗结果已保留在面板中，查看后可关闭战斗面板。',
+      duration: 5000,
+      position: 'top-right',
+      zIndex: 3300,
+    })
+  },
+)
+
 async function act(action: HentaiVerseBattleAction) {
   try {
-    await performHentaiVerseBattleAction(action.mode, selectedTarget.value, action.skill)
+    const target = action.target === 'enemy' ? selectedTarget.value : 0
+    await performHentaiVerseBattleAction(action.mode, target, action.skill)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '战斗动作提交失败')
   }
+}
+
+function getActionIcon(action: HentaiVerseBattleAction) {
+  if (action.skill === 1001) return Position
+  if (action.skill === 1011) return Search
+  if (action.skill === 311) return FirstAidKit
+  if (action.mode === 'attack') return Promotion
+  if (action.mode === 'spirit') return Lightning
+  if (action.mode === 'defend') return Lock
+  if (action.mode === 'focus') return Aim
+  if (action.mode === 'items') return Box
+  return MagicStick
 }
 
 async function recover() {
@@ -66,14 +112,25 @@ function closeLocalBattle() {
           <span v-else>回合进行中</span>
         </div>
         <div class="battle-window-actions">
-          <el-button text circle :icon="Minus" title="隐藏战斗" @click="hideHentaiVerseBattle" />
+          <el-button v-if="!battle.completed" text circle :icon="Minus" title="隐藏战斗" @click="hideHentaiVerseBattle" />
           <el-button text circle :icon="Close" title="关闭本地战斗面板" @click="closeLocalBattle" />
         </div>
       </header>
 
       <div class="battle-body">
         <div v-if="battle.vitals.length" class="battle-vitals">
-          <span v-for="vital in battle.vitals" :key="vital">{{ vital }}</span>
+          <div v-for="vital in battle.vitals" :key="vital.key" class="battle-vital">
+            <div class="battle-vital-label">
+              <span>{{ vital.label }}</span>
+              <strong>{{ vital.value }}</strong>
+            </div>
+            <el-progress
+              :percentage="vital.percent"
+              :stroke-width="8"
+              :show-text="false"
+              :color="vitalColors[vital.key]"
+            />
+          </div>
         </div>
 
         <div v-if="livingMonsters.length" class="battle-monsters">
@@ -99,21 +156,34 @@ function closeLocalBattle() {
           <el-button size="small" :icon="Refresh" @click="recover">从服务器恢复</el-button>
         </el-alert>
 
-        <div v-if="battle.completed" class="battle-completion">
-          <strong>战斗完成</strong>
-          <p>{{ battle.completionText }}</p>
+        <div v-if="battle.completed" class="battle-completion" role="status">
+          <el-icon :size="30"><CircleCheck /></el-icon>
+          <div>
+            <strong>本次战斗已结束</strong>
+            <p>{{ battle.completionText || '战斗结果已确认，可以关闭当前面板。' }}</p>
+          </div>
+          <el-button type="primary" :icon="Close" @click="closeLocalBattle">关闭战斗面板</el-button>
         </div>
         <div v-else class="battle-actions">
-          <el-button
+          <el-tooltip
             v-for="action in battle.actions"
             :key="`${action.mode}:${action.skill}`"
-            :type="action.mode === 'attack' ? 'danger' : 'primary'"
-            :plain="action.mode !== 'attack'"
-            :loading="hentaiVerseState.actionPending"
-            @click="act(action)"
+            :content="action.description"
+            placement="top"
+            trigger="click"
+            :popper-style="{ zIndex: 3205 }"
           >
-            {{ action.label }}
-          </el-button>
+            <el-button
+              :type="action.mode === 'attack' ? 'danger' : 'primary'"
+              :plain="action.mode !== 'attack'"
+              :icon="getActionIcon(action)"
+              :loading="hentaiVerseState.actionPending"
+              :aria-label="`${action.label}：${action.description}`"
+              @click="act(action)"
+            >
+              {{ action.label }}
+            </el-button>
+          </el-tooltip>
           <span v-if="!battle.actions.length" class="battle-action-empty">未能解析当前回合的可用操作，请刷新战斗状态</span>
         </div>
 
@@ -175,17 +245,48 @@ function closeLocalBattle() {
   overflow: auto;
 }
 
-.battle-vitals,
 .battle-actions {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px;
 }
 
-.battle-vitals span {
-  padding: 6px 10px;
+.battle-actions :deep(.el-button) {
+  min-width: 0;
+  width: 100%;
+}
+
+.battle-vitals {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.battle-vital {
+  min-width: 0;
+  padding: 8px 10px 10px;
   border-radius: 4px;
   background: var(--el-fill-color-light);
+}
+
+.battle-vital-label {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 12px;
+}
+
+.battle-vital-label span {
+  overflow: hidden;
+  color: var(--el-text-color-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.battle-vital-label strong {
+  font-variant-numeric: tabular-nums;
 }
 
 .battle-monsters {
@@ -229,9 +330,25 @@ function closeLocalBattle() {
   font-size: 13px;
 }
 
+.battle-completion {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--el-color-success-light-7);
+  border-radius: 6px;
+  background: var(--el-color-success-light-9);
+}
+
+.battle-completion > .el-icon {
+  color: var(--el-color-success);
+}
+
 .battle-completion p {
-  margin-bottom: 0;
+  margin: 4px 0 0;
   color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 .battle-log {
@@ -289,9 +406,21 @@ function closeLocalBattle() {
     padding: 14px;
   }
 
-  .battle-actions .el-button {
-    flex: 1 1 calc(33.333% - 8px);
+  .battle-actions :deep(.el-button) {
     min-height: 42px;
+  }
+
+  .battle-vital {
+    padding: 7px 8px 9px;
+  }
+
+  .battle-completion {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .battle-completion :deep(.el-button) {
+    grid-column: 1 / -1;
+    width: 100%;
   }
 
   .battle-resume-button {

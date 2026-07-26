@@ -1,10 +1,12 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { ArrowLeft } from '@element-plus/icons-vue'
 import type { HentaiVerseEquipmentPage } from '@/core/hentaiverse/model/hentaiVerse'
 
 const props = defineProps<{ data: HentaiVerseEquipmentPage; loading?: boolean }>()
 const emit = defineEmits<{
   set: [id: string, postToken: string]
+  overview: []
   slot: [id: string]
   equip: [slotId: string, equipmentId: string, postToken: string]
   unequip: [slotId: string, postToken: string]
@@ -12,6 +14,15 @@ const emit = defineEmits<{
 
 const candidateId = ref('')
 const activeSlot = computed(() => props.data.slots.find((slot) => slot.id === props.data.selectedSlot))
+const activeSlotLabel = computed(() => activeSlot.value?.label || ({
+  '1': '主手',
+  '9': '副手',
+  '13': '头部',
+  '11': '身体',
+  '14': '手部',
+  '12': '腿部',
+  '15': '脚部',
+} as Record<string, string>)[props.data.selectedSlot] || `部位 ${props.data.selectedSlot}`)
 
 watch(() => props.data.selectedSlot, () => {
   candidateId.value = ''
@@ -39,11 +50,11 @@ watch(() => props.data.selectedSlot, () => {
         :key="slot.id"
         type="button"
         :class="{ active: slot.active || slot.id === data.selectedSlot }"
-        :disabled="loading"
+        :disabled="loading || slot.disabled"
         @click="emit('slot', slot.id)"
       >
         <span>{{ slot.label }}</span>
-        <strong>{{ slot.equipmentName || '未装备' }}</strong>
+        <strong>{{ slot.equipmentName || (slot.disabled ? '当前主手不可用' : '未装备') }}</strong>
       </button>
     </div>
 
@@ -51,17 +62,20 @@ watch(() => props.data.selectedSlot, () => {
       <header>
         <div>
           <span>当前部位</span>
-          <h3>{{ activeSlot?.label || `部位 ${data.selectedSlot}` }}</h3>
+          <h3>{{ activeSlotLabel }}</h3>
         </div>
-        <el-button
-          v-if="activeSlot?.equipmentId"
-          type="danger"
-          plain
-          :disabled="loading || !data.postToken"
-          @click="emit('unequip', data.selectedSlot, data.postToken)"
-        >
-          卸下
-        </el-button>
+        <div class="equipment-picker-actions">
+          <el-button :icon="ArrowLeft" :disabled="loading" @click="emit('overview')">返回装备总览</el-button>
+          <el-button
+            v-if="activeSlot?.equipmentId"
+            type="danger"
+            plain
+            :disabled="loading || !data.postToken"
+            @click="emit('unequip', data.selectedSlot, data.postToken)"
+          >
+            卸下
+          </el-button>
+        </div>
       </header>
 
       <el-radio-group v-if="data.candidates.length" v-model="candidateId" class="equipment-list">
@@ -175,6 +189,17 @@ watch(() => props.data.selectedSlot, () => {
   letter-spacing: 0;
 }
 
+.equipment-picker-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.equipment-picker-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
 .equipment-list {
   display: grid;
   gap: 0;
@@ -224,6 +249,15 @@ watch(() => props.data.selectedSlot, () => {
 
   .equipment-list small {
     width: 100%;
+  }
+
+  .equipment-picker header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .equipment-picker-actions :deep(.el-button) {
+    flex: 1 1 140px;
   }
 }
 </style>

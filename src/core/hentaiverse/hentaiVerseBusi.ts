@@ -111,7 +111,7 @@ export class HentaiVerseBusi {
 
   /**
    * Input: 当前战斗令牌、动作、目标和技能编号。
-   * Output: 合并源站增量片段后的新战斗快照；动作不会自动重试。
+   * Output: 合并增量片段，并在响应不含日志时同步完整战斗页；动作不会自动重试。
    */
   async sendBattleAction(
     current: HentaiVerseBattleSnapshot,
@@ -125,7 +125,14 @@ export class HentaiVerseBusi {
       target,
       skill,
     })
-    return parseBattleResponse(payload, current)
+    const updated = parseBattleResponse(payload, current)
+    if (typeof payload.textlog === 'string' && payload.textlog.trim()) return updated
+
+    try {
+      return parseBattlePage(await this.requestText('/hentaiverse/page'))
+    } catch {
+      return updated
+    }
   }
 
   private async requestText(
