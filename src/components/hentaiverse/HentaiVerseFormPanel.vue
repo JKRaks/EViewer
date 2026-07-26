@@ -12,15 +12,31 @@ const emit = defineEmits<{
 }>()
 
 const values = reactive<Record<string, string | boolean>>({})
-const visibleControls = computed(() => props.form.controls.filter((control) => control.type !== 'radio'))
-const radioGroups = computed(() => {
-  const groups = new Map<string, typeof props.form.controls>()
-  props.form.controls.filter((control) => control.type === 'radio').forEach((control) => {
-    const group = groups.get(control.name) || []
-    group.push(control)
-    groups.set(control.name, group)
+const controlGroups = computed(() => {
+  const definitions = props.form.groups?.length
+    ? props.form.groups
+    : [{ key: 'default', title: '', description: '' }]
+  const controlsByGroup = new Map(definitions.map((group) => [group.key, [] as typeof props.form.controls]))
+  props.form.controls.forEach((control) => {
+    const key = control.group && controlsByGroup.has(control.group) ? control.group : definitions[0]!.key
+    controlsByGroup.get(key)!.push(control)
   })
-  return Array.from(groups, ([name, controls]) => ({ name, controls }))
+
+  return definitions.flatMap((group) => {
+    const controls = controlsByGroup.get(group.key) || []
+    if (!controls.length) return []
+    const radioGroups = new Map<string, typeof controls>()
+    controls.filter((control) => control.type === 'radio').forEach((control) => {
+      const radioGroup = radioGroups.get(control.name) || []
+      radioGroup.push(control)
+      radioGroups.set(control.name, radioGroup)
+    })
+    return [{
+      ...group,
+      controls: controls.filter((control) => control.type !== 'radio'),
+      radioGroups: Array.from(radioGroups, ([name, radioControls]) => ({ name, controls: radioControls })),
+    }]
+  })
 })
 
 watch(
@@ -62,59 +78,66 @@ function submit(action?: HentaiVerseFormAction) {
       </div>
     </header>
 
-    <div class="hv-form-grid">
-      <template v-for="control in visibleControls" :key="`${control.name}:${control.value}`">
-        <label v-if="control.type !== 'checkbox'" class="hv-field-label">{{ control.label }}</label>
-        <el-select
-          v-if="control.type === 'select'"
-          v-model="values[control.name]"
-          :aria-label="control.label"
-        >
-          <el-option
-            v-for="option in control.options"
-            :key="option.value"
-            :label="option.label"
-            :value="option.value"
-          />
-        </el-select>
-        <el-input
-          v-else-if="control.type === 'textarea'"
-          v-model="values[control.name] as string"
-          type="textarea"
-          :rows="3"
-        />
-        <el-input-number
-          v-else-if="control.type === 'number'"
-          v-model="values[control.name] as string"
-          :min="control.min"
-          :max="control.max"
-          :step="control.step || 1"
-          controls-position="right"
-        />
-        <el-checkbox
-          v-else-if="control.type === 'checkbox'"
-          v-model="values[control.name] as boolean"
-          class="hv-checkbox"
-        >
-          {{ control.label }}
-        </el-checkbox>
-        <el-input
-          v-else
-          v-model="values[control.name] as string"
-          :type="control.type === 'password' ? 'password' : 'text'"
-          :aria-label="control.label"
-        />
-      </template>
+    <section v-for="group in controlGroups" :key="group.key" class="hv-form-group">
+      <header v-if="group.title" class="hv-form-group-heading">
+        <h3>{{ group.title }}</h3>
+        <p v-if="group.description">{{ group.description }}</p>
+      </header>
 
-      <template v-for="group in radioGroups" :key="group.name">
-        <label class="hv-field-label">{{ group.controls[0]?.label }}</label>
-        <el-radio-group v-model="values[group.name]">
-          <el-radio v-for="control in group.controls" :key="control.value" :value="control.value">
+      <div class="hv-form-grid">
+        <template v-for="control in group.controls" :key="`${control.name}:${control.value}`">
+          <label v-if="control.type !== 'checkbox'" class="hv-field-label">{{ control.label }}</label>
+          <el-select
+            v-if="control.type === 'select'"
+            v-model="values[control.name]"
+            :aria-label="control.label"
+          >
+            <el-option
+              v-for="option in control.options"
+              :key="option.value"
+              :label="option.label"
+              :value="option.value"
+            />
+          </el-select>
+          <el-input
+            v-else-if="control.type === 'textarea'"
+            v-model="values[control.name] as string"
+            type="textarea"
+            :rows="3"
+          />
+          <el-input-number
+            v-else-if="control.type === 'number'"
+            v-model="values[control.name] as string"
+            :min="control.min"
+            :max="control.max"
+            :step="control.step || 1"
+            controls-position="right"
+          />
+          <el-checkbox
+            v-else-if="control.type === 'checkbox'"
+            v-model="values[control.name] as boolean"
+            class="hv-checkbox"
+          >
             {{ control.label }}
-          </el-radio>
-        </el-radio-group>
-      </template>
-    </div>
+          </el-checkbox>
+          <el-input
+            v-else
+            v-model="values[control.name] as string"
+            :type="control.type === 'password' ? 'password' : 'text'"
+            :aria-label="control.label"
+          />
+        </template>
+
+        <template v-for="radioGroup in group.radioGroups" :key="radioGroup.name">
+          <label class="hv-field-label">{{ radioGroup.controls[0]?.groupLabel || radioGroup.controls[0]?.label }}</label>
+          <el-radio-group v-model="values[radioGroup.name]" class="hv-radio-group">
+            <el-radio v-for="control in radioGroup.controls" :key="control.value" :value="control.value">
+              {{ control.label }}
+            </el-radio>
+          </el-radio-group>
+        </template>
+      </div>
+    </section>
 
     <footer class="hv-form-actions">
       <el-button
@@ -123,6 +146,7 @@ function submit(action?: HentaiVerseFormAction) {
         :type="action.danger ? 'danger' : 'primary'"
         :plain="action.danger"
         :loading="loading"
+        :disabled="action.disabled"
         @click="submit(action)"
       >
         {{ action.label }}
@@ -149,12 +173,62 @@ function submit(action?: HentaiVerseFormAction) {
   line-height: 1.55;
 }
 
+.hv-form-group {
+  min-width: 0;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.hv-form-group:last-of-type {
+  border-bottom: 0;
+}
+
+.hv-form-group-heading h3 {
+  margin: 0;
+  font-size: 15px;
+  letter-spacing: 0;
+}
+
+.hv-form-group-heading p {
+  margin: 5px 0 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
 .hv-form-grid {
   display: grid;
   grid-template-columns: minmax(150px, 220px) minmax(220px, 1fr);
   gap: 12px 18px;
   align-items: center;
+  min-width: 0;
   margin-top: 18px;
+}
+
+.hv-form-grid > * {
+  min-width: 0;
+}
+
+.hv-form-grid :deep(.el-input),
+.hv-form-grid :deep(.el-input-number),
+.hv-form-grid :deep(.el-select),
+.hv-form-grid :deep(.el-textarea),
+.hv-form-grid :deep(.el-radio-group) {
+  width: 100%;
+  max-width: 100%;
+}
+
+.hv-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+}
+
+.hv-radio-group :deep(.el-radio) {
+  height: auto;
+  min-height: 32px;
+  margin-right: 0;
+  white-space: normal;
 }
 
 .hv-field-label {

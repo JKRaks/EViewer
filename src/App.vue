@@ -117,7 +117,7 @@ const menuItems = computed<FloatingMenuItem[]>(() => [
   {
     key: 'hentaiverse',
     path: '/hentaiverse',
-    label: 'HentaiVerse',
+    label: '角色养成与战斗',
     icon: Lightning,
     requiresAuth: true,
   },

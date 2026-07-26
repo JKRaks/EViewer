@@ -33,7 +33,7 @@ const emit = defineEmits<{ start: [id: string]; cancel: [] }>()
         </el-button>
       </article>
     </div>
-    <el-empty v-else-if="!data.activeName" description="未能从源站解析训练项目" />
+    <el-empty v-else-if="!data.activeName" description="当前没有可用训练项目" />
   </section>
 </template>
 

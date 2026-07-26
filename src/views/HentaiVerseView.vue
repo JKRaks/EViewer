@@ -32,11 +32,29 @@ const page = ref<HentaiVersePage>()
 const loading = ref(false)
 const error = ref('')
 const currentTarget = ref<HentaiVersePageTarget>({ ...HENTAIVERSE_SECTIONS[0]!.target })
+const characterSummary = ref({ name: '', persona: '' })
 let requestId = 0
 
 const currentMeta = computed(() => HENTAIVERSE_SECTIONS.find((item) => item.key === activeSection.value)!)
 const characterSections = computed(() => HENTAIVERSE_SECTIONS.filter((item) => item.group === 'character'))
 const battleSections = computed(() => HENTAIVERSE_SECTIONS.filter((item) => item.group === 'battle'))
+
+function updateCharacterSummary(nextPage: HentaiVersePage) {
+  const characterName = nextPage.characterName !== 'HentaiVerse'
+    ? nextPage.characterName
+    : nextPage.personaName
+  if (characterName) {
+    characterSummary.value = {
+      name: characterName,
+      persona: nextPage.personaName !== characterName ? nextPage.personaName : '',
+    }
+  }
+}
+
+function setPage(nextPage: HentaiVersePage) {
+  page.value = nextPage
+  updateCharacterSummary(nextPage)
+}
 
 async function loadSection(
   section: HentaiVerseSection = activeSection.value,
@@ -53,9 +71,12 @@ async function loadSection(
   error.value = ''
   try {
     const result = await busi.getPage(currentTarget.value)
-    if (currentRequest !== requestId) return
+    if (currentRequest !== requestId) {
+      updateCharacterSummary(result)
+      return
+    }
     if (!result.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
-    page.value = result
+    setPage(result)
   } catch (loadError) {
     if (currentRequest === requestId) error.value = loadError instanceof Error ? loadError.message : '页面加载失败'
   } finally {
@@ -75,7 +96,7 @@ async function runDomainAction(
       ElMessage.success('已进入 HentaiVerse 战斗')
     } else if (result.page) {
       if (!result.page.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
-      page.value = result.page
+      setPage(result.page)
       ElMessage.success(successMessage)
     }
   } catch (actionError) {
@@ -96,6 +117,22 @@ async function submitForm(
       return
     }
   }
+  if (['arena', 'ringOfBlood', 'grindfest'].includes(section) && data.initid) {
+    try {
+      const sectionLabel = HENTAIVERSE_SECTIONS.find((item) => item.key === section)?.label || '战斗'
+      await ElMessageBox.confirm(
+        `即将进入${sectionLabel}，进入后需要完成或退出当前战斗。确定继续吗？`,
+        '确认开始战斗',
+        {
+          type: 'warning',
+          confirmButtonText: '开始战斗',
+          cancelButtonText: '暂不进入',
+        },
+      )
+    } catch {
+      return
+    }
+  }
   loading.value = true
   try {
     const result = await busi.submitForm(section, data, currentTarget.value)
@@ -104,7 +141,7 @@ async function submitForm(
       ElMessage.success('已进入 HentaiVerse 战斗')
     } else if (result.page) {
       if (!result.page.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
-      page.value = result.page
+      setPage(result.page)
       ElMessage.success('HentaiVerse 设置已更新')
     }
   } catch (submitError) {
@@ -123,6 +160,10 @@ function selectEquipmentSet(id: string, postToken: string) {
 
 function selectEquipmentSlot(id: string) {
   void loadSection('equipment', { equip_slot: id })
+}
+
+function showEquipmentOverview() {
+  void loadSection('equipment')
 }
 
 function equipItem(slotId: string, equipmentId: string, postToken: string) {
@@ -183,9 +224,12 @@ onMounted(() => {
   <div class="hv-view">
     <header class="hv-page-header">
       <div>
-        <span>独立游戏模块</span>
-        <h1>HentaiVerse</h1>
-        <p v-if="page">{{ page.characterName }}<template v-if="page.personaName"> · {{ page.personaName }}</template></p>
+        <span>E-Hentai 联动网页游戏</span>
+        <h1>HentaiVerse 角色养成与战斗</h1>
+        <p class="hv-module-description">培养角色、配置装备与能力，并参加竞技场等战斗内容。</p>
+        <p v-if="characterSummary.name" class="hv-character-summary">
+          当前角色：{{ characterSummary.name }}<template v-if="characterSummary.persona"> · {{ characterSummary.persona }}</template>
+        </p>
       </div>
       <div class="hv-header-actions">
         <el-button :icon="Lightning" @click="resumeBattle">恢复战斗</el-button>
@@ -272,6 +316,7 @@ onMounted(() => {
             :data="page.equipment"
             :loading="loading"
             @set="selectEquipmentSet"
+            @overview="showEquipmentOverview"
             @slot="selectEquipmentSlot"
             @equip="equipItem"
             @unequip="unequipItem"
@@ -316,7 +361,7 @@ onMounted(() => {
               && !page.abilities
               && !page.training
               && !page.inventory"
-            description="源站当前页面没有可解析的操作"
+            description="当前页面没有可用操作"
           />
         </template>
       </main>
@@ -356,6 +401,11 @@ onMounted(() => {
 .hv-page-header p {
   margin: 5px 0 0;
   color: var(--el-text-color-secondary);
+}
+
+.hv-page-header .hv-character-summary {
+  color: var(--el-text-color-regular);
+  font-size: 13px;
 }
 
 .hv-header-actions {
