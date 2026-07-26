@@ -84,6 +84,117 @@ export interface HentaiVerseFormBlock {
   actions: HentaiVerseFormAction[]
 }
 
+export interface HentaiVerseEquipmentSet {
+  id: string
+  label: string
+  active: boolean
+}
+
+export interface HentaiVerseEquipmentSlot {
+  id: string
+  label: string
+  equipmentId: string
+  equipmentName: string
+  description: string
+  active: boolean
+}
+
+export interface HentaiVerseEquipmentCandidate {
+  id: string
+  name: string
+  description: string
+  locked: boolean
+  equipped: boolean
+}
+
+export interface HentaiVerseEquipmentPage {
+  sets: HentaiVerseEquipmentSet[]
+  slots: HentaiVerseEquipmentSlot[]
+  candidates: HentaiVerseEquipmentCandidate[]
+  selectedSlot: string
+  postToken: string
+}
+
+export type HentaiVerseAbilityActionName =
+  | 'unlock_ability'
+  | 'reset_ability'
+  | 'unlock_slot'
+  | 'equip_ability'
+
+export interface HentaiVerseAbilityTree {
+  id: string
+  label: string
+  active: boolean
+}
+
+export interface HentaiVerseAbility {
+  id: string
+  name: string
+  description: string
+  level: number
+  maxLevel: number
+  cost: string
+  action?: HentaiVerseAbilityActionName
+  actionLabel?: string
+  disabled: boolean
+}
+
+export interface HentaiVerseAbilitySlot {
+  id: string
+  label: string
+  abilityId: string
+  abilityName: string
+  locked: boolean
+  action?: HentaiVerseAbilityActionName
+}
+
+export interface HentaiVerseAbilityPage {
+  trees: HentaiVerseAbilityTree[]
+  abilities: HentaiVerseAbility[]
+  slots: HentaiVerseAbilitySlot[]
+  selectedTree: string
+  abilityPoints: string
+  canResetAll: boolean
+}
+
+export interface HentaiVerseTrainingOption {
+  id: string
+  name: string
+  description: string
+  level: string
+  cost: string
+  duration: string
+  canStart: boolean
+}
+
+export interface HentaiVerseTrainingPage {
+  activeName: string
+  progress: string
+  remaining: string
+  canCancel: boolean
+  options: HentaiVerseTrainingOption[]
+}
+
+export interface HentaiVerseInventoryItem {
+  id: string
+  name: string
+  description: string
+  quantity: string
+  selected: boolean
+}
+
+export interface HentaiVerseInventorySlot {
+  id: string
+  label: string
+  itemId: string
+  itemName: string
+}
+
+export interface HentaiVerseInventoryPage {
+  items: HentaiVerseInventoryItem[]
+  slots: HentaiVerseInventorySlot[]
+}
+
 export interface HentaiVersePage {
   section: HentaiVerseSection
   title: string
@@ -94,6 +205,10 @@ export interface HentaiVersePage {
   metrics: HentaiVerseMetric[]
   attributes: HentaiVerseAttribute[]
   personas: HentaiVersePersona[]
+  equipment?: HentaiVerseEquipmentPage
+  abilities?: HentaiVerseAbilityPage
+  training?: HentaiVerseTrainingPage
+  inventory?: HentaiVerseInventoryPage
   forms: HentaiVerseFormBlock[]
   notices: string[]
 }

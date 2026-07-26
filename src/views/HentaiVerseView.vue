@@ -2,13 +2,19 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Lightning, Refresh } from '@element-plus/icons-vue'
+import AbilityPanel from '@/components/hentaiverse/AbilityPanel.vue'
 import CharacterOverviewPanel from '@/components/hentaiverse/CharacterOverviewPanel.vue'
+import EquipmentPanel from '@/components/hentaiverse/EquipmentPanel.vue'
 import HentaiVerseFormPanel from '@/components/hentaiverse/HentaiVerseFormPanel.vue'
+import InventoryPanel from '@/components/hentaiverse/InventoryPanel.vue'
+import TrainingPanel from '@/components/hentaiverse/TrainingPanel.vue'
 import { HentaiVerseBusi } from '@/core/hentaiverse/hentaiVerseBusi'
 import { HENTAIVERSE_SECTIONS } from '@/core/hentaiverse/hentaiVerseProtocol'
 import type {
+  HentaiVerseAbilityActionName,
   HentaiVerseFormSection,
   HentaiVersePage,
+  HentaiVersePageTarget,
   HentaiVerseSection,
 } from '@/core/hentaiverse/model/hentaiVerse'
 import {
@@ -25,21 +31,28 @@ const activeSection = ref<HentaiVerseSection>('character')
 const page = ref<HentaiVersePage>()
 const loading = ref(false)
 const error = ref('')
+const currentTarget = ref<HentaiVersePageTarget>({ ...HENTAIVERSE_SECTIONS[0]!.target })
 let requestId = 0
 
 const currentMeta = computed(() => HENTAIVERSE_SECTIONS.find((item) => item.key === activeSection.value)!)
 const characterSections = computed(() => HENTAIVERSE_SECTIONS.filter((item) => item.group === 'character'))
 const battleSections = computed(() => HENTAIVERSE_SECTIONS.filter((item) => item.group === 'battle'))
 
-async function loadSection(section: HentaiVerseSection = activeSection.value) {
+async function loadSection(
+  section: HentaiVerseSection = activeSection.value,
+  targetOverride?: Partial<HentaiVersePageTarget>,
+) {
   const meta = HENTAIVERSE_SECTIONS.find((item) => item.key === section)
   if (!meta || loading.value && section === activeSection.value) return
+  const changedSection = section !== page.value?.section
   activeSection.value = section
+  currentTarget.value = { ...meta.target, ...(targetOverride || {}) }
+  if (changedSection) page.value = undefined
   const currentRequest = ++requestId
   loading.value = true
   error.value = ''
   try {
-    const result = await busi.getPage(meta.target)
+    const result = await busi.getPage(currentTarget.value)
     if (currentRequest !== requestId) return
     if (!result.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
     page.value = result
@@ -47,6 +60,28 @@ async function loadSection(section: HentaiVerseSection = activeSection.value) {
     if (currentRequest === requestId) error.value = loadError instanceof Error ? loadError.message : '页面加载失败'
   } finally {
     if (currentRequest === requestId) loading.value = false
+  }
+}
+
+async function runDomainAction(
+  request: () => ReturnType<HentaiVerseBusi['submitForm']>,
+  successMessage: string,
+) {
+  loading.value = true
+  try {
+    const result = await request()
+    if (result.battle) {
+      showHentaiVerseBattleSnapshot(result.battle)
+      ElMessage.success('已进入 HentaiVerse 战斗')
+    } else if (result.page) {
+      if (!result.page.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
+      page.value = result.page
+      ElMessage.success(successMessage)
+    }
+  } catch (actionError) {
+    ElMessage.error(actionError instanceof Error ? actionError.message : '操作失败')
+  } finally {
+    loading.value = false
   }
 }
 
@@ -63,11 +98,12 @@ async function submitForm(
   }
   loading.value = true
   try {
-    const result = await busi.submitForm(section, data, currentMeta.value.target)
+    const result = await busi.submitForm(section, data, currentTarget.value)
     if (result.battle) {
       showHentaiVerseBattleSnapshot(result.battle)
       ElMessage.success('已进入 HentaiVerse 战斗')
     } else if (result.page) {
+      if (!result.page.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
       page.value = result.page
       ElMessage.success('HentaiVerse 设置已更新')
     }
@@ -76,6 +112,58 @@ async function submitForm(
   } finally {
     loading.value = false
   }
+}
+
+function selectEquipmentSet(id: string, postToken: string) {
+  void runDomainAction(
+    () => busi.selectEquipmentSet(id, postToken, currentTarget.value),
+    '装备套装已切换',
+  )
+}
+
+function selectEquipmentSlot(id: string) {
+  void loadSection('equipment', { equip_slot: id })
+}
+
+function equipItem(slotId: string, equipmentId: string, postToken: string) {
+  void runDomainAction(
+    () => busi.equipItem(slotId, equipmentId, postToken, currentTarget.value),
+    '装备已更新',
+  )
+}
+
+function unequipItem(slotId: string, postToken: string) {
+  void runDomainAction(
+    () => busi.unequipItem(slotId, postToken, currentTarget.value),
+    '装备已卸下',
+  )
+}
+
+function selectAbilityTree(id: string) {
+  void loadSection('abilities', { tree: id })
+}
+
+function updateAbility(action: HentaiVerseAbilityActionName | 'reset_all', value: string) {
+  void runDomainAction(() => busi.updateAbility(action, value, currentTarget.value), '能力配置已更新')
+}
+
+function equipAbility(slotId: string, abilityId: string) {
+  void runDomainAction(() => busi.equipAbility(slotId, abilityId, currentTarget.value), '能力槽已更新')
+}
+
+function startTraining(id: string) {
+  void runDomainAction(() => busi.startTraining(id, currentTarget.value), '训练已开始')
+}
+
+function cancelTraining() {
+  void runDomainAction(() => busi.cancelTraining(currentTarget.value), '训练已取消')
+}
+
+function assignInventoryItem(slotId: string, itemId: string) {
+  void runDomainAction(
+    () => busi.assignInventoryItem(slotId, itemId, currentTarget.value),
+    '物品槽位已更新',
+  )
 }
 
 async function resumeBattle() {
@@ -179,6 +267,40 @@ onMounted(() => {
             @persona="submitForm('persona', $event)"
           />
 
+          <EquipmentPanel
+            v-else-if="activeSection === 'equipment' && page.equipment"
+            :data="page.equipment"
+            :loading="loading"
+            @set="selectEquipmentSet"
+            @slot="selectEquipmentSlot"
+            @equip="equipItem"
+            @unequip="unequipItem"
+          />
+
+          <AbilityPanel
+            v-else-if="activeSection === 'abilities' && page.abilities"
+            :data="page.abilities"
+            :loading="loading"
+            @tree="selectAbilityTree"
+            @action="updateAbility"
+            @equip="equipAbility"
+          />
+
+          <TrainingPanel
+            v-else-if="activeSection === 'training' && page.training"
+            :data="page.training"
+            :loading="loading"
+            @start="startTraining"
+            @cancel="cancelTraining"
+          />
+
+          <InventoryPanel
+            v-else-if="activeSection === 'inventory' && page.inventory"
+            :data="page.inventory"
+            :loading="loading"
+            @assign="assignInventoryItem"
+          />
+
           <HentaiVerseFormPanel
             v-for="form in page.forms.filter((item) => activeSection !== 'character' || !['character', 'persona'].includes(item.section))"
             :key="form.id"
@@ -188,8 +310,13 @@ onMounted(() => {
           />
 
           <el-empty
-            v-if="activeSection !== 'character' && !page.forms.length"
-            description="源站当前页面没有可操作的表单"
+            v-if="activeSection !== 'character'
+              && !page.forms.length
+              && !page.equipment
+              && !page.abilities
+              && !page.training
+              && !page.inventory"
+            description="源站当前页面没有可解析的操作"
           />
         </template>
       </main>
@@ -243,7 +370,6 @@ onMounted(() => {
 .hv-shell {
   display: grid;
   grid-template-columns: 190px minmax(0, 1fr);
-  min-height: 620px;
   border-top: 1px solid var(--el-border-color);
 }
 

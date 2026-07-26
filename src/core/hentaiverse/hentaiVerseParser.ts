@@ -5,6 +5,15 @@ import type {
   HentaiVerseBattleMonster,
   HentaiVerseBattleSnapshot,
   HentaiVerseEncounter,
+  HentaiVerseAbility,
+  HentaiVerseAbilityActionName,
+  HentaiVerseAbilityPage,
+  HentaiVerseAbilitySlot,
+  HentaiVerseAbilityTree,
+  HentaiVerseEquipmentCandidate,
+  HentaiVerseEquipmentPage,
+  HentaiVerseEquipmentSet,
+  HentaiVerseEquipmentSlot,
   HentaiVerseFormAction,
   HentaiVerseFormBlock,
   HentaiVerseFormControl,
@@ -12,6 +21,11 @@ import type {
   HentaiVersePage,
   HentaiVersePageTarget,
   HentaiVersePersona,
+  HentaiVerseTrainingPage,
+  HentaiVerseTrainingOption,
+  HentaiVerseInventoryItem,
+  HentaiVerseInventoryPage,
+  HentaiVerseInventorySlot,
 } from './model/hentaiVerse'
 import { getHentaiVerseSection } from './hentaiVerseProtocol'
 import {
@@ -26,10 +40,14 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
   const document = parser.parseFromString(html, 'text/html')
   decodeHentaiVerseGlyphs(document)
   const bodyText = cleanText(document.body?.textContent)
-  const authenticated = !/you must be logged on|requires you to log on|please log on/i.test(bodyText)
+  const authenticated = !/you (?:must|have to) (?:be logged on|log on)|requires you to log on|please log on|log on with an EH account/i.test(bodyText)
   const scriptText = Array.from(document.scripts, (script) => script.textContent || '').join('\n')
   const section = getHentaiVerseSection(target)
   const personaName = readScriptString(scriptText, 'current_persona_name')
+  const equipment = section === 'equipment' ? parseEquipment(document, scriptText, target) : undefined
+  const abilities = section === 'abilities' ? parseAbilities(document, scriptText, target) : undefined
+  const training = section === 'training' ? parseTraining(document) : undefined
+  const inventory = section === 'inventory' ? parseInventory(document) : undefined
 
   return {
     section,
@@ -41,6 +59,10 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
     metrics: parseMetrics(document, scriptText),
     attributes: parseAttributes(scriptText),
     personas: parsePersonas(document, personaName),
+    equipment,
+    abilities,
+    training,
+    inventory,
     forms: parseForms(document, section),
     notices: parseNotices(document),
   }
@@ -165,14 +187,230 @@ function parsePersonas(document: Document, currentName: string): HentaiVersePers
   return Array.from(personas.values())
 }
 
+function parseEquipment(
+  document: Document,
+  scriptText: string,
+  target: HentaiVersePageTarget,
+): HentaiVerseEquipmentPage {
+  const selectedSlot = target.equip_slot || readNamedValue(document.body?.innerHTML || '', 'equip_slot')
+  const sets = new Map<string, HentaiVerseEquipmentSet>()
+  document.querySelectorAll<HTMLElement>(
+    'select[name="equip_set"] option, [data-equip-set], [onclick*="equip_set"], a[href*="equip_set="]',
+  ).forEach((node, index) => {
+    const option = node instanceof HTMLOptionElement ? node : undefined
+    const source = getActionSource(node)
+    const id = option?.value || node.dataset.equipSet || readNamedValue(source, 'equip_set') || String(index + 1)
+    const label = readNodeLabel(node) || `套装 ${id}`
+    sets.set(id, {
+      id,
+      label,
+      active: Boolean(option?.selected || node.matches('.active, .selected, [aria-current="true"]')),
+    })
+  })
+
+  const slots = new Map<string, HentaiVerseEquipmentSlot>()
+  document.querySelectorAll<HTMLElement>(
+    '#eqch_outer [data-equip-slot], #eqch_outer [id*="equip_slot"], #eqch_outer a[href*="equip_slot="], [onclick*="equip_slot"]',
+  ).forEach((node) => {
+    const source = getActionSource(node)
+    const id = node.dataset.equipSlot || readNamedValue(source, 'equip_slot') || matchValue(node.id, /equip_slot[_-]?(\d+)/i)
+    if (!id) return
+    const equipmentId = readEquipmentId(node)
+    const equipmentName = readNodeLabel(node)
+    slots.set(id, {
+      id,
+      label: readEquipmentSlotLabel(id, node),
+      equipmentId,
+      equipmentName: equipmentName && equipmentName !== readEquipmentSlotLabel(id, node) ? equipmentName : '',
+      description: cleanText(node.getAttribute('title') || node.dataset.description),
+      active: id === selectedSlot || node.matches('.active, .selected, [aria-current="true"]'),
+    })
+  })
+
+  const candidates = new Map<string, HentaiVerseEquipmentCandidate>()
+  document.querySelectorAll<HTMLElement>(
+    '#equiplist tr, .equiplist tr, #eqch_outer [data-eid], #eqch_outer [id^="e"][onclick]',
+  ).forEach((node) => {
+    const id = readEquipmentId(node)
+    const name = readEquipmentName(node)
+    if (!id || !name) return
+    const rowText = cleanText(node.textContent)
+    candidates.set(id, {
+      id,
+      name,
+      description: cleanText(node.getAttribute('title') || node.dataset.description || rowText.replace(name, '')),
+      locked: node.dataset.locked === '1' || /(?:^|\s)(?:locked|il)(?:\s|$)/i.test(node.className),
+      equipped: node.dataset.equipped === '1' || /equipped|current/i.test(`${node.className} ${rowText}`),
+    })
+  })
+
+  const postToken = document.querySelector<HTMLInputElement>('input[name="postoken"]')?.value
+    || readScriptString(scriptText, 'postoken')
+    || matchValue(scriptText, /postoken\s*[:=]\s*['"]([^'"]+)/i)
+  return {
+    sets: Array.from(sets.values()),
+    slots: Array.from(slots.values()),
+    candidates: Array.from(candidates.values()),
+    selectedSlot,
+    postToken,
+  }
+}
+
+function parseAbilities(
+  document: Document,
+  scriptText: string,
+  target: HentaiVersePageTarget,
+): HentaiVerseAbilityPage {
+  const trees = new Map<string, HentaiVerseAbilityTree>()
+  document.querySelectorAll<HTMLElement>(
+    '#ability_treelist > div, #ability_treelist a, [data-ability-tree], a[href*="tree="]',
+  ).forEach((node, index) => {
+    const source = getActionSource(node)
+    const id = node.dataset.abilityTree || node.dataset.tree || readNamedValue(source, 'tree')
+      || matchValue(`${node.id} ${source}`, /(?:ability_)?tree[_-]?([a-z0-9]+)/i)
+      || String(index)
+    const label = readNodeLabel(node)
+    if (!label) return
+    trees.set(id, {
+      id,
+      label,
+      active: id === target.tree || node.matches('.active, .selected, [aria-current="true"]') || /f[24][lr]a/.test(node.className),
+    })
+  })
+
+  const abilities: HentaiVerseAbility[] = []
+  document.querySelectorAll<HTMLElement>('#ability_treepane > div').forEach((row) => {
+    const source = getActionSource(row, true)
+    const parsedAction = readAbilityAction(source)
+    const id = row.dataset.abilityId || row.dataset.ability || parsedAction?.value
+      || matchValue(row.id, /(?:ability|ab)[_-]?(\d+)/i)
+      || matchValue(row.querySelector<HTMLImageElement>('img[src*="/a/"]')?.src || '', /\/a\/(\d+)/i)
+    const nameNode = row.querySelector<HTMLElement>(':scope > div:first-child, [data-ability-name], .ability-name')
+    const name = readNodeLabel(nameNode || row)
+    if (!id || !name) return
+    const levelText = cleanText(row.dataset.level || row.querySelector<HTMLElement>('[data-level], .ability-level')?.textContent)
+    const levelMatch = levelText.match(/(\d+)\s*\/\s*(\d+)/)
+    const maxLevel = Number(row.dataset.maxLevel || levelMatch?.[2] || row.querySelector(':scope > div:nth-child(3)')?.children.length || 0)
+    const level = Number(row.dataset.level || levelMatch?.[1] || countActiveAbilityLevels(row))
+    const actionNode = row.querySelector<HTMLElement>('[onclick*="unlock_ability"], [onclick*="reset_ability"], [data-action]')
+    abilities.push({
+      id,
+      name,
+      description: cleanText(row.dataset.description || row.getAttribute('title') || row.querySelector<HTMLElement>('.ability-description')?.textContent),
+      level,
+      maxLevel,
+      cost: cleanText(row.dataset.cost || row.querySelector(':scope > div:nth-child(4)')?.textContent),
+      action: parsedAction?.name,
+      actionLabel: parsedAction ? readNodeLabel(actionNode || row.querySelector<HTMLElement>(':scope > div:last-child') || row) : undefined,
+      disabled: !parsedAction || Boolean(actionNode?.matches('.disabled, [aria-disabled="true"]')),
+    })
+  })
+
+  const slots: HentaiVerseAbilitySlot[] = []
+  document.querySelectorAll<HTMLElement>('.ability_slotbar > div, .ability_slotbox > div').forEach((node, index) => {
+    const source = getActionSource(node, true)
+    const action = readAbilityAction(source)
+    const id = node.dataset.slot || node.dataset.abilitySlot || readNamedValue(source, 'equip_slot')
+      || readNamedValue(source, 'unlock_slot') || String(index + 1)
+    const abilityId = node.dataset.abilityId || readNamedValue(source, 'equip_ability')
+      || matchValue(node.querySelector<HTMLImageElement>('img[src*="/a/"]')?.src || '', /\/a\/(\d+)/i)
+    const abilityName = readNodeLabel(node)
+    const locked = action?.name === 'unlock_slot' || node.matches('.locked, .disabled, [aria-disabled="true"]')
+    slots.push({
+      id,
+      label: `槽位 ${Number(id) || index + 1}`,
+      abilityId,
+      abilityName: locked ? '' : abilityName,
+      locked,
+      action: action?.name,
+    })
+  })
+
+  const topText = cleanText(document.querySelector('#ability_top')?.textContent)
+  const abilityPoints = matchValue(topText, /Ability Points?\s*:?\s*([\d,]+)/i)
+    || matchValue(scriptText, /(?:ability_points|available_ap)\s*[:=]\s*['"]?([\d,]+)/i)
+  return {
+    trees: Array.from(trees.values()),
+    abilities,
+    slots,
+    selectedTree: target.tree || Array.from(trees.values()).find((tree) => tree.active)?.id || '',
+    abilityPoints,
+    canResetAll: Boolean(document.querySelector('[name="reset_all"], [onclick*="reset_all"]')),
+  }
+}
+
+function parseTraining(document: Document): HentaiVerseTrainingPage {
+  const progressPane = document.querySelector<HTMLElement>('#train_progress')
+  const progress = cleanText(document.querySelector('#train_progcnt')?.textContent)
+  const progressText = cleanText(progressPane?.textContent)
+  const options: HentaiVerseTrainingOption[] = []
+  document.querySelectorAll<HTMLElement>('#train_table tr').forEach((row) => {
+    const cells = Array.from(row.querySelectorAll('td'), (cell) => cleanText(cell.textContent))
+    const source = getActionSource(row, true)
+    const id = readNamedValue(source, 'start_train')
+    if (!id || !cells[0]) return
+    options.push({
+      id,
+      name: translateHentaiVerseText(cells[0]),
+      description: cells[1] || '',
+      level: cells[2] || '',
+      cost: cells[3] || cells[4] || '',
+      duration: cells[5] || cells[6] || '',
+      canStart: !row.matches('.disabled, [aria-disabled="true"]') && !/unavailable|locked/i.test(row.className),
+    })
+  })
+  return {
+    activeName: cleanText(progressPane?.querySelector(':scope > div:nth-child(3)')?.textContent),
+    progress,
+    remaining: matchValue(progressText, /(?:Remaining|Time Left)\s*:?\s*(.+)$/i),
+    canCancel: Boolean(document.querySelector('[name="cancel_train"], [onclick*="cancel_training"]')),
+    options,
+  }
+}
+
+function parseInventory(document: Document): HentaiVerseInventoryPage {
+  const items = new Map<string, HentaiVerseInventoryItem>()
+  document.querySelectorAll<HTMLElement>('#item_list tr, #item_list [data-item], .itemlist tr').forEach((row) => {
+    const source = getActionSource(row, true)
+    const id = row.dataset.item || readNamedValue(source, 'item') || matchValue(`${row.id} ${source}`, /(?:item|set_item)[_(\s'"-]*(\d+)/i)
+    const cells = Array.from(row.querySelectorAll('td'), (cell) => cleanText(cell.textContent))
+    const name = readNodeLabel(row.querySelector<HTMLElement>('[data-item-name], td:first-child') || row)
+    if (!id || !name) return
+    items.set(id, {
+      id,
+      name,
+      description: cleanText(row.getAttribute('title') || row.dataset.description || cells.slice(1, -1).join(' ')),
+      quantity: cells.at(-1) || row.dataset.quantity || '',
+      selected: row.matches('.active, .selected, [aria-current="true"]'),
+    })
+  })
+
+  const slots: HentaiVerseInventorySlot[] = []
+  document.querySelectorAll<HTMLElement>('#item_slots [data-slot], #item_slots [onclick], #item_slots > div > div').forEach((node, index) => {
+    const source = getActionSource(node, true)
+    const id = node.dataset.slot || readNamedValue(source, 'slot') || String(index + 1)
+    const itemId = node.dataset.item || readNamedValue(source, 'item')
+    const itemName = readNodeLabel(node)
+    if (!itemId && !itemName) return
+    slots.push({ id, label: `槽位 ${Number(id) || index + 1}`, itemId, itemName })
+  })
+  return { items: Array.from(items.values()), slots }
+}
+
 function parseForms(document: Document, pageSection: HentaiVersePage['section']): HentaiVerseFormBlock[] {
+  if (['equipment', 'abilities', 'training', 'inventory'].includes(pageSection)) return []
   return Array.from(document.forms).map((form, index) => {
     const controls: HentaiVerseFormControl[] = []
     const hidden: Record<string, string> = {}
     const actions: HentaiVerseFormAction[] = []
     form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>(
-      'input[name], select[name], textarea[name], button[name]',
+      'input[name], input[type="submit"], input[type="button"], select[name], textarea[name], button',
     ).forEach((element) => parseFormElement(form, element, controls, hidden, actions))
+    if (!actions.length) {
+      const clickAction = form.querySelector<HTMLElement>('[onclick*=".submit"], [onclick*="submit()"]')
+      const label = readNodeLabel(clickAction)
+      if (label) actions.push({ name: '', value: '', label })
+    }
     const heading = form.querySelector('h2, h3, legend') || findPreviousHeading(form)
     return {
       id: form.id || `hv-form-${index}`,
@@ -181,9 +419,9 @@ function parseForms(document: Document, pageSection: HentaiVersePage['section'])
       section: inferFormSection(pageSection, controls, hidden, actions),
       hidden,
       controls,
-      actions: actions.length ? actions : [{ name: '', value: '', label: '提交' }],
+      actions,
     }
-  }).filter((form) => form.controls.length || Object.keys(form.hidden).length || form.actions.length)
+  }).filter((form) => form.controls.length || form.actions.length)
 }
 
 function parseFormElement(
@@ -194,16 +432,18 @@ function parseFormElement(
   actions: HentaiVerseFormAction[],
 ) {
   const name = element.name
-  if (!name) return
   if (element instanceof HTMLButtonElement || (element instanceof HTMLInputElement && ['submit', 'button'].includes(element.type))) {
+    const label = translateHentaiVerseText(element.textContent || element.value || name)
+    if (!label) return
     actions.push({
       name,
       value: element.value || '1',
-      label: translateHentaiVerseText(element.textContent || element.value || name),
+      label,
       danger: /reset|cancel|unequip|delete/i.test(`${name} ${element.value}`),
     })
     return
   }
+  if (!name) return
   if (element instanceof HTMLInputElement && element.type === 'hidden') {
     hidden[name] = element.value
     return
@@ -268,9 +508,6 @@ function parseBattleActions(document: Document): HentaiVerseBattleAction[] {
     const label = translateHentaiVerseText(cleanText(node.textContent) || mode)
     actions.set(`${mode}:${skill}`, { label, mode, skill })
   })
-  ;(['attack', 'defend', 'focus', 'spirit'] as HentaiVerseBattleMode[]).forEach((mode) => {
-    if (!actions.has(`${mode}:0`)) actions.set(`${mode}:0`, { label: translateHentaiVerseText(mode), mode, skill: 0 })
-  })
   return Array.from(actions.values())
 }
 
@@ -304,9 +541,11 @@ function normalizeControlType(type: string): HentaiVerseFormControl['type'] {
 }
 
 function parseNotices(document: Document) {
-  return Array.from(document.querySelectorAll<HTMLElement>('.stuffbox, .fd4, .fc4, #messagebox'))
+  return Array.from(document.querySelectorAll<HTMLElement>(
+    '.stuffbox, #messagebox, #message_box, [role="alert"], .notice, .errorbox',
+  ))
     .map((node) => cleanText(node.textContent))
-    .filter((value, index, values) => value && values.indexOf(value) === index)
+    .filter((value, index, values) => value && value.length <= 500 && values.indexOf(value) === index)
     .slice(0, 8)
 }
 
@@ -333,6 +572,87 @@ function readTextRows(element?: Element | null) {
     .map((node) => cleanText(node.textContent))
     .filter(Boolean)
   return rows.length ? Array.from(new Set(rows)) : [cleanText(element.textContent)].filter(Boolean)
+}
+
+function getActionSource(node: HTMLElement, includeChildren = false) {
+  const nodes = includeChildren
+    ? [node, ...Array.from(node.querySelectorAll<HTMLElement>('[onclick], a[href], input[name], button[name], select[name]'))]
+    : [node]
+  return nodes.map((item) => [
+    item.id,
+    item.getAttribute('onclick'),
+    item.getAttribute('href'),
+    item.getAttribute('name') && `${item.getAttribute('name')}=${item.getAttribute('value') || ''}`,
+    ...Object.entries(item.dataset).flat(),
+  ].filter(Boolean).join(' ')).join(' ')
+}
+
+function readNamedValue(source: string, name: string) {
+  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const patterns = [
+    new RegExp(`[?&]${escaped}=([^&#'"\\s)]+)`, 'i'),
+    new RegExp(`${escaped}\\s*\\(\\s*['"]?([a-z0-9_-]+)`, 'i'),
+    new RegExp(`${escaped}\\s*[:=,]\\s*['"]?([a-z0-9_-]+)`, 'i'),
+  ]
+  for (const pattern of patterns) {
+    const value = matchValue(source, pattern)
+    if (value) {
+      try {
+        return decodeURIComponent(value)
+      } catch {
+        return value
+      }
+    }
+  }
+  return ''
+}
+
+function readNodeLabel(node?: HTMLElement | null) {
+  if (!node) return ''
+  const image = node.querySelector<HTMLImageElement>('img[alt], img[title]')
+  return translateHentaiVerseText(cleanText(
+    node.dataset.label
+    || node.getAttribute('aria-label')
+    || node.getAttribute('title')
+    || image?.alt
+    || image?.title
+    || node.textContent,
+  ))
+}
+
+function readEquipmentId(node: HTMLElement) {
+  const source = getActionSource(node, true)
+  return node.dataset.eid || node.dataset.equipId
+    || readNamedValue(source, 'equip_id')
+    || matchValue(source, /equips?\.set\s*\(\s*(\d+)/i)
+    || matchValue(node.id, /^e(\d+)$/i)
+}
+
+function readEquipmentName(node: HTMLElement) {
+  const nameNode = node.querySelector<HTMLElement>('[data-equip-name], .equip-name, td:first-child')
+  return readNodeLabel(nameNode || node)
+}
+
+function readEquipmentSlotLabel(id: string, node: HTMLElement) {
+  const explicit = cleanText(node.dataset.slotLabel || node.getAttribute('aria-label') || node.getAttribute('title'))
+  if (explicit) return translateHentaiVerseText(explicit)
+  const labels = ['武器', '副手', '头部', '身体', '手部', '腿部', '脚部']
+  return labels[Number(id)] || `部位 ${id}`
+}
+
+function readAbilityAction(source: string): { name: HentaiVerseAbilityActionName; value: string } | undefined {
+  const names: HentaiVerseAbilityActionName[] = ['unlock_ability', 'reset_ability', 'unlock_slot', 'equip_ability']
+  for (const name of names) {
+    const value = readNamedValue(source, name)
+    if (value) return { name, value }
+  }
+  return
+}
+
+function countActiveAbilityLevels(row: HTMLElement) {
+  return Array.from(row.querySelectorAll<HTMLElement>(':scope > div:nth-child(3) > div'))
+    .filter((node) => !node.matches('.disabled, .locked, [aria-disabled="true"]') && node.style.opacity !== '0.3')
+    .length
 }
 
 function cleanText(value?: string | null) {
