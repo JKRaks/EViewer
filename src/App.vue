@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
@@ -13,13 +13,22 @@ import {
   MoonNight,
   Setting,
   StarFilled,
+  Lightning,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import type { Component } from 'vue'
 import { useFloatingActions } from '@/composables/useFloatingActions'
 import { useAuthState } from '@/core/auth/authState'
+import { hentaiVerseState } from '@/core/hentaiverse/hentaiVerseRuntime'
 import { useGlobalState } from './core/common/globalStore'
+
+const EncounterPrompt = defineAsyncComponent(
+  () => import('@/components/hentaiverse/EncounterPrompt.vue'),
+)
+const BattleFloatingPanel = defineAsyncComponent(
+  () => import('@/components/hentaiverse/BattleFloatingPanel.vue'),
+)
 
 interface FloatingMenuItem {
   key: string
@@ -103,6 +112,13 @@ const menuItems = computed<FloatingMenuItem[]>(() => [
     path: '/favorites',
     label: '个人收藏',
     icon: StarFilled,
+    requiresAuth: true,
+  },
+  {
+    key: 'hentaiverse',
+    path: '/hentaiverse',
+    label: 'HentaiVerse',
+    icon: Lightning,
     requiresAuth: true,
   },
   {
@@ -374,6 +390,8 @@ onUnmounted(() => {
           />
         </div>
       </div>
+      <EncounterPrompt v-if="hentaiVerseState.encounter" />
+      <BattleFloatingPanel v-if="hentaiVerseState.battle" />
     </el-container>
   </el-config-provider>
 </template>

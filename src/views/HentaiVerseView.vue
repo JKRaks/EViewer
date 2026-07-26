@@ -1,0 +1,354 @@
+<script setup lang="ts">
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Lightning, Refresh } from '@element-plus/icons-vue'
+import CharacterOverviewPanel from '@/components/hentaiverse/CharacterOverviewPanel.vue'
+import HentaiVerseFormPanel from '@/components/hentaiverse/HentaiVerseFormPanel.vue'
+import { HentaiVerseBusi } from '@/core/hentaiverse/hentaiVerseBusi'
+import { HENTAIVERSE_SECTIONS } from '@/core/hentaiverse/hentaiVerseProtocol'
+import type {
+  HentaiVerseFormSection,
+  HentaiVersePage,
+  HentaiVerseSection,
+} from '@/core/hentaiverse/model/hentaiVerse'
+import {
+  enterHentaiVerseBattle,
+  showHentaiVerseBattleSnapshot,
+} from '@/core/hentaiverse/hentaiVerseStore'
+import { useAuthState } from '@/core/auth/authState'
+
+defineOptions({ name: 'HentaiVerseView' })
+
+const busi = new HentaiVerseBusi()
+const authState = useAuthState()
+const activeSection = ref<HentaiVerseSection>('character')
+const page = ref<HentaiVersePage>()
+const loading = ref(false)
+const error = ref('')
+let requestId = 0
+
+const currentMeta = computed(() => HENTAIVERSE_SECTIONS.find((item) => item.key === activeSection.value)!)
+const characterSections = computed(() => HENTAIVERSE_SECTIONS.filter((item) => item.group === 'character'))
+const battleSections = computed(() => HENTAIVERSE_SECTIONS.filter((item) => item.group === 'battle'))
+
+async function loadSection(section: HentaiVerseSection = activeSection.value) {
+  const meta = HENTAIVERSE_SECTIONS.find((item) => item.key === section)
+  if (!meta || loading.value && section === activeSection.value) return
+  activeSection.value = section
+  const currentRequest = ++requestId
+  loading.value = true
+  error.value = ''
+  try {
+    const result = await busi.getPage(meta.target)
+    if (currentRequest !== requestId) return
+    if (!result.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
+    page.value = result
+  } catch (loadError) {
+    if (currentRequest === requestId) error.value = loadError instanceof Error ? loadError.message : '页面加载失败'
+  } finally {
+    if (currentRequest === requestId) loading.value = false
+  }
+}
+
+async function submitForm(
+  section: HentaiVerseFormSection,
+  data: Record<string, string | number | boolean>,
+) {
+  if (section === 'persona' && data.persona_create) {
+    try {
+      await ElMessageBox.confirm('人格创建后无法删除，确定继续吗？', '创建人格', { type: 'warning' })
+    } catch {
+      return
+    }
+  }
+  loading.value = true
+  try {
+    const result = await busi.submitForm(section, data, currentMeta.value.target)
+    if (result.battle) {
+      showHentaiVerseBattleSnapshot(result.battle)
+      ElMessage.success('已进入 HentaiVerse 战斗')
+    } else if (result.page) {
+      page.value = result.page
+      ElMessage.success('HentaiVerse 设置已更新')
+    }
+  } catch (submitError) {
+    ElMessage.error(submitError instanceof Error ? submitError.message : '提交失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+async function resumeBattle() {
+  try {
+    await enterHentaiVerseBattle(undefined)
+  } catch (resumeError) {
+    ElMessage.info(resumeError instanceof Error ? resumeError.message : '当前没有可恢复的战斗')
+  }
+}
+
+onMounted(() => {
+  if (authState.loggedIn) void loadSection()
+})
+</script>
+
+<template>
+  <div class="hv-view">
+    <header class="hv-page-header">
+      <div>
+        <span>独立游戏模块</span>
+        <h1>HentaiVerse</h1>
+        <p v-if="page">{{ page.characterName }}<template v-if="page.personaName"> · {{ page.personaName }}</template></p>
+      </div>
+      <div class="hv-header-actions">
+        <el-button :icon="Lightning" @click="resumeBattle">恢复战斗</el-button>
+        <el-button :icon="Refresh" circle title="刷新当前页面" :loading="loading" @click="loadSection()" />
+      </div>
+    </header>
+
+    <el-alert
+      v-if="!authState.loggedIn"
+      title="请先在账号信息中维护认证 Cookie，HentaiVerse 与主站共用认证信息。"
+      type="warning"
+      :closable="false"
+      show-icon
+    />
+
+    <div v-else class="hv-shell">
+      <aside class="hv-navigation">
+        <strong>角色</strong>
+        <button
+          v-for="item in characterSections"
+          :key="item.key"
+          type="button"
+          :class="{ active: activeSection === item.key }"
+          @click="loadSection(item.key)"
+        >
+          {{ item.label }}
+        </button>
+        <strong>战斗</strong>
+        <button
+          v-for="item in battleSections"
+          :key="item.key"
+          type="button"
+          :class="{ active: activeSection === item.key }"
+          @click="loadSection(item.key)"
+        >
+          {{ item.label }}
+        </button>
+      </aside>
+
+      <main class="hv-content">
+        <el-select
+          v-model="activeSection"
+          class="hv-mobile-navigation"
+          aria-label="HentaiVerse 页面"
+          @change="loadSection"
+        >
+          <el-option v-for="item in HENTAIVERSE_SECTIONS" :key="item.key" :label="item.label" :value="item.key" />
+        </el-select>
+
+        <div v-if="loading && !page" class="hv-loading">
+          <el-skeleton :rows="7" animated />
+        </div>
+        <el-result v-else-if="error" icon="error" title="HentaiVerse 页面加载失败" :sub-title="error">
+          <template #extra><el-button type="primary" @click="loadSection()">重新加载</el-button></template>
+        </el-result>
+        <template v-else-if="page">
+          <div class="hv-content-heading">
+            <div>
+              <span>{{ currentMeta.group === 'character' ? '角色维护' : '战斗入口' }}</span>
+              <h2>{{ currentMeta.label }}</h2>
+            </div>
+            <el-tag v-if="loading" type="info">更新中</el-tag>
+          </div>
+
+          <el-alert
+            v-for="notice in page.notices"
+            :key="notice"
+            :title="notice"
+            type="info"
+            :closable="false"
+            class="hv-notice"
+          />
+
+          <CharacterOverviewPanel
+            v-if="activeSection === 'character'"
+            :page="page"
+            :loading="loading"
+            @attributes="submitForm('character', $event)"
+            @persona="submitForm('persona', $event)"
+          />
+
+          <HentaiVerseFormPanel
+            v-for="form in page.forms.filter((item) => activeSection !== 'character' || !['character', 'persona'].includes(item.section))"
+            :key="form.id"
+            :form="form"
+            :loading="loading"
+            @submit="submitForm"
+          />
+
+          <el-empty
+            v-if="activeSection !== 'character' && !page.forms.length"
+            description="源站当前页面没有可操作的表单"
+          />
+        </template>
+      </main>
+    </div>
+  </div>
+</template>
+
+<style scoped>
+.hv-view {
+  width: min(1240px, 100%);
+  min-height: 100%;
+  margin: 0 auto;
+  padding-bottom: 80px;
+}
+
+.hv-page-header {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 0 22px;
+}
+
+.hv-page-header span,
+.hv-content-heading span {
+  color: var(--el-color-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hv-page-header h1 {
+  margin: 3px 0 0;
+  font-size: 30px;
+  letter-spacing: 0;
+}
+
+.hv-page-header p {
+  margin: 5px 0 0;
+  color: var(--el-text-color-secondary);
+}
+
+.hv-header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.hv-header-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.hv-shell {
+  display: grid;
+  grid-template-columns: 190px minmax(0, 1fr);
+  min-height: 620px;
+  border-top: 1px solid var(--el-border-color);
+}
+
+.hv-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 22px 18px 22px 0;
+  border-right: 1px solid var(--el-border-color-lighter);
+}
+
+.hv-navigation strong {
+  margin: 14px 10px 5px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.hv-navigation strong:first-child {
+  margin-top: 0;
+}
+
+.hv-navigation button {
+  width: 100%;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 6px;
+  color: var(--el-text-color-regular);
+  text-align: left;
+  background: transparent;
+  cursor: pointer;
+}
+
+.hv-navigation button:hover {
+  background: var(--el-fill-color-light);
+}
+
+.hv-navigation button.active {
+  color: var(--el-color-primary);
+  font-weight: 700;
+  background: var(--el-color-primary-light-9);
+}
+
+.hv-content {
+  min-width: 0;
+  padding: 24px 0 24px 28px;
+}
+
+.hv-content-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 18px;
+}
+
+.hv-content-heading h2 {
+  margin: 3px 0 0;
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.hv-mobile-navigation {
+  display: none;
+  width: 100%;
+  margin-bottom: 18px;
+}
+
+.hv-notice {
+  margin-bottom: 10px;
+}
+
+.hv-loading {
+  padding: 16px 0;
+}
+
+@media (max-width: 767px) {
+  .hv-page-header {
+    align-items: stretch;
+    flex-direction: column;
+    gap: 14px;
+    padding-top: 8px;
+  }
+
+  .hv-page-header h1 {
+    font-size: 26px;
+  }
+
+  .hv-header-actions .el-button:first-child {
+    flex: 1;
+  }
+
+  .hv-shell {
+    display: block;
+    border-top: 0;
+  }
+
+  .hv-navigation {
+    display: none;
+  }
+
+  .hv-content {
+    padding: 14px 0;
+  }
+
+  .hv-mobile-navigation {
+    display: block;
+  }
+}
+</style>

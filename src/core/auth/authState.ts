@@ -50,7 +50,12 @@ export async function saveAuthCookies(memberId: string, passHash: string) {
   const response = await requestAuth('/auth/cookies', { memberId, passHash })
   const now = Date.now()
   const nextMemberId = response.memberId ?? memberId
-  if (previousMemberId && previousMemberId !== nextMemberId) clearUserConfigCache()
+  if (previousMemberId && previousMemberId !== nextMemberId) {
+    clearUserConfigCache()
+    void import('@/core/hentaiverse/hentaiVerseStore').then(({ clearHentaiVerseState }) => {
+      clearHentaiVerseState()
+    })
+  }
   Object.assign(authState, {
     loggedIn: true,
     memberId: nextMemberId,
@@ -63,6 +68,9 @@ export async function saveAuthCookies(memberId: string, passHash: string) {
 export async function clearAuthCookies() {
   await requestAuth('/auth/logout')
   clearUserConfigCache()
+  void import('@/core/hentaiverse/hentaiVerseStore').then(({ clearHentaiVerseState }) => {
+    clearHentaiVerseState()
+  })
   Object.assign(authState, defaultState, { expiresAt: undefined, lastLoginAt: undefined })
   localStorage.removeItem(storageKey)
 }

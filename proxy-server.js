@@ -13,6 +13,22 @@ const ALLOWED_ORIGINS = configuredAllowedOrigins.length ? configuredAllowedOrigi
 const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024
 const IMAGE_LOOKUP_MAX_BYTES = IMAGE_PROXY_MAX_BYTES + 1024 * 1024
 const AUTH_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
+const AUTH_COOKIE_NAMES = ['ipb_member_id', 'ipb_pass_hash']
+const AUTH_COOKIE_PATHS = ['/ehentai', '/hentaiverse']
+const HENTAIVERSE_ORIGIN = 'https://hentaiverse.org'
+const HENTAIVERSE_PAGE_ROUTES = new Set([
+  'Character:ch',
+  'Character:eq',
+  'Character:ab',
+  'Character:tr',
+  'Character:it',
+  'Character:se',
+  'Battle:ba',
+  'Battle:ar',
+  'Battle:rb',
+  'Battle:gr',
+  'Battle:iw',
+])
 
 const isAllowedOrigin = (origin) =>
   !origin ||
@@ -33,7 +49,7 @@ const normalizeAuthInput = (value, cookieName) => {
 const isValidPassHash = (value) =>
   typeof value === 'string' && value.length >= 8 && value.length <= 256 && !/[;\r\n\0]/.test(value)
 
-const buildAuthCookie = (name, value, req, clear = false) => {
+const buildAuthCookie = (name, value, req, path, clear = false) => {
   const forwardedProtocol = String(req.headers['x-forwarded-proto'] || '')
     .split(',')[0]
     ?.trim()
@@ -42,7 +58,7 @@ const buildAuthCookie = (name, value, req, clear = false) => {
     `${name}=${clear ? '' : encodeURIComponent(value)}`,
     'HttpOnly',
     secure ? 'SameSite=None' : 'SameSite=Lax',
-    'Path=/ehentai',
+    `Path=${path}`,
     clear ? 'Max-Age=0' : `Max-Age=${AUTH_COOKIE_MAX_AGE}`,
   ]
   if (secure) attributes.push('Secure')
@@ -71,7 +87,7 @@ app.use(
     credentials: true, // 允许发送 Cookie
   }),
 )
-app.use(express.json({ limit: '4kb' }))
+app.use(express.json({ limit: '128kb' }))
 
 // 添加请求日志中间件
 app.use((req, res, next) => {
@@ -118,8 +134,10 @@ app.post('/auth/cookies', (req, res) => {
   }
 
   res.set('Cache-Control', 'no-store')
-  res.append('Set-Cookie', buildAuthCookie('ipb_member_id', memberId, req))
-  res.append('Set-Cookie', buildAuthCookie('ipb_pass_hash', passHash, req))
+  AUTH_COOKIE_PATHS.forEach((path) => {
+    res.append('Set-Cookie', buildAuthCookie('ipb_member_id', memberId, req, path))
+    res.append('Set-Cookie', buildAuthCookie('ipb_pass_hash', passHash, req, path))
+  })
   return res.json({ success: true, memberId, expiresAt: Date.now() + AUTH_COOKIE_MAX_AGE * 1000 })
 })
 
@@ -129,9 +147,173 @@ app.post('/auth/logout', (req, res) => {
   }
 
   res.set('Cache-Control', 'no-store')
-  res.append('Set-Cookie', buildAuthCookie('ipb_member_id', '', req, true))
-  res.append('Set-Cookie', buildAuthCookie('ipb_pass_hash', '', req, true))
+  AUTH_COOKIE_PATHS.forEach((path) => {
+    res.append('Set-Cookie', buildAuthCookie('ipb_member_id', '', req, path, true))
+    res.append('Set-Cookie', buildAuthCookie('ipb_pass_hash', '', req, path, true))
+  })
   return res.json({ success: true })
+})
+
+const getAllowedAuthCookieHeader = (cookieHeader = '') => {
+  const allowed = new Map()
+  cookieHeader.split(';').forEach((part) => {
+    const separator = part.indexOf('=')
+    if (separator <= 0) return
+    const name = part.slice(0, separator).trim()
+    if (AUTH_COOKIE_NAMES.includes(name)) {
+      allowed.set(name, part.slice(separator + 1).trim())
+    }
+  })
+  return Array.from(allowed, ([name, value]) => `${name}=${value}`).join('; ')
+}
+
+const parseHentaiVersePageTarget = (query) => {
+  const section = typeof query.s === 'string' ? query.s : ''
+  const subsection = typeof query.ss === 'string' ? query.ss : ''
+  if (!section && !subsection) return new URL('/', HENTAIVERSE_ORIGIN)
+  if (!HENTAIVERSE_PAGE_ROUTES.has(`${section}:${subsection}`)) {
+    throw new Error('不允许访问该 HentaiVerse 页面')
+  }
+
+  const target = new URL('/', HENTAIVERSE_ORIGIN)
+  target.searchParams.set('s', section)
+  target.searchParams.set('ss', subsection)
+  if (section === 'Battle' && subsection === 'ba' && query.encounter) {
+    const encounter = String(query.encounter)
+    if (!/^[A-Za-z0-9+/=_-]{20,512}$/.test(encounter)) throw new Error('遭遇令牌格式不正确')
+    target.searchParams.set('encounter', encounter)
+  }
+  if (section === 'Character' && subsection === 'eq' && query.equip_slot) {
+    const slot = String(query.equip_slot)
+    if (!/^\d{1,4}$/.test(slot)) throw new Error('装备槽位格式不正确')
+    target.searchParams.set('equip_slot', slot)
+  }
+  if (section === 'Character' && subsection === 'ab' && query.tree) {
+    const tree = String(query.tree)
+    if (!/^[a-z0-9]{1,32}$/.test(tree)) throw new Error('能力树格式不正确')
+    target.searchParams.set('tree', tree)
+  }
+  return target
+}
+
+const HENTAIVERSE_FORM_ROUTES = {
+  character: { s: 'Character', ss: 'ch' },
+  persona: { s: 'Character', ss: 'ch' },
+  equipment: { s: 'Character', ss: 'eq' },
+  abilities: { s: 'Character', ss: 'ab' },
+  training: { s: 'Character', ss: 'tr' },
+  inventory: { s: 'Character', ss: 'it' },
+  settings: { s: 'Character', ss: 'se' },
+  arena: { s: 'Battle', ss: 'ar' },
+  ringOfBlood: { s: 'Battle', ss: 'rb' },
+  grindfest: { s: 'Battle', ss: 'gr' },
+  itemWorld: { s: 'Battle', ss: 'iw' },
+}
+
+const isAllowedHentaiVerseFormField = (section, name, value) => {
+  const scalar = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+  if (!scalar || String(value).length > 4096 || /[\0\r\n]/.test(String(value))) return false
+  const fields = {
+    character: /^(attr_apply|str_delta|dex_delta|agi_delta|end_delta|int_delta|wis_delta)$/,
+    persona: /^(persona_set|persona_rename|persona_create)$/,
+    equipment: /^(postoken|equip_set|equip_slot|equip_id|action)$/,
+    abilities: /^(unlock_ability|reset_ability|reset_all|unlock_slot|equip_slot|equip_ability)$/,
+    training: /^(start_train|cancel_train)$/,
+    inventory: /^(slot|item)$/,
+    settings: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    arena: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    ringOfBlood: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    grindfest: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    itemWorld: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+  }
+  return fields[section]?.test(name) === true
+}
+
+const requestHentaiVerse = async (req, targetUrl, method, body, contentType) => {
+  const cookie = getAllowedAuthCookieHeader(req.headers.cookie)
+  const headers = {
+    Accept: method === 'POST' && contentType === 'application/json' ? 'application/json' : 'text/html,application/xhtml+xml,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    Referer: `${HENTAIVERSE_ORIGIN}/`,
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+    ...(contentType && { 'Content-Type': contentType }),
+    ...(cookie && { Cookie: cookie }),
+  }
+  const response = await fetch(targetUrl, {
+    method,
+    headers,
+    body,
+    redirect: 'manual',
+    signal: AbortSignal.timeout(30000),
+  })
+  return response
+}
+
+const sendHentaiVerseResponse = async (res, response) => {
+  const content = Buffer.from(await response.arrayBuffer())
+  res.status(response.status)
+  res.set('Cache-Control', 'no-store')
+  res.set('Content-Type', response.headers.get('content-type') || 'text/html; charset=UTF-8')
+  const location = response.headers.get('location')
+  if (location) res.set('X-HentaiVerse-Location', location)
+  return res.send(content)
+}
+
+app.get('/hentaiverse/page', async (req, res) => {
+  if (!isAllowedOrigin(req.headers.origin)) return res.status(403).json({ error: '不允许的请求来源' })
+  try {
+    const target = parseHentaiVersePageTarget(req.query)
+    return await sendHentaiVerseResponse(res, await requestHentaiVerse(req, target, 'GET'))
+  } catch (error) {
+    return res.status(400).json({ error: error.message || 'HentaiVerse 页面请求失败' })
+  }
+})
+
+app.post('/hentaiverse/form', async (req, res) => {
+  if (!isAllowedOrigin(req.headers.origin)) return res.status(403).json({ error: '不允许的请求来源' })
+  const section = String(req.body?.section || '')
+  const route = HENTAIVERSE_FORM_ROUTES[section]
+  const data = req.body?.data
+  if (!route || !data || typeof data !== 'object' || Array.isArray(data)) {
+    return res.status(400).json({ error: 'HentaiVerse 表单格式不正确' })
+  }
+  const entries = Object.entries(data)
+  if (!entries.length || entries.length > 400 || entries.some(([name, value]) => !isAllowedHentaiVerseFormField(section, name, value))) {
+    return res.status(400).json({ error: 'HentaiVerse 表单包含不允许的字段' })
+  }
+  const form = new URLSearchParams(entries.map(([name, value]) => [name, String(value)]))
+  const target = new URL('/', HENTAIVERSE_ORIGIN)
+  target.searchParams.set('s', route.s)
+  target.searchParams.set('ss', route.ss)
+  try {
+    return await sendHentaiVerseResponse(
+      res,
+      await requestHentaiVerse(req, target, 'POST', form, 'application/x-www-form-urlencoded; charset=UTF-8'),
+    )
+  } catch (error) {
+    return res.status(502).json({ error: error.message || 'HentaiVerse 表单请求失败' })
+  }
+})
+
+app.post('/hentaiverse/action', async (req, res) => {
+  if (!isAllowedOrigin(req.headers.origin)) return res.status(403).json({ error: '不允许的请求来源' })
+  const { token, mode, target = 0, skill = 0 } = req.body || {}
+  const allowedModes = new Set(['attack', 'magic', 'items', 'spirit', 'defend', 'focus'])
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{6,128}$/.test(token) || !allowedModes.has(mode)) {
+    return res.status(400).json({ error: 'HentaiVerse 战斗动作格式不正确' })
+  }
+  if (!Number.isInteger(target) || target < 0 || target > 100 || !Number.isInteger(skill) || skill < 0 || skill > 1000000) {
+    return res.status(400).json({ error: 'HentaiVerse 战斗目标格式不正确' })
+  }
+  const payload = JSON.stringify({ type: 'battle', method: 'action', token, mode, target, skill })
+  try {
+    return await sendHentaiVerseResponse(
+      res,
+      await requestHentaiVerse(req, new URL('/json', HENTAIVERSE_ORIGIN), 'POST', payload, 'application/json'),
+    )
+  } catch (error) {
+    return res.status(502).json({ error: error.message || 'HentaiVerse 回合请求失败' })
+  }
 })
 
 // 封面图片代理 - 仅允许 EH 图片域名，防止成为任意 URL 代理
@@ -454,6 +636,7 @@ app.listen(PORT, () => {
   console.log('  - GET /health (健康检查)')
   console.log('  - POST /auth/cookies (保存用户认证 Cookie)')
   console.log('  - POST /auth/logout (清除用户认证 Cookie)')
+  console.log('  - GET/POST /hentaiverse/* (HentaiVerse 受控网关)')
   console.log('  - GET /image-proxy?url=... (代理 ehgt.org 图片)')
   console.log('  - ALL /ehentai/* (代理到 e-hentai.org)')
 })

@@ -51,6 +51,11 @@ const router = createRouter({
       name: 'login',
       component: () => import('@/views/LoginView.vue'),
     },
+    {
+      path: '/hentaiverse',
+      name: 'hentaiverse',
+      component: () => import('@/views/HentaiVerseView.vue'),
+    },
   ],
 })
 
