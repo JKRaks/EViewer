@@ -114,6 +114,7 @@ function closeLocalBattle() {
           >
             {{ action.label }}
           </el-button>
+          <span v-if="!battle.actions.length" class="battle-action-empty">未能解析当前回合的可用操作，请刷新战斗状态</span>
         </div>
 
         <div class="battle-log">
@@ -221,6 +222,11 @@ function closeLocalBattle() {
 
 .battle-actions :deep(.el-button + .el-button) {
   margin-left: 0;
+}
+
+.battle-action-empty {
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 .battle-completion p {

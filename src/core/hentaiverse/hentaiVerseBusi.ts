@@ -1,5 +1,6 @@
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
 import type {
+  HentaiVerseAbilityActionName,
   HentaiVerseBattleMode,
   HentaiVerseBattleSnapshot,
   HentaiVerseFormSection,
@@ -37,6 +38,63 @@ export class HentaiVerseBusi {
     const html = await this.requestText('/hentaiverse/form', { method: 'POST', body: { section, data } })
     if (isHentaiVerseBattleHtml(html)) return { battle: parseBattlePage(html) }
     return { page: parseHentaiVersePage(html, target) }
+  }
+
+  /** Input: 装备套装编号。Output: 切换套装后的装备页。 */
+  async selectEquipmentSet(setId: string, postToken: string, target: HentaiVersePageTarget) {
+    return this.submitForm('equipment', {
+      ...(postToken && { postoken: postToken }),
+      equip_set: setId,
+    }, target)
+  }
+
+  /** Input: 部位、装备编号及页面令牌。Output: 完成装备后的当前部位页面。 */
+  async equipItem(slotId: string, equipmentId: string, postToken: string, target: HentaiVersePageTarget) {
+    return this.submitForm('equipment', {
+      postoken: postToken,
+      equip_slot: slotId,
+      equip_id: equipmentId,
+      action: 'equip',
+    }, { ...target, equip_slot: slotId })
+  }
+
+  /** Input: 部位及页面令牌。Output: 卸下装备后的当前部位页面。 */
+  async unequipItem(slotId: string, postToken: string, target: HentaiVersePageTarget) {
+    return this.submitForm('equipment', {
+      postoken: postToken,
+      equip_slot: slotId,
+      equip_id: '0',
+      action: 'unequip',
+    }, { ...target, equip_slot: slotId })
+  }
+
+  /** Input: 能力操作名和能力或槽位编号。Output: 更新后的能力页。 */
+  async updateAbility(
+    action: HentaiVerseAbilityActionName | 'reset_all',
+    value: string,
+    target: HentaiVersePageTarget,
+  ) {
+    return this.submitForm('abilities', { [action]: value }, target)
+  }
+
+  /** Input: 能力槽位和已解锁能力编号。Output: 更新后的能力页。 */
+  async equipAbility(slotId: string, abilityId: string, target: HentaiVersePageTarget) {
+    return this.submitForm('abilities', { equip_slot: slotId, equip_ability: abilityId }, target)
+  }
+
+  /** Input: 训练项目编号。Output: 开始训练后的训练页。 */
+  async startTraining(trainingId: string, target: HentaiVersePageTarget) {
+    return this.submitForm('training', { start_train: trainingId }, target)
+  }
+
+  /** Input: 无。Output: 取消当前训练后的训练页。 */
+  async cancelTraining(target: HentaiVersePageTarget) {
+    return this.submitForm('training', { cancel_train: '1' }, target)
+  }
+
+  /** Input: 战斗物品槽位和物品编号。Output: 更新后的物品页。 */
+  async assignInventoryItem(slotId: string, itemId: string, target: HentaiVersePageTarget) {
+    return this.submitForm('inventory', { slot: slotId, item: itemId }, target)
   }
 
   /**

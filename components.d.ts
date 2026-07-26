@@ -12,6 +12,7 @@ export {}
 /* prettier-ignore */
 declare module 'vue' {
   export interface GlobalComponents {
+    AbilityPanel: typeof import('./src/components/hentaiverse/AbilityPanel.vue')['default']
     BattleFloatingPanel: typeof import('./src/components/hentaiverse/BattleFloatingPanel.vue')['default']
     BookItem: typeof import('./src/components/BookItem.vue')['default']
     BookShareOverlay: typeof import('./src/components/BookShareOverlay.vue')['default']
@@ -60,13 +61,16 @@ declare module 'vue' {
     ElTag: typeof import('element-plus/es')['ElTag']
     ElTooltip: typeof import('element-plus/es')['ElTooltip']
     EncounterPrompt: typeof import('./src/components/hentaiverse/EncounterPrompt.vue')['default']
+    EquipmentPanel: typeof import('./src/components/hentaiverse/EquipmentPanel.vue')['default']
     HentaiVerseFormPanel: typeof import('./src/components/hentaiverse/HentaiVerseFormPanel.vue')['default']
     HomePopularPanel: typeof import('./src/components/HomePopularPanel.vue')['default']
     HomeYesterdayPanel: typeof import('./src/components/HomeYesterdayPanel.vue')['default']
+    InventoryPanel: typeof import('./src/components/hentaiverse/InventoryPanel.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SearchTagPicker: typeof import('./src/components/SearchTagPicker.vue')['default']
     ToplistOverviewPanel: typeof import('./src/components/ToplistOverviewPanel.vue')['default']
+    TrainingPanel: typeof import('./src/components/hentaiverse/TrainingPanel.vue')['default']
     UserConfigPanel: typeof import('./src/components/UserConfigPanel.vue')['default']
   }
   export interface GlobalDirectives {
@@ -77,6 +81,7 @@ declare module 'vue' {
 
 // For TSX support
 declare global {
+  const AbilityPanel: typeof import('./src/components/hentaiverse/AbilityPanel.vue')['default']
   const BattleFloatingPanel: typeof import('./src/components/hentaiverse/BattleFloatingPanel.vue')['default']
   const BookItem: typeof import('./src/components/BookItem.vue')['default']
   const BookShareOverlay: typeof import('./src/components/BookShareOverlay.vue')['default']
@@ -125,12 +130,15 @@ declare global {
   const ElTag: typeof import('element-plus/es')['ElTag']
   const ElTooltip: typeof import('element-plus/es')['ElTooltip']
   const EncounterPrompt: typeof import('./src/components/hentaiverse/EncounterPrompt.vue')['default']
+  const EquipmentPanel: typeof import('./src/components/hentaiverse/EquipmentPanel.vue')['default']
   const HentaiVerseFormPanel: typeof import('./src/components/hentaiverse/HentaiVerseFormPanel.vue')['default']
   const HomePopularPanel: typeof import('./src/components/HomePopularPanel.vue')['default']
   const HomeYesterdayPanel: typeof import('./src/components/HomeYesterdayPanel.vue')['default']
+  const InventoryPanel: typeof import('./src/components/hentaiverse/InventoryPanel.vue')['default']
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
   const SearchTagPicker: typeof import('./src/components/SearchTagPicker.vue')['default']
   const ToplistOverviewPanel: typeof import('./src/components/ToplistOverviewPanel.vue')['default']
+  const TrainingPanel: typeof import('./src/components/hentaiverse/TrainingPanel.vue')['default']
   const UserConfigPanel: typeof import('./src/components/UserConfigPanel.vue')['default']
 }
