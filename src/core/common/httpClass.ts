@@ -69,6 +69,15 @@ export class httpClass {
 
       result.data = response.data
       result.isSuccess = true
+      if (
+        typeof response.data === 'string' &&
+        response.data.includes('eventpane') &&
+        response.data.includes('hentaiverse.org')
+      ) {
+        void import('../hentaiverse/hentaiVerseStore').then(({ inspectGalleryHtmlForEncounter }) => {
+          inspectGalleryHtmlForEncounter(response.data)
+        })
+      }
     } catch (error: unknown) {
       if (!axios.isCancel(error)) console.error('请求失败:', error)
       result.msg = (error as Error).message

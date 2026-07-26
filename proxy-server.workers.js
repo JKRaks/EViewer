@@ -32,6 +32,21 @@ const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024
 const IMAGE_LOOKUP_MAX_BYTES = IMAGE_PROXY_MAX_BYTES + 1024 * 1024
 const AUTH_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
 const AUTH_COOKIE_NAMES = ['ipb_member_id', 'ipb_pass_hash']
+const AUTH_COOKIE_PATHS = ['/ehentai', '/hentaiverse']
+const HENTAIVERSE_ORIGIN = 'https://hentaiverse.org'
+const HENTAIVERSE_PAGE_ROUTES = new Set([
+  'Character:ch',
+  'Character:eq',
+  'Character:ab',
+  'Character:tr',
+  'Character:it',
+  'Character:se',
+  'Battle:ba',
+  'Battle:ar',
+  'Battle:rb',
+  'Battle:gr',
+  'Battle:iw',
+])
 
 function parseAllowedImageUrl(value) {
   if (!value) {
@@ -73,13 +88,13 @@ function isValidPassHash(value) {
   )
 }
 
-function buildAuthCookie(name, value, requestUrl, clear = false) {
+function buildAuthCookie(name, value, requestUrl, path, clear = false) {
   const secure = requestUrl.protocol === 'https:'
   const attributes = [
     `${name}=${clear ? '' : encodeURIComponent(value)}`,
     'HttpOnly',
     secure ? 'SameSite=None' : 'SameSite=Lax',
-    'Path=/ehentai',
+    `Path=${path}`,
     clear ? 'Max-Age=0' : `Max-Age=${AUTH_COOKIE_MAX_AGE}`,
   ]
   if (secure) attributes.push('Secure')
@@ -112,7 +127,9 @@ async function handleAuthRequest(request, requestUrl) {
       request,
       { success: true },
       200,
-      AUTH_COOKIE_NAMES.map((name) => buildAuthCookie(name, '', requestUrl, true)),
+      AUTH_COOKIE_PATHS.flatMap((path) =>
+        AUTH_COOKIE_NAMES.map((name) => buildAuthCookie(name, '', requestUrl, path, true)),
+      ),
     )
   }
 
@@ -140,11 +157,167 @@ async function handleAuthRequest(request, requestUrl) {
     request,
     { success: true, memberId, expiresAt: Date.now() + AUTH_COOKIE_MAX_AGE * 1000 },
     200,
-    [
-      buildAuthCookie('ipb_member_id', memberId, requestUrl),
-      buildAuthCookie('ipb_pass_hash', passHash, requestUrl),
-    ],
+    AUTH_COOKIE_PATHS.flatMap((path) => [
+      buildAuthCookie('ipb_member_id', memberId, requestUrl, path),
+      buildAuthCookie('ipb_pass_hash', passHash, requestUrl, path),
+    ]),
   )
+}
+
+function getAllowedAuthCookieHeader(cookieHeader = '') {
+  const allowed = new Map()
+  cookieHeader.split(';').forEach((part) => {
+    const separator = part.indexOf('=')
+    if (separator <= 0) return
+    const name = part.slice(0, separator).trim()
+    if (AUTH_COOKIE_NAMES.includes(name)) allowed.set(name, part.slice(separator + 1).trim())
+  })
+  return Array.from(allowed, ([name, value]) => `${name}=${value}`).join('; ')
+}
+
+function parseHentaiVersePageTarget(query) {
+  const section = query.get('s') || ''
+  const subsection = query.get('ss') || ''
+  if (!section && !subsection) return new URL('/', HENTAIVERSE_ORIGIN)
+  if (!HENTAIVERSE_PAGE_ROUTES.has(`${section}:${subsection}`)) {
+    throw new Error('不允许访问该 HentaiVerse 页面')
+  }
+  const target = new URL('/', HENTAIVERSE_ORIGIN)
+  target.searchParams.set('s', section)
+  target.searchParams.set('ss', subsection)
+  const encounter = query.get('encounter')
+  if (section === 'Battle' && subsection === 'ba' && encounter) {
+    if (!/^[A-Za-z0-9+/=_-]{20,512}$/.test(encounter)) throw new Error('遭遇令牌格式不正确')
+    target.searchParams.set('encounter', encounter)
+  }
+  const equipSlot = query.get('equip_slot')
+  if (section === 'Character' && subsection === 'eq' && equipSlot) {
+    if (!/^\d{1,4}$/.test(equipSlot)) throw new Error('装备槽位格式不正确')
+    target.searchParams.set('equip_slot', equipSlot)
+  }
+  const tree = query.get('tree')
+  if (section === 'Character' && subsection === 'ab' && tree) {
+    if (!/^[a-z0-9]{1,32}$/.test(tree)) throw new Error('能力树格式不正确')
+    target.searchParams.set('tree', tree)
+  }
+  return target
+}
+
+const HENTAIVERSE_FORM_ROUTES = {
+  character: { s: 'Character', ss: 'ch' },
+  persona: { s: 'Character', ss: 'ch' },
+  equipment: { s: 'Character', ss: 'eq' },
+  abilities: { s: 'Character', ss: 'ab' },
+  training: { s: 'Character', ss: 'tr' },
+  inventory: { s: 'Character', ss: 'it' },
+  settings: { s: 'Character', ss: 'se' },
+  arena: { s: 'Battle', ss: 'ar' },
+  ringOfBlood: { s: 'Battle', ss: 'rb' },
+  grindfest: { s: 'Battle', ss: 'gr' },
+  itemWorld: { s: 'Battle', ss: 'iw' },
+}
+
+function isAllowedHentaiVerseFormField(section, name, value) {
+  const scalar = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+  if (!scalar || String(value).length > 4096 || /[\0\r\n]/.test(String(value))) return false
+  const fields = {
+    character: /^(attr_apply|str_delta|dex_delta|agi_delta|end_delta|int_delta|wis_delta)$/,
+    persona: /^(persona_set|persona_rename|persona_create)$/,
+    equipment: /^(postoken|equip_set|equip_slot|equip_id|action)$/,
+    abilities: /^(unlock_ability|reset_ability|reset_all|unlock_slot|equip_slot|equip_ability)$/,
+    training: /^(start_train|cancel_train)$/,
+    inventory: /^(slot|item)$/,
+    settings: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    arena: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    ringOfBlood: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    grindfest: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    itemWorld: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+  }
+  return fields[section]?.test(name) === true
+}
+
+async function requestHentaiVerse(request, target, method, body, contentType) {
+  const headers = new Headers({
+    Accept: method === 'POST' && contentType === 'application/json' ? 'application/json' : 'text/html,application/xhtml+xml,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+    Referer: `${HENTAIVERSE_ORIGIN}/`,
+    'User-Agent': request.headers.get('user-agent') || 'Mozilla/5.0',
+  })
+  if (contentType) headers.set('Content-Type', contentType)
+  const cookie = getAllowedAuthCookieHeader(request.headers.get('cookie') || '')
+  if (cookie) headers.set('Cookie', cookie)
+  return fetch(target, { method, headers, body, redirect: 'manual' })
+}
+
+async function sendHentaiVerseResponse(request, upstream) {
+  const headers = new Headers({
+    'Cache-Control': 'no-store',
+    'Content-Type': upstream.headers.get('content-type') || 'text/html; charset=UTF-8',
+  })
+  const requesterOrigin = getRequesterOrigin(request)
+  if (requesterOrigin && isAllowedRequesterOrigin(requesterOrigin)) {
+    headers.set('Access-Control-Allow-Origin', requesterOrigin)
+    headers.set('Access-Control-Allow-Credentials', 'true')
+    headers.set('Vary', 'Origin')
+  }
+  const location = upstream.headers.get('location')
+  if (location) headers.set('X-HentaiVerse-Location', location)
+  return new Response(await upstream.arrayBuffer(), { status: upstream.status, headers })
+}
+
+async function handleHentaiVerseRequest(request, requestUrl) {
+  const requesterOrigin = getRequesterOrigin(request)
+  if (!isAllowedRequesterOrigin(requesterOrigin)) {
+    return jsonResponse(request, { error: '不允许的请求来源' }, 403)
+  }
+  try {
+    if (request.method === 'GET' && requestUrl.pathname === '/hentaiverse/page') {
+      const target = parseHentaiVersePageTarget(requestUrl.searchParams)
+      return sendHentaiVerseResponse(request, await requestHentaiVerse(request, target, 'GET'))
+    }
+    if (request.method !== 'POST') return jsonResponse(request, { error: '请求方法不正确' }, 405)
+    const contentLength = Number(request.headers.get('content-length') || '0')
+    if (contentLength > 131072) return jsonResponse(request, { error: '请求内容过大' }, 413)
+    const body = await request.json()
+    if (requestUrl.pathname === '/hentaiverse/action') {
+      const { token, mode, target = 0, skill = 0 } = body || {}
+      const modes = new Set(['attack', 'magic', 'items', 'spirit', 'defend', 'focus'])
+      if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{6,128}$/.test(token) || !modes.has(mode)) {
+        return jsonResponse(request, { error: 'HentaiVerse 战斗动作格式不正确' }, 400)
+      }
+      if (!Number.isInteger(target) || target < 0 || target > 100 || !Number.isInteger(skill) || skill < 0 || skill > 1000000) {
+        return jsonResponse(request, { error: 'HentaiVerse 战斗目标格式不正确' }, 400)
+      }
+      const payload = JSON.stringify({ type: 'battle', method: 'action', token, mode, target, skill })
+      return sendHentaiVerseResponse(
+        request,
+        await requestHentaiVerse(request, new URL('/json', HENTAIVERSE_ORIGIN), 'POST', payload, 'application/json'),
+      )
+    }
+    if (requestUrl.pathname === '/hentaiverse/form') {
+      const section = String(body?.section || '')
+      const route = HENTAIVERSE_FORM_ROUTES[section]
+      const data = body?.data
+      if (!route || !data || typeof data !== 'object' || Array.isArray(data)) {
+        return jsonResponse(request, { error: 'HentaiVerse 表单格式不正确' }, 400)
+      }
+      const entries = Object.entries(data)
+      if (!entries.length || entries.length > 400 || entries.some(([name, value]) => !isAllowedHentaiVerseFormField(section, name, value))) {
+        return jsonResponse(request, { error: 'HentaiVerse 表单包含不允许的字段' }, 400)
+      }
+      const target = new URL('/', HENTAIVERSE_ORIGIN)
+      target.searchParams.set('s', route.s)
+      target.searchParams.set('ss', route.ss)
+      const form = new URLSearchParams(entries.map(([name, value]) => [name, String(value)]))
+      return sendHentaiVerseResponse(
+        request,
+        await requestHentaiVerse(request, target, 'POST', form, 'application/x-www-form-urlencoded; charset=UTF-8'),
+      )
+    }
+    return jsonResponse(request, { error: 'Not found' }, 404)
+  } catch (error) {
+    return jsonResponse(request, { error: error.message || 'HentaiVerse 请求失败' }, 502)
+  }
 }
 
 /**
@@ -613,6 +786,14 @@ async function handleRequest(request) {
   // CORS 预检
   if (request.method === 'OPTIONS') {
     return handleCorsPreFlight(request)
+  }
+
+  if (
+    pathname === '/hentaiverse/page' ||
+    pathname === '/hentaiverse/form' ||
+    pathname === '/hentaiverse/action'
+  ) {
+    return handleHentaiVerseRequest(request, url)
   }
 
   if (pathname === '/image-proxy') {

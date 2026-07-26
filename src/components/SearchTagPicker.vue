@@ -180,6 +180,17 @@ function updateMobileState(event: MediaQueryListEvent | MediaQueryList) {
   if (!event.matches && activeNamespace.value) mobileStage.value = 'tags'
 }
 
+function backToNamespaces() {
+  keyword.value = ''
+  mobileStage.value = 'namespaces'
+}
+
+function getSearchResultDisplayName(tag: SearchableTag) {
+  if (!searching.value) return tag.displayName
+  const namespace = namespaces.value.find((item) => item.namespace === tag.namespace)
+  return `${namespace?.displayName ?? tag.namespace}:${tag.displayName}`
+}
+
 function tagKey(tag: Pick<SearchableTag, 'namespace' | 'master'>) {
   return `${tag.namespace.toLowerCase()}\u0000${tag.master.toLowerCase()}`
 }
@@ -228,7 +239,10 @@ onBeforeUnmount(() => {
       />
     </div>
 
-    <div class="picker-body" :class="{ 'show-tags': mobileStage === 'tags' }">
+    <div
+      class="picker-body"
+      :class="{ 'show-tags': mobileStage === 'tags' || searching }"
+    >
       <aside v-loading="loadingNamespaces" class="namespace-list">
         <button
           v-for="item in namespaces"
@@ -249,7 +263,7 @@ onBeforeUnmount(() => {
             circle
             text
             :icon="ArrowLeft"
-            @click="mobileStage = 'namespaces'"
+            @click="backToNamespaces"
           />
           <div>
             <strong>{{ searching ? '搜索结果' : activeNamespaceInfo?.displayName }}</strong>
@@ -274,7 +288,7 @@ onBeforeUnmount(() => {
               @click="row.tag && toggleTag(row.tag)"
             >
               <template v-if="row.tag">
-                <span class="tag-option-name">{{ row.tag.displayName }}</span>
+                <span class="tag-option-name">{{ getSearchResultDisplayName(row.tag) }}</span>
                 <span class="tag-option-original"
                   >{{ row.tag.namespace }}:{{ row.tag.master }}</span
                 >
