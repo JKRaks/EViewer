@@ -45,18 +45,25 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
   const document = parser.parseFromString(html, 'text/html')
   decodeHentaiVerseGlyphs(document)
   const bodyText = cleanText(document.body?.textContent)
-  const authenticated = !/you (?:must|have to) (?:be logged on|log on)|requires you to log on|please log on|log on with an EH account/i.test(bodyText)
+  const authenticated =
+    !/you (?:must|have to) (?:be logged on|log on)|requires you to log on|please log on|log on with an EH account/i.test(
+      bodyText,
+    )
   const scriptText = Array.from(document.scripts, (script) => script.textContent || '').join('\n')
   const section = getHentaiVerseSection(target)
   const personaName = readScriptString(scriptText, 'current_persona_name')
-  const equipment = section === 'equipment' ? parseEquipment(document, scriptText, target) : undefined
-  const abilities = section === 'abilities' ? parseAbilities(document, scriptText, target) : undefined
+  const equipment =
+    section === 'equipment' ? parseEquipment(document, scriptText, target) : undefined
+  const abilities =
+    section === 'abilities' ? parseAbilities(document, scriptText, target) : undefined
   const training = section === 'training' ? parseTraining(document) : undefined
   const inventory = section === 'inventory' ? parseInventory(document) : undefined
 
   return {
     section,
-    title: translateHentaiVerseText(document.querySelector('h1, #mainpane h2, title')?.textContent || 'HentaiVerse'),
+    title: translateHentaiVerseText(
+      document.querySelector('h1, #mainpane h2, title')?.textContent || 'HentaiVerse',
+    ),
     characterName: readCharacterName(document, personaName),
     personaName,
     authenticated,
@@ -92,7 +99,9 @@ export function parseBattlePage(html: string): HentaiVerseBattleSnapshot {
   const document = parser.parseFromString(html, 'text/html')
   decodeHentaiVerseGlyphs(document)
   const scripts = Array.from(document.scripts, (script) => script.textContent || '').join('\n')
-  const token = readScriptString(scripts, 'battle_token') || matchValue(scripts, /battle_token\s*=\s*['"]([^'"]+)/)
+  const token =
+    readScriptString(scripts, 'battle_token') ||
+    matchValue(scripts, /battle_token\s*=\s*['"]([^'"]+)/)
   return parseBattleDocument(document, token)
 }
 
@@ -120,21 +129,29 @@ export function parseBattleResponse(
   paneNames.forEach((name) => {
     const value = payload[name]
     if (typeof value !== 'string') return
-    const wrapper = document.createElement(name.startsWith('table_') || name === 'textlog' ? 'table' : 'div')
+    const wrapper = document.createElement(
+      name.startsWith('table_') || name === 'textlog' ? 'table' : 'div',
+    )
     wrapper.id = name
     wrapper.innerHTML = value
     document.body.appendChild(wrapper)
   })
   decodeHentaiVerseGlyphs(document)
   const parsed = parseBattleDocument(document, previous.token)
-  const actions = new Map(previous.actions.map((action) => [`${action.mode}:${action.skill}`, action]))
+  const actions = new Map(
+    previous.actions.map((action) => [`${action.mode}:${action.skill}`, action]),
+  )
   parsed.actions.forEach((action) => actions.set(`${action.mode}:${action.skill}`, action))
   return {
     ...previous,
     ...parsed,
     vitals: parsed.vitals.length ? parsed.vitals : previous.vitals,
     effects: parsed.effects.length ? parsed.effects : previous.effects,
-    monsters: parsed.completed ? parsed.monsters : parsed.monsters.length ? parsed.monsters : previous.monsters,
+    monsters: parsed.completed
+      ? parsed.monsters
+      : parsed.monsters.length
+        ? parsed.monsters
+        : previous.monsters,
     actions: parsed.completed ? [] : Array.from(actions.values()),
     log: parsed.log.length ? parsed.log : previous.log,
   }
@@ -181,16 +198,24 @@ function parseMetrics(document: Document, scriptText: string) {
 
 function parsePersonas(document: Document, currentName: string): HentaiVersePersona[] {
   const personas = new Map<string, HentaiVersePersona>()
-  document.querySelectorAll<HTMLOptionElement>('select[name="persona_set"] option').forEach((option) => {
-    const name = cleanText(option.textContent)
-    personas.set(option.value, { id: option.value, name, active: option.selected || name === currentName })
-  })
-  document.querySelectorAll<HTMLElement>('[data-persona], [onclick*="persona_set"]').forEach((node) => {
-    const onclick = node.getAttribute('onclick') || ''
-    const id = node.dataset.persona || matchValue(onclick, /persona_set[^0-9]*(\d+)/)
-    const name = cleanText(node.textContent)
-    if (id && name) personas.set(id, { id, name, active: name === currentName })
-  })
+  document
+    .querySelectorAll<HTMLOptionElement>('select[name="persona_set"] option')
+    .forEach((option) => {
+      const name = cleanText(option.textContent)
+      personas.set(option.value, {
+        id: option.value,
+        name,
+        active: option.selected || name === currentName,
+      })
+    })
+  document
+    .querySelectorAll<HTMLElement>('[data-persona], [onclick*="persona_set"]')
+    .forEach((node) => {
+      const onclick = node.getAttribute('onclick') || ''
+      const id = node.dataset.persona || matchValue(onclick, /persona_set[^0-9]*(\d+)/)
+      const name = cleanText(node.textContent)
+      if (id && name) personas.set(id, { id, name, active: name === currentName })
+    })
   return Array.from(personas.values())
 }
 
@@ -201,65 +226,88 @@ function parseEquipment(
 ): HentaiVerseEquipmentPage {
   const selectedSlot = target.equip_slot || ''
   const sets = new Map<string, HentaiVerseEquipmentSet>()
-  document.querySelectorAll<HTMLElement>(
-    'select[name="equip_set"] option, [data-equip-set], [onclick*="equip_set"], a[href*="equip_set="]',
-  ).forEach((node, index) => {
-    const option = node instanceof HTMLOptionElement ? node : undefined
-    const source = getActionSource(node)
-    const id = option?.value || node.dataset.equipSet || readNamedValue(source, 'equip_set') || String(index + 1)
-    const label = readNodeLabel(node) || `套装 ${id}`
-    sets.set(id, {
-      id,
-      label,
-      active: Boolean(option?.selected || node.matches('.active, .selected, [aria-current="true"]')),
+  document
+    .querySelectorAll<HTMLElement>(
+      'select[name="equip_set"] option, [data-equip-set], [onclick*="equip_set"], a[href*="equip_set="]',
+    )
+    .forEach((node, index) => {
+      const option = node instanceof HTMLOptionElement ? node : undefined
+      const source = getActionSource(node)
+      const id =
+        option?.value ||
+        node.dataset.equipSet ||
+        readNamedValue(source, 'equip_set') ||
+        String(index + 1)
+      const label = readNodeLabel(node) || `套装 ${id}`
+      sets.set(id, {
+        id,
+        label,
+        active: Boolean(
+          option?.selected || node.matches('.active, .selected, [aria-current="true"]'),
+        ),
+      })
     })
-  })
 
   const slots = new Map<string, HentaiVerseEquipmentSlot>()
   const overviewSlotIds = ['1', '9', '13', '11', '14', '12', '15']
-  document.querySelectorAll<HTMLElement>(
-    '#eqsb > .eqb, #eqch_outer [data-equip-slot], #eqch_outer [id*="equip_slot"], #eqch_outer a[href*="equip_slot="]',
-  ).forEach((node, index) => {
-    const source = getActionSource(node)
-    const id = node.dataset.equipSlot || readNamedValue(source, 'equip_slot')
-      || matchValue(node.id, /equip_slot[_-]?(\d+)/i) || overviewSlotIds[index]
-    if (!id) return
-    const equipmentId = readEquipmentId(node)
-    const equipmentName = readNodeLabel(node)
-    const slotLabel = readEquipmentSlotLabel(id, node)
-    slots.set(id, {
-      id,
-      label: slotLabel,
-      equipmentId,
-      equipmentName: equipmentName && equipmentName !== slotLabel && !/\((?:empty|unavailable[^)]*)\)/i.test(equipmentName)
-        ? equipmentName
-        : '',
-      description: cleanText(node.getAttribute('title') || node.dataset.description),
-      active: id === selectedSlot || node.matches('.active, .selected, [aria-current="true"]'),
-      disabled: node.matches('.eqdisabled, .disabled, [aria-disabled="true"]'),
+  document
+    .querySelectorAll<HTMLElement>(
+      '#eqsb > .eqb, #eqch_outer [data-equip-slot], #eqch_outer [id*="equip_slot"], #eqch_outer a[href*="equip_slot="]',
+    )
+    .forEach((node, index) => {
+      const source = getActionSource(node)
+      const id =
+        node.dataset.equipSlot ||
+        readNamedValue(source, 'equip_slot') ||
+        matchValue(node.id, /equip_slot[_-]?(\d+)/i) ||
+        overviewSlotIds[index]
+      if (!id) return
+      const equipmentId = readEquipmentId(node)
+      const equipmentName = readNodeLabel(node)
+      const slotLabel = readEquipmentSlotLabel(id, node)
+      slots.set(id, {
+        id,
+        label: slotLabel,
+        equipmentId,
+        equipmentName:
+          equipmentName &&
+          equipmentName !== slotLabel &&
+          !/\((?:empty|unavailable[^)]*)\)/i.test(equipmentName)
+            ? equipmentName
+            : '',
+        description: cleanText(node.getAttribute('title') || node.dataset.description),
+        active: id === selectedSlot || node.matches('.active, .selected, [aria-current="true"]'),
+        disabled: node.matches('.eqdisabled, .disabled, [aria-disabled="true"]'),
+      })
     })
-  })
 
   const candidates = new Map<string, HentaiVerseEquipmentCandidate>()
-  document.querySelectorAll<HTMLElement>(
-    '#equiplist tr, .equiplist tr, #eqch_outer [data-eid], #eqch_outer [id^="e"][onclick]',
-  ).forEach((node) => {
-    const id = readEquipmentId(node)
-    const name = readEquipmentName(node)
-    if (!id || !name) return
-    const rowText = cleanText(node.textContent)
-    candidates.set(id, {
-      id,
-      name,
-      description: cleanText(node.getAttribute('title') || node.dataset.description || rowText.replace(name, '')),
-      locked: node.dataset.locked === '1' || /(?:^|\s)(?:locked|il)(?:\s|$)/i.test(node.className),
-      equipped: node.dataset.equipped === '1' || /equipped|current/i.test(`${node.className} ${rowText}`),
+  document
+    .querySelectorAll<HTMLElement>(
+      '#equiplist tr, .equiplist tr, #eqch_outer [data-eid], #eqch_outer [id^="e"][onclick]',
+    )
+    .forEach((node) => {
+      const id = readEquipmentId(node)
+      const name = readEquipmentName(node)
+      if (!id || !name) return
+      const rowText = cleanText(node.textContent)
+      candidates.set(id, {
+        id,
+        name,
+        description: cleanText(
+          node.getAttribute('title') || node.dataset.description || rowText.replace(name, ''),
+        ),
+        locked:
+          node.dataset.locked === '1' || /(?:^|\s)(?:locked|il)(?:\s|$)/i.test(node.className),
+        equipped:
+          node.dataset.equipped === '1' || /equipped|current/i.test(`${node.className} ${rowText}`),
+      })
     })
-  })
 
-  const postToken = document.querySelector<HTMLInputElement>('input[name="postoken"]')?.value
-    || readScriptString(scriptText, 'postoken')
-    || matchValue(scriptText, /postoken\s*[:=]\s*['"]([^'"]+)/i)
+  const postToken =
+    document.querySelector<HTMLInputElement>('input[name="postoken"]')?.value ||
+    readScriptString(scriptText, 'postoken') ||
+    matchValue(scriptText, /postoken\s*[:=]\s*['"]([^'"]+)/i)
   return {
     sets: Array.from(sets.values()),
     slots: Array.from(slots.values()),
@@ -275,79 +323,129 @@ function parseAbilities(
   target: HentaiVersePageTarget,
 ): HentaiVerseAbilityPage {
   const trees = new Map<string, HentaiVerseAbilityTree>()
-  document.querySelectorAll<HTMLElement>(
-    '#ability_treelist > div, #ability_treelist a, [data-ability-tree], a[href*="tree="]',
-  ).forEach((node, index) => {
-    const source = getActionSource(node)
-    const id = node.dataset.abilityTree || node.dataset.tree || readNamedValue(source, 'tree')
-      || matchValue(`${node.id} ${source}`, /(?:ability_)?tree[_-]?([a-z0-9]+)/i)
-      || String(index)
-    const label = readNodeLabel(node)
-    if (!label) return
-    trees.set(id, {
-      id,
-      label,
-      active: id === target.tree || node.matches('.active, .selected, [aria-current="true"]') || /f[24][lr]a/.test(node.className),
+  document
+    .querySelectorAll<HTMLElement>(
+      '#ability_treelist > div, #ability_treelist a, [data-ability-tree], a[href*="tree="]',
+    )
+    .forEach((node, index) => {
+      const source = getActionSource(node)
+      const id =
+        node.dataset.abilityTree ||
+        node.dataset.tree ||
+        readNamedValue(source, 'tree') ||
+        matchValue(`${node.id} ${source}`, /(?:ability_)?tree[_-]?([a-z0-9]+)/i) ||
+        String(index)
+      const label = readNodeLabel(node)
+      if (!label) return
+      trees.set(id, {
+        id,
+        label,
+        active:
+          id === target.tree ||
+          node.matches('.active, .selected, [aria-current="true"]') ||
+          /f[24][lr]a/.test(node.className),
+      })
     })
-  })
 
   const abilities: HentaiVerseAbility[] = []
   document.querySelectorAll<HTMLElement>('#ability_treepane > div').forEach((row) => {
     const source = getActionSource(row, true)
     const parsedAction = readAbilityAction(source)
     const presentation = readAbilityPresentation(row)
-    const id = row.dataset.abilityId || row.dataset.ability || parsedAction?.value
-      || matchValue(row.id, /(?:ability|ab)[_-]?(\d+)/i)
-      || matchValue(row.querySelector<HTMLImageElement>('img[src*="/a/"]')?.src || '', /\/a\/(\d+)/i)
-    const nameNode = row.querySelector<HTMLElement>(':scope > div:first-child, [data-ability-name], .ability-name')
+    const id =
+      row.dataset.abilityId ||
+      row.dataset.ability ||
+      parsedAction?.value ||
+      matchValue(row.id, /(?:ability|ab)[_-]?(\d+)/i) ||
+      matchValue(row.querySelector<HTMLImageElement>('img[src*="/a/"]')?.src || '', /\/a\/(\d+)/i)
+    const nameNode = row.querySelector<HTMLElement>(
+      ':scope > div:first-child, [data-ability-name], .ability-name',
+    )
     const name = translateHentaiVerseText(presentation.name || readNodeLabel(nameNode || row))
     if (!id || !name) return
-    const levelText = cleanText(row.dataset.level || row.querySelector<HTMLElement>('[data-level], .ability-level')?.textContent)
+    const levelText = cleanText(
+      row.dataset.level ||
+        row.querySelector<HTMLElement>('[data-level], .ability-level')?.textContent,
+    )
     const levelMatch = levelText.match(/(\d+)\s*\/\s*(\d+)/)
-    const maxLevel = Number(row.dataset.maxLevel || levelMatch?.[2] || row.querySelector(':scope > div:nth-child(3)')?.children.length || 0)
+    const maxLevel = Number(
+      row.dataset.maxLevel ||
+        levelMatch?.[2] ||
+        row.querySelector(':scope > div:nth-child(3)')?.children.length ||
+        0,
+    )
     const statusLevel = matchValue(presentation.status, /(?:Level|Tier)\s+(\d+)/i)
     const level = /not acquired/i.test(presentation.status)
       ? 0
       : Number(row.dataset.level || levelMatch?.[1] || statusLevel || countActiveAbilityLevels(row))
-    const actionNode = row.querySelector<HTMLElement>('[onclick*="unlock_ability"], [onclick*="reset_ability"], [data-action]')
+    const actionNode = row.querySelector<HTMLElement>(
+      '[onclick*="unlock_ability"], [onclick*="reset_ability"], [data-action]',
+    )
     abilities.push({
       id,
       name,
-      description: translateHentaiVerseDescription(presentation.description
-        || cleanText(row.dataset.description || row.getAttribute('title') || row.querySelector<HTMLElement>('.ability-description')?.textContent)),
+      description: translateHentaiVerseDescription(
+        presentation.description ||
+          cleanText(
+            row.dataset.description ||
+              row.getAttribute('title') ||
+              row.querySelector<HTMLElement>('.ability-description')?.textContent,
+          ),
+      ),
       level,
       maxLevel,
-      cost: translateHentaiVerseText(presentation.requirement
-        || cleanText(row.dataset.cost || row.querySelector(':scope > div:nth-child(4)')?.textContent)),
+      cost: translateHentaiVerseText(
+        presentation.requirement ||
+          cleanText(
+            row.dataset.cost || row.querySelector(':scope > div:nth-child(4)')?.textContent,
+          ),
+      ),
       action: parsedAction?.name,
-      actionLabel: parsedAction ? readNodeLabel(actionNode || row.querySelector<HTMLElement>(':scope > div:last-child') || row) : undefined,
+      actionLabel: parsedAction
+        ? readNodeLabel(
+            actionNode || row.querySelector<HTMLElement>(':scope > div:last-child') || row,
+          )
+        : undefined,
       disabled: !parsedAction || Boolean(actionNode?.matches('.disabled, [aria-disabled="true"]')),
     })
   })
 
   const slots: HentaiVerseAbilitySlot[] = []
-  document.querySelectorAll<HTMLElement>('.ability_slotbar > div, .ability_slotbox > div').forEach((node, index) => {
-    const source = getActionSource(node, true)
-    const action = readAbilityAction(source)
-    const id = node.dataset.slot || node.dataset.abilitySlot || readNamedValue(source, 'equip_slot')
-      || readNamedValue(source, 'unlock_slot') || String(index + 1)
-    const abilityId = node.dataset.abilityId || readNamedValue(source, 'equip_ability')
-      || matchValue(node.querySelector<HTMLImageElement>('img[src*="/a/"]')?.src || '', /\/a\/(\d+)/i)
-    const abilityName = abilityId ? readNodeLabel(node) : ''
-    const locked = action?.name === 'unlock_slot' || node.matches('.locked, .disabled, [aria-disabled="true"]')
-    slots.push({
-      id,
-      label: `槽位 ${index + 1}`,
-      abilityId,
-      abilityName: locked ? '' : abilityName,
-      locked,
-      action: action?.name,
+  document
+    .querySelectorAll<HTMLElement>('.ability_slotbar > div, .ability_slotbox > div')
+    .forEach((node, index) => {
+      const source = getActionSource(node, true)
+      const action = readAbilityAction(source)
+      const id =
+        node.dataset.slot ||
+        node.dataset.abilitySlot ||
+        readNamedValue(source, 'equip_slot') ||
+        readNamedValue(source, 'unlock_slot') ||
+        String(index + 1)
+      const abilityId =
+        node.dataset.abilityId ||
+        readNamedValue(source, 'equip_ability') ||
+        matchValue(
+          node.querySelector<HTMLImageElement>('img[src*="/a/"]')?.src || '',
+          /\/a\/(\d+)/i,
+        )
+      const abilityName = abilityId ? readNodeLabel(node) : ''
+      const locked =
+        action?.name === 'unlock_slot' || node.matches('.locked, .disabled, [aria-disabled="true"]')
+      slots.push({
+        id,
+        label: `槽位 ${index + 1}`,
+        abilityId,
+        abilityName: locked ? '' : abilityName,
+        locked,
+        action: action?.name,
+      })
     })
-  })
 
   const topText = cleanText(document.querySelector('#ability_top')?.textContent)
-  const abilityPoints = matchValue(topText, /Ability Points?\s*:?\s*([\d,]+)/i)
-    || matchValue(scriptText, /(?:ability_points|available_ap)\s*[:=]\s*['"]?([\d,]+)/i)
+  const abilityPoints =
+    matchValue(topText, /Ability Points?\s*:?\s*([\d,]+)/i) ||
+    matchValue(scriptText, /(?:ability_points|available_ap)\s*[:=]\s*['"]?([\d,]+)/i)
   return {
     trees: Array.from(trees.values()),
     abilities,
@@ -366,8 +464,9 @@ function parseTraining(document: Document): HentaiVerseTrainingPage {
   document.querySelectorAll<HTMLElement>('#train_table tr').forEach((row) => {
     const cells = Array.from(row.querySelectorAll('td'), (cell) => cleanText(cell.textContent))
     const source = getActionSource(row, true)
-    const id = readNamedValue(source, 'start_train')
-      || matchValue(source, /training\.start_training\s*\(\s*(\d+)/i)
+    const id =
+      readNamedValue(source, 'start_train') ||
+      matchValue(source, /training\.start_training\s*\(\s*(\d+)/i)
     if (!id || !cells[0]) return
     const maxLevel = cells[6] && cells[6] !== '0' ? cells[6] : ''
     const duration = (cells[3] || '').replace(/^(\d+)\s*h$/i, '$1 小时')
@@ -378,96 +477,130 @@ function parseTraining(document: Document): HentaiVerseTrainingPage {
       level: cells[4] && maxLevel ? `${cells[4]} / ${maxLevel}` : cells[4] || maxLevel,
       cost: cells[2] || '',
       duration,
-      canStart: !row.matches('.disabled, [aria-disabled="true"]') && !/unavailable|locked/i.test(row.className),
+      canStart:
+        !row.matches('.disabled, [aria-disabled="true"]') &&
+        !/unavailable|locked/i.test(row.className),
     })
   })
   return {
     activeName: cleanText(progressPane?.querySelector(':scope > div:nth-child(3)')?.textContent),
     progress,
     remaining: matchValue(progressText, /(?:Remaining|Time Left)\s*:?\s*(.+)$/i),
-    canCancel: Boolean(document.querySelector('[name="cancel_train"], [onclick*="cancel_training"]')),
+    canCancel: Boolean(
+      document.querySelector('[name="cancel_train"], [onclick*="cancel_training"]'),
+    ),
     options,
   }
 }
 
 function parseInventory(document: Document): HentaiVerseInventoryPage {
   const items = new Map<string, HentaiVerseInventoryItem>()
-  document.querySelectorAll<HTMLElement>('#item_list tr, #item_list [data-item], .itemlist tr').forEach((row) => {
-    const source = getActionSource(row, true)
-    const id = row.dataset.item || readNamedValue(source, 'item') || matchValue(`${row.id} ${source}`, /(?:item|set_item)[_(\s'"-]*(\d+)/i)
-    const cells = Array.from(row.querySelectorAll('td'), (cell) => cleanText(cell.textContent))
-    const name = readNodeLabel(row.querySelector<HTMLElement>('[data-item-name], td:first-child') || row)
-    if (!id || !name) return
-    items.set(id, {
-      id,
-      name,
-      description: cleanText(row.getAttribute('title') || row.dataset.description || cells.slice(1, -1).join(' ')),
-      quantity: cells.at(-1) || row.dataset.quantity || '',
-      selected: row.matches('.active, .selected, [aria-current="true"]'),
+  document
+    .querySelectorAll<HTMLElement>('#item_list tr, #item_list [data-item], .itemlist tr')
+    .forEach((row) => {
+      const source = getActionSource(row, true)
+      const id =
+        row.dataset.item ||
+        readNamedValue(source, 'item') ||
+        matchValue(`${row.id} ${source}`, /(?:item|set_item)[_(\s'"-]*(\d+)/i)
+      const cells = Array.from(row.querySelectorAll('td'), (cell) => cleanText(cell.textContent))
+      const name = readNodeLabel(
+        row.querySelector<HTMLElement>('[data-item-name], td:first-child') || row,
+      )
+      if (!id || !name) return
+      items.set(id, {
+        id,
+        name,
+        description: cleanText(
+          row.getAttribute('title') || row.dataset.description || cells.slice(1, -1).join(' '),
+        ),
+        quantity: cells.at(-1) || row.dataset.quantity || '',
+        selected: row.matches('.active, .selected, [aria-current="true"]'),
+      })
     })
-  })
 
   const slots: HentaiVerseInventorySlot[] = []
-  document.querySelectorAll<HTMLElement>('#item_slots [onclick*="commit_slot"]').forEach((node, index) => {
-    const source = getActionSource(node, true)
-    const id = node.dataset.slot || matchValue(source, /commit_slot\s*\(\s*(\d+)/i) || String(index + 1)
-    const itemNode = node.querySelector<HTMLElement>('[id^="item_"]')
-    const itemId = matchValue(itemNode?.id || '', /^item_(\d+)$/i)
-    const assignedItemId = itemId === '0' ? '' : itemId
-    slots.push({
-      id,
-      label: readInventorySlotLabel(id),
-      itemId: assignedItemId,
-      itemName: assignedItemId ? readNodeLabel(itemNode) : '',
+  document
+    .querySelectorAll<HTMLElement>('#item_slots [onclick*="commit_slot"]')
+    .forEach((node, index) => {
+      const source = getActionSource(node, true)
+      const id =
+        node.dataset.slot || matchValue(source, /commit_slot\s*\(\s*(\d+)/i) || String(index + 1)
+      const itemNode = node.querySelector<HTMLElement>('[id^="item_"]')
+      const itemId = matchValue(itemNode?.id || '', /^item_(\d+)$/i)
+      const assignedItemId = itemId === '0' ? '' : itemId
+      slots.push({
+        id,
+        label: readInventorySlotLabel(id),
+        itemId: assignedItemId,
+        itemName: assignedItemId ? readNodeLabel(itemNode) : '',
+      })
     })
-  })
   return { items: Array.from(items.values()), slots }
 }
 
-function parseForms(document: Document, pageSection: HentaiVersePage['section']): HentaiVerseFormBlock[] {
+function parseForms(
+  document: Document,
+  pageSection: HentaiVersePage['section'],
+): HentaiVerseFormBlock[] {
   if (['equipment', 'abilities', 'training', 'inventory'].includes(pageSection)) return []
-  return Array.from(document.forms).map((form, index) => {
-    const controls: HentaiVerseFormControl[] = []
-    const hidden: Record<string, string> = {}
-    const actions: HentaiVerseFormAction[] = []
-    form.querySelectorAll<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement>(
-      'input[name], input[type="submit"], input[type="button"], select[name], textarea[name], button',
-    ).forEach((element) => parseFormElement(form, element, controls, hidden, actions))
-    if (!actions.length) {
-      const clickAction = form.querySelector<HTMLElement>('[onclick*=".submit"], [onclick*="submit()"]')
-      const label = readNodeLabel(clickAction)
-      if (label) actions.push({ name: '', value: '', label })
-    }
-    if (!actions.length && (pageSection === 'arena' || pageSection === 'ringOfBlood' || pageSection === 'grindfest')) {
-      actions.push(...parseBattleEntryActions(document, pageSection))
-    }
-    if (pageSection === 'settings') {
-      controls.forEach((control) => Object.assign(
-        control,
-        getHentaiVerseSettingControl(control.name, control.value, control.label),
-      ))
-    }
-    const heading = form.querySelector('h2, h3, legend') || findPreviousHeading(form)
-    const sourceDescription = cleanText(form.querySelector('.fd4, .fc4, p')?.textContent)
-    const sectionTitles: Partial<Record<HentaiVersePage['section'], string>> = {
-      arena: '竞技场挑战',
-      ringOfBlood: '鲜血之环挑战',
-      grindfest: '混战祭',
-      itemWorld: '装备界',
-    }
-    return {
-      id: form.id || `hv-form-${index}`,
-      title: pageSection === 'settings'
-        ? '战斗设置项目'
-        : sectionTitles[pageSection] || translateHentaiVerseText(heading?.textContent || form.getAttribute('name') || '操作'),
-      description: translateHentaiVerseDescription(sourceDescription || readSectionDescription(document, pageSection)),
-      section: inferFormSection(pageSection, controls, hidden, actions),
-      hidden,
-      controls,
-      actions,
-      groups: pageSection === 'settings' ? HENTAIVERSE_SETTING_GROUPS : undefined,
-    }
-  }).filter((form) => form.controls.length || form.actions.length)
+  return Array.from(document.forms)
+    .map((form, index) => {
+      const controls: HentaiVerseFormControl[] = []
+      const hidden: Record<string, string> = {}
+      const actions: HentaiVerseFormAction[] = []
+      form
+        .querySelectorAll<
+          HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement | HTMLButtonElement
+        >('input[name], input[type="submit"], input[type="button"], select[name], textarea[name], button')
+        .forEach((element) => parseFormElement(form, element, controls, hidden, actions))
+      if (!actions.length) {
+        const clickAction = form.querySelector<HTMLElement>(
+          '[onclick*=".submit"], [onclick*="submit()"]',
+        )
+        const label = readNodeLabel(clickAction)
+        if (label) actions.push({ name: '', value: '', label })
+      }
+      if (
+        !actions.length &&
+        (pageSection === 'arena' || pageSection === 'ringOfBlood' || pageSection === 'grindfest')
+      ) {
+        actions.push(...parseBattleEntryActions(document, pageSection))
+      }
+      if (pageSection === 'settings') {
+        controls.forEach((control) =>
+          Object.assign(
+            control,
+            getHentaiVerseSettingControl(control.name, control.value, control.label),
+          ),
+        )
+      }
+      const heading = form.querySelector('h2, h3, legend') || findPreviousHeading(form)
+      const sourceDescription = cleanText(form.querySelector('.fd4, .fc4, p')?.textContent)
+      const sectionTitles: Partial<Record<HentaiVersePage['section'], string>> = {
+        arena: '竞技场挑战',
+        ringOfBlood: '鲜血之环挑战',
+        grindfest: '混战祭',
+        itemWorld: '装备界',
+      }
+      return {
+        id: form.id || `hv-form-${index}`,
+        title:
+          pageSection === 'settings'
+            ? '战斗设置项目'
+            : sectionTitles[pageSection] ||
+              translateHentaiVerseText(heading?.textContent || form.getAttribute('name') || '操作'),
+        description: translateHentaiVerseDescription(
+          sourceDescription || readSectionDescription(document, pageSection),
+        ),
+        section: inferFormSection(pageSection, controls, hidden, actions),
+        hidden,
+        controls,
+        actions,
+        groups: pageSection === 'settings' ? HENTAIVERSE_SETTING_GROUPS : undefined,
+      }
+    })
+    .filter((form) => form.controls.length || form.actions.length)
 }
 
 function parseFormElement(
@@ -478,7 +611,10 @@ function parseFormElement(
   actions: HentaiVerseFormAction[],
 ) {
   const name = element.name
-  if (element instanceof HTMLButtonElement || (element instanceof HTMLInputElement && ['submit', 'button'].includes(element.type))) {
+  if (
+    element instanceof HTMLButtonElement ||
+    (element instanceof HTMLInputElement && ['submit', 'button'].includes(element.type))
+  ) {
     const label = translateHentaiVerseText(element.textContent || element.value || name)
     if (!label) return
     actions.push({
@@ -495,22 +631,29 @@ function parseFormElement(
     hidden[name] = element.value
     return
   }
-  const inputType = element instanceof HTMLInputElement ? element.type : element.tagName.toLowerCase()
+  const inputType =
+    element instanceof HTMLInputElement ? element.type : element.tagName.toLowerCase()
   const type = normalizeControlType(inputType)
-  const value = element instanceof HTMLSelectElement
-    ? element.value
-    : element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+  const value =
+    element instanceof HTMLSelectElement
       ? element.value
-      : ''
+      : element instanceof HTMLInputElement || element instanceof HTMLTextAreaElement
+        ? element.value
+        : ''
   controls.push({
     name,
     label: readControlLabel(form, element, name),
     type,
     value,
     checked: element instanceof HTMLInputElement ? element.checked : undefined,
-    options: element instanceof HTMLSelectElement
-      ? Array.from(element.options, (option) => ({ label: translateHentaiVerseText(option.text), value: option.value, selected: option.selected }))
-      : undefined,
+    options:
+      element instanceof HTMLSelectElement
+        ? Array.from(element.options, (option) => ({
+            label: translateHentaiVerseText(option.text),
+            value: option.value,
+            selected: option.selected,
+          }))
+        : undefined,
     min: element instanceof HTMLInputElement && element.min ? Number(element.min) : undefined,
     max: element instanceof HTMLInputElement && element.max ? Number(element.max) : undefined,
     step: element instanceof HTMLInputElement && element.step ? Number(element.step) : undefined,
@@ -521,17 +664,28 @@ function parseBattleEntryActions(
   document: Document,
   pageSection: Extract<HentaiVersePage['section'], 'arena' | 'ringOfBlood' | 'grindfest'>,
 ): HentaiVerseFormAction[] {
-  return Array.from(document.querySelectorAll<HTMLElement>('[onclick*="init_battle"]')).flatMap((node) => {
-    const id = matchValue(node.getAttribute('onclick') || '', /init_battle\s*\(\s*(\d+)/i)
-    if (!id) return []
-    const challengeName = translateHentaiVerseText(cleanText(node.closest('tr')?.querySelector('td:first-child')?.textContent))
-    const prefix = pageSection === 'arena' ? '开始竞技场挑战' : pageSection === 'grindfest' ? '开始混战祭' : '进入鲜血之环'
-    return [{
-      name: 'initid',
-      value: id,
-      label: challengeName ? `${prefix}：${challengeName}` : prefix,
-    }]
-  })
+  return Array.from(document.querySelectorAll<HTMLElement>('[onclick*="init_battle"]')).flatMap(
+    (node) => {
+      const id = matchValue(node.getAttribute('onclick') || '', /init_battle\s*\(\s*(\d+)/i)
+      if (!id) return []
+      const challengeName = translateHentaiVerseText(
+        cleanText(node.closest('tr')?.querySelector('td:first-child')?.textContent),
+      )
+      const prefix =
+        pageSection === 'arena'
+          ? '开始竞技场挑战'
+          : pageSection === 'grindfest'
+            ? '开始混战祭'
+            : '进入鲜血之环'
+      return [
+        {
+          name: 'initid',
+          value: id,
+          label: challengeName ? `${prefix}：${challengeName}` : prefix,
+        },
+      ]
+    },
+  )
 }
 
 function readSectionDescription(document: Document, pageSection: HentaiVersePage['section']) {
@@ -549,15 +703,20 @@ function readSectionDescription(document: Document, pageSection: HentaiVersePage
     itemWorld: '#equiplist p, #equipblurb p',
   }
   const selector = preferredSelectors[pageSection] || '#mainpane > p'
-  return Array.from(document.querySelectorAll<HTMLElement>(selector))
-    .map((node) => cleanText(node.textContent))
-    .find((text) => text.length >= 16 && text.length <= 1200) || fallbacks[pageSection] || ''
+  return (
+    Array.from(document.querySelectorAll<HTMLElement>(selector))
+      .map((node) => cleanText(node.textContent))
+      .find((text) => text.length >= 16 && text.length <= 1200) ||
+    fallbacks[pageSection] ||
+    ''
+  )
 }
 
 function parseBattleDocument(document: Document, token: string): HentaiVerseBattleSnapshot {
   const completionPane = document.querySelector<HTMLElement>('#pane_completion')
   const completionText = readBattleCompletion(completionPane)
-  const completed = Boolean(completionPane?.innerHTML.trim() || completionText)
+  // Active battles keep an empty completion pane in the DOM as an AJAX target.
+  const completed = Boolean(completionText)
   const sourceTitle = cleanText(document.querySelector('#pane_battle h1, h1, title')?.textContent)
   return {
     token,
@@ -576,15 +735,24 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
 
 function readBattleCompletion(pane?: HTMLElement | null) {
   if (!pane) return ''
-  const text = cleanText(pane.textContent)
-    || cleanText(pane.querySelector<HTMLElement>('[title], [aria-label], img[alt]')?.getAttribute('title'))
-    || cleanText(pane.querySelector<HTMLElement>('[aria-label]')?.getAttribute('aria-label'))
-    || cleanText(pane.querySelector<HTMLImageElement>('img[alt]')?.alt)
-  return text ? translateHentaiVerseBattleLog(text) : '战斗已经结束。'
+  const text =
+    cleanText(pane.textContent) ||
+    cleanText(
+      pane.querySelector<HTMLElement>('[title], [aria-label], img[alt]')?.getAttribute('title'),
+    ) ||
+    cleanText(pane.querySelector<HTMLElement>('[aria-label]')?.getAttribute('aria-label')) ||
+    cleanText(pane.querySelector<HTMLImageElement>('img[alt]')?.alt)
+  return text ? translateHentaiVerseBattleLog(text) : ''
 }
 
 function parseBattleVitals(document: Document) {
-  const fields: Array<Omit<HentaiVerseBattleVital, 'value' | 'percent'> & { id: string; bar: string; maxWidth: number }> = [
+  const fields: Array<
+    Omit<HentaiVerseBattleVital, 'value' | 'percent'> & {
+      id: string
+      bar: string
+      maxWidth: number
+    }
+  > = [
     { key: 'health', id: 'vrhb', bar: '#vbh img', label: '生命', maxWidth: 492 },
     { key: 'magic', id: 'vrm', bar: '#vbm img', label: '魔力', maxWidth: 207 },
     { key: 'spirit', id: 'vrs', bar: '#vbs img', label: '灵力', maxWidth: 207 },
@@ -592,12 +760,14 @@ function parseBattleVitals(document: Document) {
   return fields.flatMap(({ key, id, bar, label, maxWidth }) => {
     const value = cleanText(document.getElementById(id)?.textContent)
     if (!value) return []
-    return [{
-      key,
-      label,
-      value,
-      percent: readBattleBarPercent(document.querySelector<HTMLImageElement>(bar), maxWidth) ?? 0,
-    }]
+    return [
+      {
+        key,
+        label,
+        value,
+        percent: readBattleBarPercent(document.querySelector<HTMLImageElement>(bar), maxWidth) ?? 0,
+      },
+    ]
   })
 }
 
@@ -605,9 +775,11 @@ function parseBattleLog(document: Document) {
   const log = document.querySelector('#textlog')
   if (!log) return []
 
-  const topLevelRows = Array.from(log.querySelectorAll<HTMLElement>(
-    ':scope > tbody > tr, :scope > tr, :scope > table > tbody > tr, :scope > table > tr',
-  ))
+  const topLevelRows = Array.from(
+    log.querySelectorAll<HTMLElement>(
+      ':scope > tbody > tr, :scope > tr, :scope > table > tbody > tr, :scope > table > tr',
+    ),
+  )
   if (!topLevelRows.length) return readTextRows(log).map(translateHentaiVerseBattleLog)
 
   return topLevelRows.flatMap((row) => {
@@ -617,7 +789,9 @@ function parseBattleLog(document: Document) {
     const summaryNode = row.cloneNode(true) as HTMLElement
     summaryNode.querySelectorAll('table').forEach((table) => table.remove())
     const summary = translateHentaiVerseBattleLog(cleanText(summaryNode.textContent))
-    const details = Array.from(nestedTable.querySelectorAll<HTMLElement>(':scope > tbody > tr, :scope > tr'))
+    const details = Array.from(
+      nestedTable.querySelectorAll<HTMLElement>(':scope > tbody > tr, :scope > tr'),
+    )
       .map((detail) => translateHentaiVerseBattleLog(cleanText(detail.textContent)))
       .filter(Boolean)
     return [summary, ...details].filter(Boolean)
@@ -626,25 +800,33 @@ function parseBattleLog(document: Document) {
 
 function parseMonsters(document: Document): HentaiVerseBattleMonster[] {
   const monsters = new Map<number, HentaiVerseBattleMonster>()
-  document.querySelectorAll<HTMLElement>('#pane_monster > [id^="mkey_"], #pane_monster [data-mid]').forEach((node, index) => {
-    const idText = node.id || node.getAttribute('data-mid') || ''
-    const id = Number(matchValue(idText, /(\d+)/) || index + 1)
-    const rawName = cleanText(node.querySelector('.btm3, .monstername, strong')?.textContent || node.textContent)
-    const name = rawName ? rawName.charAt(0).toUpperCase() + rawName.slice(1) : ''
-    if (!name || monsters.has(id)) return
-    const level = cleanText(node.querySelector('.btm2 > div:nth-child(2)')?.textContent)
-    const health = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="health"]'))
-    const magic = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="magic"]'))
-    const status = [level && `等级 ${level}`, health !== undefined && `生命 ${health}%`, magic !== undefined && `魔力 ${magic}%`]
-      .filter(Boolean)
-      .join(' · ')
-    monsters.set(id, {
-      id,
-      name,
-      status,
-      defeated: health === 0 || /dead|defeated/i.test(`${node.className} ${node.textContent}`),
+  document
+    .querySelectorAll<HTMLElement>('#pane_monster > [id^="mkey_"], #pane_monster [data-mid]')
+    .forEach((node, index) => {
+      const idText = node.id || node.getAttribute('data-mid') || ''
+      const id = Number(matchValue(idText, /(\d+)/) || index + 1)
+      const rawName = cleanText(
+        node.querySelector('.btm3, .monstername, strong')?.textContent || node.textContent,
+      )
+      const name = rawName ? rawName.charAt(0).toUpperCase() + rawName.slice(1) : ''
+      if (!name || monsters.has(id)) return
+      const level = cleanText(node.querySelector('.btm2 > div:nth-child(2)')?.textContent)
+      const health = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="health"]'))
+      const magic = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="magic"]'))
+      const status = [
+        level && `等级 ${level}`,
+        health !== undefined && `生命 ${health}%`,
+        magic !== undefined && `魔力 ${magic}%`,
+      ]
+        .filter(Boolean)
+        .join(' · ')
+      monsters.set(id, {
+        id,
+        name,
+        status,
+        defeated: health === 0 || /dead|defeated/i.test(`${node.className} ${node.textContent}`),
+      })
     })
-  })
   return Array.from(monsters.values())
 }
 
@@ -652,7 +834,9 @@ function parseBattleActions(document: Document): HentaiVerseBattleAction[] {
   const actions = new Map<string, HentaiVerseBattleAction>()
   document.querySelectorAll<HTMLElement>('[onclick]').forEach((node) => {
     const onclick = node.getAttribute('onclick') || ''
-    const baseMatch = onclick.match(/battle\.lock_action\s*\(\s*this\s*,\s*0\s*,\s*['"](attack|skill|items|spirit|defend|focus)['"]/i)
+    const baseMatch = onclick.match(
+      /battle\.lock_action\s*\(\s*this\s*,\s*0\s*,\s*['"](attack|skill|items|spirit|defend|focus)['"]/i,
+    )
     if (baseMatch) {
       const rawMode = baseMatch[1]?.toLowerCase()
       if (rawMode === 'skill' || rawMode === 'items') return
@@ -667,7 +851,9 @@ function parseBattleActions(document: Document): HentaiVerseBattleAction[] {
       return
     }
 
-    const skillMatch = onclick.match(/battle\.lock_action\s*\(\s*this\s*,\s*1\s*,\s*['"](magic|items)['"]\s*,\s*(\d+)/i)
+    const skillMatch = onclick.match(
+      /battle\.lock_action\s*\(\s*this\s*,\s*1\s*,\s*['"](magic|items)['"]\s*,\s*(\d+)/i,
+    )
     if (!skillMatch) return
     const mode = skillMatch[1]?.toLowerCase() as HentaiVerseBattleMode
     const skill = Number(skillMatch[2] || 0)
@@ -685,9 +871,12 @@ function parseBattleActions(document: Document): HentaiVerseBattleAction[] {
 
 const BATTLE_ACTION_DESCRIPTIONS: Record<string, string> = {
   attack: '对选中的怪物发动一次普通物理攻击。',
-  spirit: '至少拥有 50% 过载值时可开启；物理伤害提升 100%，魔力消耗降低 25%，每回合消耗 1 点灵力和 10% 过载值。再次使用可关闭。',
-  defend: '本回合及下一回合的物理与魔法减伤提升 25%；过载值充足时消耗 25% 过载值，恢复 10% 基础生命。',
-  focus: '消耗 25% 过载值恢复 5% 基础魔力；本回合闪避、格挡、招架和抵抗降为 0，下一回合提高魔法命中与反抵抗。',
+  spirit:
+    '至少拥有 50% 过载值时可开启；物理伤害提升 100%，魔力消耗降低 25%，每回合消耗 1 点灵力和 10% 过载值。再次使用可关闭。',
+  defend:
+    '本回合及下一回合的物理与魔法减伤提升 25%；过载值充足时消耗 25% 过载值，恢复 10% 基础生命。',
+  focus:
+    '消耗 25% 过载值恢复 5% 基础魔力；本回合闪避、格挡、招架和抵抗降为 0，下一回合提高魔法命中与反抵抗。',
   flee: '逃离当前战斗。',
   scan: '获取选中怪物的能力、攻击方式与抗性信息，会消耗一个回合。',
   cure: '为自己恢复适量生命值。',
@@ -695,18 +884,28 @@ const BATTLE_ACTION_DESCRIPTIONS: Record<string, string> = {
 
 function getBattleActionPresentation(node: HTMLElement, mode: HentaiVerseBattleMode, skill = 0) {
   const hover = node.getAttribute('onmouseover') || ''
-  const scripted = hover.match(/set_infopane(?:_spell)?\s*\(\s*['"]([^'"]+)(?:['"]\s*,\s*['"]([^'"]*))?/i)
-  const image = node instanceof HTMLImageElement ? node : node.querySelector<HTMLImageElement>('img')
+  const scripted = hover.match(
+    /set_infopane(?:_spell)?\s*\(\s*['"]([^'"]+)(?:['"]\s*,\s*['"]([^'"]*))?/i,
+  )
+  const image =
+    node instanceof HTMLImageElement ? node : node.querySelector<HTMLImageElement>('img')
   const sourceName = matchValue(image?.src || '', /\/([^/]+?)(?:_[ns])?\.png$/i)
-  const sourceLabel = scripted?.[1]
-    || cleanText(node.getAttribute('title') || node.getAttribute('aria-label') || image?.alt || node.textContent)
-    || (skill ? `${mode === 'items' ? '物品' : '技能'} ${skill}` : sourceName || mode)
+  const sourceLabel =
+    scripted?.[1] ||
+    cleanText(
+      node.getAttribute('title') ||
+        node.getAttribute('aria-label') ||
+        image?.alt ||
+        node.textContent,
+    ) ||
+    (skill ? `${mode === 'items' ? '物品' : '技能'} ${skill}` : sourceName || mode)
   return {
     label: translateHentaiVerseText(sourceLabel),
-    description: BATTLE_ACTION_DESCRIPTIONS[sourceLabel.toLowerCase()]
-      || BATTLE_ACTION_DESCRIPTIONS[mode]
-      || cleanText(scripted?.[2])
-      || `执行${translateHentaiVerseText(sourceLabel)}操作。`,
+    description:
+      BATTLE_ACTION_DESCRIPTIONS[sourceLabel.toLowerCase()] ||
+      BATTLE_ACTION_DESCRIPTIONS[mode] ||
+      cleanText(scripted?.[2]) ||
+      `执行${translateHentaiVerseText(sourceLabel)}操作。`,
   }
 }
 
@@ -714,7 +913,7 @@ function readBattleBarPercent(image?: HTMLImageElement | null, maxWidth = 120) {
   if (!image) return
   const width = Number.parseFloat(image.style.width || image.getAttribute('width') || '')
   if (!Number.isFinite(width)) return
-  return Math.max(0, Math.min(100, Math.round(width / maxWidth * 100)))
+  return Math.max(0, Math.min(100, Math.round((width / maxWidth) * 100)))
 }
 
 function inferFormSection(
@@ -723,20 +922,30 @@ function inferFormSection(
   hidden: Record<string, string>,
   actions: HentaiVerseFormAction[],
 ): HentaiVerseFormSection {
-  const names = [...controls.map((item) => item.name), ...Object.keys(hidden), ...actions.map((item) => item.name)].join(' ')
+  const names = [
+    ...controls.map((item) => item.name),
+    ...Object.keys(hidden),
+    ...actions.map((item) => item.name),
+  ].join(' ')
   if (/persona_/.test(names)) return 'persona'
   if (pageSection === 'character') return 'character'
   return pageSection as HentaiVerseFormSection
 }
 
 function readControlLabel(form: HTMLFormElement, element: HTMLElement, fallback: string) {
-  const explicit = 'labels' in element ? (element.labels as NodeListOf<HTMLLabelElement> | null)?.item(0) : null
+  const explicit =
+    'labels' in element ? (element.labels as NodeListOf<HTMLLabelElement> | null)?.item(0) : null
   const wrappingLabel = element.closest('label')
   const rowLabel = element.closest('tr')?.querySelector('td:first-child, th:first-child')
-  const label = [explicit?.textContent, wrappingLabel?.textContent, rowLabel?.textContent, element.getAttribute('title')]
-    .map((value) => cleanText(value))
-    .find(Boolean)
-    || fallback.replace(/_/g, ' ')
+  const label =
+    [
+      explicit?.textContent,
+      wrappingLabel?.textContent,
+      rowLabel?.textContent,
+      element.getAttribute('title'),
+    ]
+      .map((value) => cleanText(value))
+      .find(Boolean) || fallback.replace(/_/g, ' ')
   return translateHentaiVerseText(label)
 }
 
@@ -751,16 +960,24 @@ function normalizeControlType(type: string): HentaiVerseFormControl['type'] {
 }
 
 function parseNotices(document: Document) {
-  return Array.from(document.querySelectorAll<HTMLElement>(
-    '.stuffbox, #messagebox, #message_box, [role="alert"], .notice, .errorbox, #arena_list td[colspan]',
-  ))
+  return Array.from(
+    document.querySelectorAll<HTMLElement>(
+      '.stuffbox, #messagebox, #message_box, [role="alert"], .notice, .errorbox, #arena_list td[colspan]',
+    ),
+  )
     .map((node) => translateHentaiVerseDescription(cleanText(node.textContent)))
-    .filter((value, index, values) => value && value.length <= 500 && values.indexOf(value) === index)
+    .filter(
+      (value, index, values) => value && value.length <= 500 && values.indexOf(value) === index,
+    )
     .slice(0, 8)
 }
 
 function readCharacterName(document: Document, personaName: string) {
-  return cleanText(document.querySelector('#character_name, .charname, h1')?.textContent) || personaName || 'HentaiVerse'
+  return (
+    cleanText(document.querySelector('#character_name, .charname, h1')?.textContent) ||
+    personaName ||
+    'HentaiVerse'
+  )
 }
 
 function readScriptString(source: string, key: string) {
@@ -786,15 +1003,29 @@ function readTextRows(element?: Element | null) {
 
 function getActionSource(node: HTMLElement, includeChildren = false) {
   const nodes = includeChildren
-    ? [node, ...Array.from(node.querySelectorAll<HTMLElement>('[onclick], a[href], input[name], button[name], select[name]'))]
+    ? [
+        node,
+        ...Array.from(
+          node.querySelectorAll<HTMLElement>(
+            '[onclick], a[href], input[name], button[name], select[name]',
+          ),
+        ),
+      ]
     : [node]
-  return nodes.map((item) => [
-    item.id,
-    item.getAttribute('onclick'),
-    item.getAttribute('href'),
-    item.getAttribute('name') && `${item.getAttribute('name')}=${item.getAttribute('value') || ''}`,
-    ...Object.entries(item.dataset).flat(),
-  ].filter(Boolean).join(' ')).join(' ')
+  return nodes
+    .map((item) =>
+      [
+        item.id,
+        item.getAttribute('onclick'),
+        item.getAttribute('href'),
+        item.getAttribute('name') &&
+          `${item.getAttribute('name')}=${item.getAttribute('value') || ''}`,
+        ...Object.entries(item.dataset).flat(),
+      ]
+        .filter(Boolean)
+        .join(' '),
+    )
+    .join(' ')
 }
 
 function readNamedValue(source: string, name: string) {
@@ -820,22 +1051,27 @@ function readNamedValue(source: string, name: string) {
 function readNodeLabel(node?: HTMLElement | null) {
   if (!node) return ''
   const image = node.querySelector<HTMLImageElement>('img[alt], img[title]')
-  return translateHentaiVerseText(cleanText(
-    node.dataset.label
-    || node.getAttribute('aria-label')
-    || node.getAttribute('title')
-    || image?.alt
-    || image?.title
-    || node.textContent,
-  ))
+  return translateHentaiVerseText(
+    cleanText(
+      node.dataset.label ||
+        node.getAttribute('aria-label') ||
+        node.getAttribute('title') ||
+        image?.alt ||
+        image?.title ||
+        node.textContent,
+    ),
+  )
 }
 
 function readEquipmentId(node: HTMLElement) {
   const source = getActionSource(node, true)
-  return node.dataset.eid || node.dataset.equipId
-    || readNamedValue(source, 'equip_id')
-    || matchValue(source, /equips?\.set\s*\(\s*(\d+)/i)
-    || matchValue(node.id, /^e(\d+)$/i)
+  return (
+    node.dataset.eid ||
+    node.dataset.equipId ||
+    readNamedValue(source, 'equip_id') ||
+    matchValue(source, /equips?\.set\s*\(\s*(\d+)/i) ||
+    matchValue(node.id, /^e(\d+)$/i)
+  )
 }
 
 function readEquipmentName(node: HTMLElement) {
@@ -844,11 +1080,13 @@ function readEquipmentName(node: HTMLElement) {
 }
 
 function readEquipmentSlotLabel(id: string, node: HTMLElement) {
-  const explicit = cleanText(node.dataset.slotLabel || node.getAttribute('aria-label') || node.getAttribute('title'))
+  const explicit = cleanText(
+    node.dataset.slotLabel || node.getAttribute('aria-label') || node.getAttribute('title'),
+  )
   if (explicit) return translateHentaiVerseText(explicit)
   const labels: Record<string, string> = {
-    '1': '主手',
-    '9': '副手',
+    '1': '主武器',
+    '9': '副武器',
     '13': '头部',
     '11': '身体',
     '14': '手部',
@@ -867,13 +1105,22 @@ function readInventorySlotLabel(id: string) {
 }
 
 function readAbilityPresentation(row: HTMLElement) {
-  const hover = row.querySelector<HTMLElement>('[onmouseover*="overability"]')?.getAttribute('onmouseover') || ''
+  const hover =
+    row.querySelector<HTMLElement>('[onmouseover*="overability"]')?.getAttribute('onmouseover') ||
+    ''
   const quoted = "'((?:\\\\.|[^'])*)'"
-  const match = hover.match(new RegExp(`overability\\(\\s*[^,]+,\\s*${quoted}\\s*,\\s*${quoted}\\s*,\\s*${quoted}\\s*,\\s*${quoted}`, 'i'))
+  const match = hover.match(
+    new RegExp(
+      `overability\\(\\s*[^,]+,\\s*${quoted}\\s*,\\s*${quoted}\\s*,\\s*${quoted}\\s*,\\s*${quoted}`,
+      'i',
+    ),
+  )
   if (!match) return { name: '', description: '', status: '', requirement: '' }
   const readValue = (value = '') => value.replace(/\\'/g, "'").replace(/\\\\/g, '\\')
   const requirementHtml = readValue(match[4]).split(/<div/i)[0] || ''
-  const requirementText = cleanText(parser.parseFromString(`<body>${requirementHtml}</body>`, 'text/html').body.textContent)
+  const requirementText = cleanText(
+    parser.parseFromString(`<body>${requirementHtml}</body>`, 'text/html').body.textContent,
+  )
   const requirementMatch = requirementText.match(/Requires Level (\d+) and (\d+) Ability Points?/i)
   return {
     name: readValue(match[1]),
@@ -885,8 +1132,15 @@ function readAbilityPresentation(row: HTMLElement) {
   }
 }
 
-function readAbilityAction(source: string): { name: HentaiVerseAbilityActionName; value: string } | undefined {
-  const names: HentaiVerseAbilityActionName[] = ['unlock_ability', 'reset_ability', 'unlock_slot', 'equip_ability']
+function readAbilityAction(
+  source: string,
+): { name: HentaiVerseAbilityActionName; value: string } | undefined {
+  const names: HentaiVerseAbilityActionName[] = [
+    'unlock_ability',
+    'reset_ability',
+    'unlock_slot',
+    'equip_ability',
+  ]
   for (const name of names) {
     const value = readNamedValue(source, name)
     if (value) return { name, value }
@@ -895,9 +1149,10 @@ function readAbilityAction(source: string): { name: HentaiVerseAbilityActionName
 }
 
 function countActiveAbilityLevels(row: HTMLElement) {
-  return Array.from(row.querySelectorAll<HTMLElement>(':scope > div:nth-child(3) > div'))
-    .filter((node) => !node.matches('.disabled, .locked, [aria-disabled="true"]') && node.style.opacity !== '0.3')
-    .length
+  return Array.from(row.querySelectorAll<HTMLElement>(':scope > div:nth-child(3) > div')).filter(
+    (node) =>
+      !node.matches('.disabled, .locked, [aria-disabled="true"]') && node.style.opacity !== '0.3',
+  ).length
 }
 
 function cleanText(value?: string | null) {

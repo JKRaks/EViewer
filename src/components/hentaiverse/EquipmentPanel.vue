@@ -13,20 +13,32 @@ const emit = defineEmits<{
 }>()
 
 const candidateId = ref('')
-const activeSlot = computed(() => props.data.slots.find((slot) => slot.id === props.data.selectedSlot))
-const activeSlotLabel = computed(() => activeSlot.value?.label || ({
-  '1': '主手',
-  '9': '副手',
-  '13': '头部',
-  '11': '身体',
-  '14': '手部',
-  '12': '腿部',
-  '15': '脚部',
-} as Record<string, string>)[props.data.selectedSlot] || `部位 ${props.data.selectedSlot}`)
+const activeSlot = computed(() =>
+  props.data.slots.find((slot) => slot.id === props.data.selectedSlot),
+)
+const activeSlotLabel = computed(
+  () =>
+    activeSlot.value?.label ||
+    (
+      {
+        '1': '主武器',
+        '9': '副武器',
+        '13': '头部',
+        '11': '身体',
+        '14': '手部',
+        '12': '腿部',
+        '15': '脚部',
+      } as Record<string, string>
+    )[props.data.selectedSlot] ||
+    `部位 ${props.data.selectedSlot}`,
+)
 
-watch(() => props.data.selectedSlot, () => {
-  candidateId.value = ''
-})
+watch(
+  () => props.data.selectedSlot,
+  () => {
+    candidateId.value = ''
+  },
+)
 </script>
 
 <template>
@@ -54,7 +66,7 @@ watch(() => props.data.selectedSlot, () => {
         @click="emit('slot', slot.id)"
       >
         <span>{{ slot.label }}</span>
-        <strong>{{ slot.equipmentName || (slot.disabled ? '当前主手不可用' : '未装备') }}</strong>
+        <strong>{{ slot.equipmentName || (slot.disabled ? '当前主武器不可用' : '未装备') }}</strong>
       </button>
     </div>
 
@@ -65,7 +77,9 @@ watch(() => props.data.selectedSlot, () => {
           <h3>{{ activeSlotLabel }}</h3>
         </div>
         <div class="equipment-picker-actions">
-          <el-button :icon="ArrowLeft" :disabled="loading" @click="emit('overview')">返回装备总览</el-button>
+          <el-button :icon="ArrowLeft" :disabled="loading" @click="emit('overview')"
+            >返回装备总览</el-button
+          >
           <el-button
             v-if="activeSlot?.equipmentId"
             type="danger"

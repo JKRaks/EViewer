@@ -37,10 +37,10 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Create New Persona': '创建新人格',
   },
   equipment: {
-    'Main Hand': '主手',
-    Mainhand: '主手',
+    'Main Hand': '主武器',
+    Mainhand: '主武器',
     Weapon: '武器',
-    Offhand: '副手',
+    Offhand: '副武器',
     Helmet: '头部',
     Head: '头部',
     Body: '身体',
@@ -196,7 +196,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Cure: '治疗',
     Victory: '胜利',
     Defeated: '已击败',
-    'Round': '回合',
+    Round: '回合',
   },
   common: {
     Apply: '应用',
@@ -218,23 +218,39 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
 }
 
 const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
-  'When you get too powerful to be challenged by the mobs on the normal difficulty, you can increase the Challenge Level here. Playing on a higher Challenge Level will increase the EXP you get from each mob, but the mobs have increased HP and hit harder. Additional difficulty levels unlock as you level up.': '可在此调整挑战难度。难度越高，怪物的生命和伤害越高，同时提供更多经验；更多难度会随角色等级解锁。',
-  'Here you can choose which of your available titles that will be displayed below your level and on the forums.': '选择显示在角色等级下方以及论坛中的称号。',
-  'Here you can choose a custom font instead of the standard HentaiVerse font engine. This mostly affects how fast pages will render and how pretty they will look.': '可使用本机已安装字体替代默认字形引擎，主要影响文字显示效果和页面渲染速度。',
-  "If you want to have separate slotted abilities, battle items and skillbars/autocast assignments per equipment set for your current persona, you can toggle the options below. If this is changed, the current persona's shared set will be assigned to Set 1 and vice versa. This can be set differently for each persona.": '可为当前人格的每套装备分别保存能力槽、战斗物品、快捷栏和自动施法配置。切换模式时，共享配置与套装 1 的配置会相互迁移。',
-  'You can either use the standard bar which uses pips for charges, or a more utilitarian (and skinnable) bar that has numerical bars for everything.': '选择使用默认点状状态条，或显示明确数值的实用型状态条。',
-  'By default, as you gain levels, Snowflake will start accepting more lower-tier trophies for a higher-trophy roll in the Shrine. You can override this behavior here.': '设置神社献祭时是否自动将低阶奖杯合并为更高阶抽取。',
-  'Here you can set up which spells will appear on the battle screen quickbar.': '配置战斗界面快捷栏中显示的技能。',
-  'Here you can set which spells will be automatically cast at the start of each battle.': '配置每场战斗开始时自动施放的技能。',
-  'If your MP decreases below 10%, the innate spells will dissipate. They will be recast when it goes back above 25%.': '魔力低于 10% 时常驻法术会消失，恢复到 25% 以上后会重新施放。',
-  'If you want to automatically dump junk equipment on the closest travelling salesmoogle or break it down into parts, you can do so here. All equipment of the specified qualify and below will be automatically sold or turned in to salvage. If a dropped equipment qualifies for both sell and salvage, the action with the lowest required quality will be taken.': '设置掉落装备的自动出售或分解品质阈值；同时符合两项规则时，优先执行品质门槛更低的操作。',
+  'When you get too powerful to be challenged by the mobs on the normal difficulty, you can increase the Challenge Level here. Playing on a higher Challenge Level will increase the EXP you get from each mob, but the mobs have increased HP and hit harder. Additional difficulty levels unlock as you level up.':
+    '可在此调整挑战难度。难度越高，怪物的生命和伤害越高，同时提供更多经验；更多难度会随角色等级解锁。',
+  'Here you can choose which of your available titles that will be displayed below your level and on the forums.':
+    '选择显示在角色等级下方以及论坛中的称号。',
+  'Here you can choose a custom font instead of the standard HentaiVerse font engine. This mostly affects how fast pages will render and how pretty they will look.':
+    '可使用本机已安装字体替代默认字形引擎，主要影响文字显示效果和页面渲染速度。',
+  "If you want to have separate slotted abilities, battle items and skillbars/autocast assignments per equipment set for your current persona, you can toggle the options below. If this is changed, the current persona's shared set will be assigned to Set 1 and vice versa. This can be set differently for each persona.":
+    '可为当前人格的每套装备分别保存能力槽、战斗物品、快捷栏和自动施法配置。切换模式时，共享配置与套装 1 的配置会相互迁移。',
+  'You can either use the standard bar which uses pips for charges, or a more utilitarian (and skinnable) bar that has numerical bars for everything.':
+    '选择使用默认点状状态条，或显示明确数值的实用型状态条。',
+  'By default, as you gain levels, Snowflake will start accepting more lower-tier trophies for a higher-trophy roll in the Shrine. You can override this behavior here.':
+    '设置神社献祭时是否自动将低阶奖杯合并为更高阶抽取。',
+  'Here you can set up which spells will appear on the battle screen quickbar.':
+    '配置战斗界面快捷栏中显示的技能。',
+  'Here you can set which spells will be automatically cast at the start of each battle.':
+    '配置每场战斗开始时自动施放的技能。',
+  'If your MP decreases below 10%, the innate spells will dissipate. They will be recast when it goes back above 25%.':
+    '魔力低于 10% 时常驻法术会消失，恢复到 25% 以上后会重新施放。',
+  'If you want to automatically dump junk equipment on the closest travelling salesmoogle or break it down into parts, you can do so here. All equipment of the specified qualify and below will be automatically sold or turned in to salvage. If a dropped equipment qualifies for both sell and salvage, the action with the lowest required quality will be taken.':
+    '设置掉落装备的自动出售或分解品质阈值；同时符合两项规则时，优先执行品质门槛更低的操作。',
   'There are no available equipment of this type.': '当前分类没有可用装备。',
-  'Equipment must be soulbound before you can enter its Item World.': '装备必须先完成灵魂绑定才能进入其装备界。',
-  'Welcome to the Grindfest. A Grindfest consists of up to 1000 rounds of battle. Starting a Grindfest will consume 1 point of Stamina. There is a small credit reward at the end, if you make it all the way through.': '混战祭最多包含 1000 轮战斗，开始时消耗 1 点体力；坚持到最后可获得额外 Credits 奖励。',
-  'There are no challenges available at your level. Check back later!': '当前等级没有可参加的挑战，请提升等级后再来。',
-  'Increases your maximum HP. This adds 10% to your total HP per tier.': '提高生命上限，每级增加 10% 总生命值。',
-  'Increases your maximum MP. This adds 10% to your total MP per tier.': '提高魔力上限，每级增加 10% 总魔力值。',
-  'Increases your maximum SP. This adds 10% to your total SP per tier.': '提高灵力上限，每级增加 10% 总灵力值。',
+  'Equipment must be soulbound before you can enter its Item World.':
+    '装备必须先完成灵魂绑定才能进入其装备界。',
+  'Welcome to the Grindfest. A Grindfest consists of up to 1000 rounds of battle. Starting a Grindfest will consume 1 point of Stamina. There is a small credit reward at the end, if you make it all the way through.':
+    '混战祭最多包含 1000 轮战斗，开始时消耗 1 点体力；坚持到最后可获得额外 Credits 奖励。',
+  'There are no challenges available at your level. Check back later!':
+    '当前等级没有可参加的挑战，请提升等级后再来。',
+  'Increases your maximum HP. This adds 10% to your total HP per tier.':
+    '提高生命上限，每级增加 10% 总生命值。',
+  'Increases your maximum MP. This adds 10% to your total MP per tier.':
+    '提高魔力上限，每级增加 10% 总魔力值。',
+  'Increases your maximum SP. This adds 10% to your total SP per tier.':
+    '提高灵力上限，每级增加 10% 总灵力值。',
   'Improves the overall potency of common health restoratives.': '提高常规生命恢复物品的整体效果。',
   'Improves the overall potency of common mana restoratives.': '提高常规魔力恢复物品的整体效果。',
   'Improves the overall potency of common spirit restoratives.': '提高常规灵力恢复物品的整体效果。',
@@ -243,15 +259,26 @@ const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
 export const HENTAIVERSE_SETTING_GROUPS = [
   { key: 'challenge', title: '挑战与称号', description: '调整战斗难度以及角色对外显示的称号。' },
   { key: 'font', title: '字体显示', description: '自定义战斗页面使用的本机字体及其排版参数。' },
-  { key: 'equipmentSets', title: '装备套装独立配置', description: '控制每套装备是否保存独立的能力、物品和快捷栏配置。' },
+  {
+    key: 'equipmentSets',
+    title: '装备套装独立配置',
+    description: '控制每套装备是否保存独立的能力、物品和快捷栏配置。',
+  },
   { key: 'vitals', title: '状态条样式', description: '选择战斗中的生命、魔力和灵力显示方式。' },
   { key: 'trophy', title: '奖杯升级', description: '控制神社献祭时低阶奖杯的自动升级策略。' },
   { key: 'quickbar', title: '战斗快捷栏', description: '设置战斗界面快捷栏中的技能顺序。' },
   { key: 'autocast', title: '自动施法', description: '设置每场战斗开始时自动施放的技能。' },
-  { key: 'autoProcess', title: '装备自动处理', description: '分别设置各类装备自动出售和自动分解的品质阈值。' },
+  {
+    key: 'autoProcess',
+    title: '装备自动处理',
+    description: '分别设置各类装备自动出售和自动分解的品质阈值。',
+  },
 ]
 
-const TERM_TRANSLATIONS = Object.assign({}, ...Object.values(DOMAIN_TRANSLATIONS)) as Record<string, string>
+const TERM_TRANSLATIONS = Object.assign({}, ...Object.values(DOMAIN_TRANSLATIONS)) as Record<
+  string,
+  string
+>
 const LOWERCASE_TERM_TRANSLATIONS = Object.fromEntries(
   Object.entries(TERM_TRANSLATIONS).map(([term, translation]) => [term.toLowerCase(), translation]),
 )
@@ -307,8 +334,12 @@ export function getAttributeLabel(key: string) {
 export function translateHentaiVerseText(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
-  if (LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()]) return LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()]!
-  return source.replace(TERM_PATTERN, (term) => LOWERCASE_TERM_TRANSLATIONS[term.toLowerCase()] ?? term)
+  if (LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()])
+    return LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()]!
+  return source.replace(
+    TERM_PATTERN,
+    (term) => LOWERCASE_TERM_TRANSLATIONS[term.toLowerCase()] ?? term,
+  )
 }
 
 export function translateHentaiVerseDescription(value: string) {
@@ -343,8 +374,18 @@ export function translateHentaiVerseDescription(value: string) {
 }
 
 export function getHentaiVerseSettingControl(name: string, value: string, sourceLabel: string) {
-  if (name === 'difflevel') return { group: 'challenge', groupLabel: '挑战难度', label: translateHentaiVerseText(sourceLabel) }
-  if (name === 'title_override') return { group: 'challenge', groupLabel: '显示称号', label: translateHentaiVerseText(sourceLabel) }
+  if (name === 'difflevel')
+    return {
+      group: 'challenge',
+      groupLabel: '挑战难度',
+      label: translateHentaiVerseText(sourceLabel),
+    }
+  if (name === 'title_override')
+    return {
+      group: 'challenge',
+      groupLabel: '显示称号',
+      label: translateHentaiVerseText(sourceLabel),
+    }
   if (name === 'fontlocal') return { group: 'font', label: '启用自定义字体' }
   if (name === 'fontface') return { group: 'font', label: '字体名称' }
   if (name === 'fontsize') return { group: 'font', label: '字体大小（5-20 pt）' }
@@ -353,11 +394,23 @@ export function getHentaiVerseSettingControl(name: string, value: string, source
   if (name === 'fontoff') return { group: 'font', label: '垂直偏移（-8 至 8 px）' }
   if (name === 'eqs_ability') return { group: 'equipmentSets', label: '每套装备使用独立能力配置' }
   if (name === 'eqs_item') return { group: 'equipmentSets', label: '每套装备使用独立战斗物品配置' }
-  if (name === 'eqs_skillbar') return { group: 'equipmentSets', label: '每套装备使用独立快捷栏和自动施法配置' }
-  if (name === 'vitalstyle') return { group: 'vitals', groupLabel: '状态条样式', label: translateHentaiVerseText(sourceLabel) }
-  if (name === 'trophyupgrade') return { group: 'trophy', groupLabel: '自动升级策略', label: translateHentaiVerseText(sourceLabel) }
+  if (name === 'eqs_skillbar')
+    return { group: 'equipmentSets', label: '每套装备使用独立快捷栏和自动施法配置' }
+  if (name === 'vitalstyle')
+    return {
+      group: 'vitals',
+      groupLabel: '状态条样式',
+      label: translateHentaiVerseText(sourceLabel),
+    }
+  if (name === 'trophyupgrade')
+    return {
+      group: 'trophy',
+      groupLabel: '自动升级策略',
+      label: translateHentaiVerseText(sourceLabel),
+    }
   if (/^\d{1,2}$/.test(name)) return { group: 'quickbar', label: `快捷栏 ${name}` }
-  if (/^ac_\d+$/.test(name)) return { group: 'autocast', label: `自动施法 ${Number(name.slice(3)) + 1}` }
+  if (/^ac_\d+$/.test(name))
+    return { group: 'autocast', label: `自动施法 ${Number(name.slice(3)) + 1}` }
   if (/^as_[cs]_\d+$/.test(name)) {
     const action = name.startsWith('as_c_') ? '自动出售' : '自动分解'
     return { group: 'autoProcess', label: `${translateHentaiVerseText(sourceLabel)} · ${action}` }
@@ -369,17 +422,29 @@ export function translateHentaiVerseBattleLog(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
 
-  const receivedDamage = source.match(/^(.+?) (?:(\d+)x-crit|crit|hits) you, causing ([\d,.]+) points? of (.+?) damage\.$/i)
+  const receivedDamage = source.match(
+    /^(.+?) (?:(\d+)x-crit|crit|hits) you, causing ([\d,.]+) points? of (.+?) damage\.$/i,
+  )
   if (receivedDamage) {
     const damageType = BATTLE_LOG_TRANSLATIONS[receivedDamage[4] || ''] || receivedDamage[4]
-    const action = receivedDamage[2] ? `以 ${receivedDamage[2]} 倍暴击命中` : /\bcrit\b/i.test(source) ? '暴击命中' : '命中'
+    const action = receivedDamage[2]
+      ? `以 ${receivedDamage[2]} 倍暴击命中`
+      : /\bcrit\b/i.test(source)
+        ? '暴击命中'
+        : '命中'
     return `${receivedDamage[1]} ${action}你，造成 ${receivedDamage[3]} 点${damageType}伤害。`
   }
 
-  const dealtDamage = source.match(/^You (?:(\d+)x-crit|crit|hit) (.+?), causing ([\d,.]+) points? of (.+?) damage\.$/i)
+  const dealtDamage = source.match(
+    /^You (?:(\d+)x-crit|crit|hit) (.+?), causing ([\d,.]+) points? of (.+?) damage\.$/i,
+  )
   if (dealtDamage) {
     const damageType = BATTLE_LOG_TRANSLATIONS[dealtDamage[4] || ''] || dealtDamage[4]
-    const action = dealtDamage[1] ? `以 ${dealtDamage[1]} 倍暴击命中` : /\bcrit\b/i.test(source) ? '暴击命中' : '命中'
+    const action = dealtDamage[1]
+      ? `以 ${dealtDamage[1]} 倍暴击命中`
+      : /\bcrit\b/i.test(source)
+        ? '暴击命中'
+        : '命中'
     return `你${action} ${dealtDamage[2]}，造成 ${dealtDamage[3]} 点${damageType}伤害。`
   }
 
@@ -407,28 +472,32 @@ export function translateHentaiVerseBattleLog(value: string) {
     return `你的“${effect}”效果结束了。`
   }
 
-  return source.replace(BATTLE_LOG_PATTERN, (term) => (
-    BATTLE_LOG_TRANSLATIONS[term]
-    ?? BATTLE_LOG_TRANSLATIONS[toTitleCase(term)]
-    ?? term
-  ))
+  return source.replace(
+    BATTLE_LOG_PATTERN,
+    (term) => BATTLE_LOG_TRANSLATIONS[term] ?? BATTLE_LOG_TRANSLATIONS[toTitleCase(term)] ?? term,
+  )
 }
 
 export function decodeHentaiVerseGlyphs(root: ParentNode) {
-  root.querySelectorAll<HTMLElement>('[class*="c2"], [class*="c3"], [class*="c4"], [class*="c5"]').forEach((node) => {
-    const fallback = node.getAttribute('title') || node.getAttribute('aria-label')
-    if (node.textContent?.trim()) return
-    const glyphClass = Array.from(node.classList)
-      .map((className) => className.match(/^c([2345])([a-z0-9])$/i))
-      .find(Boolean)
-    const family = glyphClass?.[1]
-    const glyph = glyphClass?.[2] || ''
-    const punctuation = family === '2'
-      ? { a: '.', e: '%', f: '+' }[glyph.toLowerCase()]
-      : family === '4' && glyph.toLowerCase() === 'b' ? ',' : undefined
-    const replacement = fallback || (glyph === '9' ? ' ' : punctuation || glyph)
-    if (replacement) node.textContent = replacement
-  })
+  root
+    .querySelectorAll<HTMLElement>('[class*="c2"], [class*="c3"], [class*="c4"], [class*="c5"]')
+    .forEach((node) => {
+      const fallback = node.getAttribute('title') || node.getAttribute('aria-label')
+      if (node.textContent?.trim()) return
+      const glyphClass = Array.from(node.classList)
+        .map((className) => className.match(/^c([2345])([a-z0-9])$/i))
+        .find(Boolean)
+      const family = glyphClass?.[1]
+      const glyph = glyphClass?.[2] || ''
+      const punctuation =
+        family === '2'
+          ? { a: '.', e: '%', f: '+' }[glyph.toLowerCase()]
+          : family === '4' && glyph.toLowerCase() === 'b'
+            ? ','
+            : undefined
+      const replacement = fallback || (glyph === '9' ? ' ' : punctuation || glyph)
+      if (replacement) node.textContent = replacement
+    })
 }
 
 function toTitleCase(value: string) {
