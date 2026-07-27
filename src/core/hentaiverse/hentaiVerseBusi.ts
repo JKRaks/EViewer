@@ -19,11 +19,14 @@ export class HentaiVerseBusi {
 
   /**
    * Input: 受白名单约束的 HentaiVerse 页面参数。
-   * Output: 已解析的角色、维护或战斗入口页面。
+   * Output: 已解析的角色维护页面；源站在活动战斗期间会返回战斗页，此时返回战斗快照。
    */
-  async getPage(target: HentaiVersePageTarget): Promise<HentaiVersePage> {
+  async getPage(
+    target: HentaiVersePageTarget,
+  ): Promise<{ page?: HentaiVersePage; battle?: HentaiVerseBattleSnapshot }> {
     const html = await this.requestText('/hentaiverse/page', { query: { ...target } })
-    return parseHentaiVersePage(html, target)
+    if (isHentaiVerseBattleHtml(html)) return { battle: parseBattlePage(html) }
+    return { page: parseHentaiVersePage(html, target) }
   }
 
   /**

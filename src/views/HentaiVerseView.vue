@@ -31,6 +31,7 @@ const activeSection = ref<HentaiVerseSection>('character')
 const page = ref<HentaiVersePage>()
 const loading = ref(false)
 const error = ref('')
+const battleBlocked = ref(false)
 const currentTarget = ref<HentaiVersePageTarget>({ ...HENTAIVERSE_SECTIONS[0]!.target })
 const characterSummary = ref({ name: '', persona: '' })
 let requestId = 0
@@ -69,14 +70,21 @@ async function loadSection(
   const currentRequest = ++requestId
   loading.value = true
   error.value = ''
+  battleBlocked.value = false
   try {
     const result = await busi.getPage(currentTarget.value)
     if (currentRequest !== requestId) {
-      updateCharacterSummary(result)
+      if (result.page) updateCharacterSummary(result.page)
       return
     }
-    if (!result.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
-    setPage(result)
+    if (result.battle) {
+      page.value = undefined
+      battleBlocked.value = true
+      showHentaiVerseBattleSnapshot(result.battle)
+      return
+    }
+    if (!result.page?.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
+    setPage(result.page)
   } catch (loadError) {
     if (currentRequest === requestId) error.value = loadError instanceof Error ? loadError.message : '页面加载失败'
   } finally {
@@ -282,6 +290,14 @@ onMounted(() => {
         <div v-if="loading && !page" class="hv-loading">
           <el-skeleton :rows="7" animated />
         </div>
+        <el-result
+          v-else-if="battleBlocked"
+          icon="warning"
+          title="当前正在进行 HentaiVerse 战斗"
+          sub-title="源站会在战斗期间锁定角色维护页面。请完成或退出当前战斗后，再重新加载装备和角色配置。"
+        >
+          <template #extra><el-button type="primary" @click="resumeBattle">继续战斗</el-button></template>
+        </el-result>
         <el-result v-else-if="error" icon="error" title="HentaiVerse 页面加载失败" :sub-title="error">
           <template #extra><el-button type="primary" @click="loadSection()">重新加载</el-button></template>
         </el-result>
