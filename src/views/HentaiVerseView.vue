@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Lightning, Refresh } from '@element-plus/icons-vue'
 import AbilityPanel from '@/components/hentaiverse/AbilityPanel.vue'
@@ -19,6 +19,7 @@ import type {
 } from '@/core/hentaiverse/model/hentaiVerse'
 import {
   enterHentaiVerseBattle,
+  hentaiVerseState,
   showHentaiVerseBattleSnapshot,
 } from '@/core/hentaiverse/hentaiVerseStore'
 import { useAuthState } from '@/core/auth/authState'
@@ -39,6 +40,13 @@ let requestId = 0
 const currentMeta = computed(() => HENTAIVERSE_SECTIONS.find((item) => item.key === activeSection.value)!)
 const characterSections = computed(() => HENTAIVERSE_SECTIONS.filter((item) => item.group === 'character'))
 const battleSections = computed(() => HENTAIVERSE_SECTIONS.filter((item) => item.group === 'battle'))
+
+watch(
+  () => hentaiVerseState.battle?.completed,
+  (completed, wasCompleted) => {
+    if (completed && !wasCompleted && battleBlocked.value) void loadSection()
+  },
+)
 
 function updateCharacterSummary(nextPage: HentaiVersePage) {
   const characterName = nextPage.characterName !== 'HentaiVerse'

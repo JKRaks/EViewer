@@ -153,7 +153,7 @@ export function parseBattleResponse(
         ? parsed.monsters
         : previous.monsters,
     actions: parsed.completed ? [] : Array.from(actions.values()),
-    log: parsed.log.length ? parsed.log : previous.log,
+    log: parsed.log.length ? [...previous.log, ...parsed.log].slice(-40) : previous.log,
   }
 }
 

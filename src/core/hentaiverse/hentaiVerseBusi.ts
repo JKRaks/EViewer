@@ -129,12 +129,25 @@ export class HentaiVerseBusi {
       skill,
     })
     const updated = parseBattleResponse(payload, current)
+    if (updated.completed) return updated
     if (typeof payload.textlog === 'string' && payload.textlog.trim()) return updated
 
+    let html = ''
     try {
-      return parseBattlePage(await this.requestText('/hentaiverse/page'))
+      html = await this.requestText('/hentaiverse/page')
     } catch {
       return updated
+    }
+    if (isHentaiVerseBattleHtml(html)) return parseBattlePage(html)
+
+    const page = parseHentaiVersePage(html, {})
+    if (!page.authenticated) throw new Error('HentaiVerse 登录态已失效')
+    return {
+      ...updated,
+      monsters: updated.monsters.map((monster) => ({ ...monster, defeated: true })),
+      actions: [],
+      completed: true,
+      completionText: updated.completionText || '源站已确认本次战斗结束。',
     }
   }
 
