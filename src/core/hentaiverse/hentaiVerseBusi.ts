@@ -138,7 +138,13 @@ export class HentaiVerseBusi {
     } catch {
       return updated
     }
-    if (isHentaiVerseBattleHtml(html)) return parseBattlePage(html)
+    if (isHentaiVerseBattleHtml(html)) {
+      const refreshed = parseBattlePage(html)
+      return {
+        ...refreshed,
+        log: [...updated.log, ...refreshed.log].slice(-40),
+      }
+    }
 
     const page = parseHentaiVersePage(html, {})
     if (!page.authenticated) throw new Error('HentaiVerse 登录态已失效')
