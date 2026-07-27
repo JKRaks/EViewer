@@ -423,7 +423,7 @@ export function translateHentaiVerseBattleLog(value: string) {
   if (!source) return ''
 
   const receivedDamage = source.match(
-    /^(.+?) (?:(\d+)x-crit|crit|hits) you, causing ([\d,.]+) points? of (.+?) damage\.$/i,
+    /^(.+?) (?:(\d+)x-crit|crit|hits|glances) you, causing ([\d,.]+) points? of (.+?) damage\.$/i,
   )
   if (receivedDamage) {
     const damageType = BATTLE_LOG_TRANSLATIONS[receivedDamage[4] || ''] || receivedDamage[4]
@@ -431,12 +431,14 @@ export function translateHentaiVerseBattleLog(value: string) {
       ? `以 ${receivedDamage[2]} 倍暴击命中`
       : /\bcrit\b/i.test(source)
         ? '暴击命中'
-        : '命中'
+        : /\bglances\b/i.test(source)
+          ? '擦中'
+          : '命中'
     return `${receivedDamage[1]} ${action}你，造成 ${receivedDamage[3]} 点${damageType}伤害。`
   }
 
   const dealtDamage = source.match(
-    /^You (?:(\d+)x-crit|crit|hit) (.+?), causing ([\d,.]+) points? of (.+?) damage\.$/i,
+    /^You (?:(\d+)x-crit|crit|hit|glance) (.+?), causing ([\d,.]+) points? of (.+?) damage\.$/i,
   )
   if (dealtDamage) {
     const damageType = BATTLE_LOG_TRANSLATIONS[dealtDamage[4] || ''] || dealtDamage[4]
@@ -444,7 +446,9 @@ export function translateHentaiVerseBattleLog(value: string) {
       ? `以 ${dealtDamage[1]} 倍暴击命中`
       : /\bcrit\b/i.test(source)
         ? '暴击命中'
-        : '命中'
+        : /\bglance\b/i.test(source)
+          ? '擦中'
+          : '命中'
     return `你${action} ${dealtDamage[2]}，造成 ${dealtDamage[3]} 点${damageType}伤害。`
   }
 
