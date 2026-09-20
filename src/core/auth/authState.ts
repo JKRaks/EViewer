@@ -79,6 +79,28 @@ export function useAuthState() {
   return authState
 }
 
+/** 仅在用户主动提取时读取代理当前使用的认证 Cookie。 */
+export async function extractAuthCookies(signal?: AbortSignal): Promise<string> {
+  const proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
+  const response = await fetch(new URL('/ehentai/auth/export', proxyOrigin), {
+    method: 'POST',
+    credentials: 'include',
+    cache: 'no-store',
+    signal,
+    headers: { 'Content-Type': 'application/json' },
+    body: '{}',
+  })
+  const result = (await response.json().catch(() => ({}))) as {
+    success?: boolean
+    cookie?: string
+    message?: string
+  }
+  if (!response.ok || !result.success || !result.cookie) {
+    throw new Error(result.message || '提取认证 Cookie 失败')
+  }
+  return result.cookie
+}
+
 async function requestAuth(path: string, body?: Record<string, string>): Promise<AuthResponse> {
   const proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
   const response = await fetch(new URL(path, proxyOrigin), {
