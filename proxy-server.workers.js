@@ -164,6 +164,25 @@ async function handleAuthRequest(request, requestUrl) {
   )
 }
 
+function handleAuthExport(request, requestUrl) {
+  const origin = request.headers.get('Origin')
+  const trustedOrigin = origin && (origin === requestUrl.origin ||
+    ORIGIN_MAP.some((config) => config.allowedOrigins.includes(origin)) ||
+    /^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/.test(origin))
+  if (!trustedOrigin || !/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type') || '')) {
+    return jsonResponse(request, { success: false, message: '不允许提取认证信息，请配置可信的前端来源' }, 403)
+  }
+  const cookie = getAllowedAuthCookieHeader(request.headers.get('Cookie') || '')
+  const values = new Map(cookie.split('; ').map((part) => {
+    const separator = part.indexOf('=')
+    return [part.slice(0, separator), part.slice(separator + 1)]
+  }))
+  if (!AUTH_COOKIE_NAMES.every((name) => values.get(name))) {
+    return jsonResponse(request, { success: false, message: '当前没有完整的认证 Cookie，请重新登录' }, 401)
+  }
+  return jsonResponse(request, { success: true, cookie })
+}
+
 function getAllowedAuthCookieHeader(cookieHeader = '') {
   const allowed = new Map()
   cookieHeader.split(';').forEach((part) => {
@@ -781,6 +800,10 @@ async function handleRequest(request) {
 
   if (request.method === 'POST' && (pathname === '/auth/cookies' || pathname === '/auth/logout')) {
     return handleAuthRequest(request, url)
+  }
+
+  if (request.method === 'POST' && pathname === '/ehentai/auth/export') {
+    return handleAuthExport(request, url)
   }
 
   // CORS 预检

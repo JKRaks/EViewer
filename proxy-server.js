@@ -119,6 +119,29 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', message: 'Proxy server is running' })
 })
 
+// 使用 /ehentai 路径，以便浏览器携带现有的 HttpOnly 认证 Cookie。
+app.post('/ehentai/auth/export', (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  const origin = req.headers.origin
+  const protocol = String(req.headers['x-forwarded-proto'] || req.protocol).split(',')[0].trim()
+  const sameOrigin = `${protocol}://${req.headers.host}`
+  // 凭据导出不可沿用通用代理的通配符来源策略。
+  const trustedOrigin = origin && (origin === sameOrigin || configuredAllowedOrigins.includes(origin) ||
+    /^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/.test(origin))
+  if (!trustedOrigin || !req.is('application/json')) {
+    return res.status(403).json({ success: false, message: '不允许提取认证信息，请配置可信的前端来源' })
+  }
+  const cookie = getAllowedAuthCookieHeader(req.headers.cookie)
+  const values = new Map(cookie.split('; ').map((part) => {
+    const separator = part.indexOf('=')
+    return [part.slice(0, separator), part.slice(separator + 1)]
+  }))
+  if (!AUTH_COOKIE_NAMES.every((name) => values.get(name))) {
+    return res.status(401).json({ success: false, message: '当前没有完整的认证 Cookie，请重新登录' })
+  }
+  return res.json({ success: true, cookie })
+})
+
 app.post('/auth/cookies', (req, res) => {
   if (!isAllowedOrigin(req.headers.origin)) {
     return res.status(403).json({ success: false, message: '不允许的请求来源' })

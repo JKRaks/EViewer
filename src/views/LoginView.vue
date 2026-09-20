@@ -4,7 +4,12 @@ import { ArrowRight, Key, RefreshRight, SwitchButton } from '@element-plus/icons
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import UserConfigPanel from '@/components/UserConfigPanel.vue'
-import { clearAuthCookies, saveAuthCookies, useAuthState } from '@/core/auth/authState'
+import {
+  clearAuthCookies,
+  extractAuthCookies,
+  saveAuthCookies,
+  useAuthState,
+} from '@/core/auth/authState'
 import { userInfoBusi } from '@/core/auth/userInfoBusi'
 import hathPerkTranslationData from '@/core/data/hathPerkTranslations.json'
 import { userDonationInput } from '@/core/model/auth/userDonationInput'
@@ -136,6 +141,9 @@ const activeTab = ref<AccountTab>(authState.loggedIn ? 'overview' : 'authenticat
 const authInputMode = ref<AuthInputMode>('cookie')
 const submitting = ref(false)
 const loggingOut = ref(false)
+const extracting = ref(false)
+const extractedCookie = ref('')
+let extractionController: AbortController | undefined
 const overviewData = ref<userOverviewData>()
 const donationData = ref<userDonationData>()
 const hathPerksData = ref<userHathPerksData>()
@@ -220,6 +228,8 @@ async function submitCookies() {
   const credentials = resolveAuthCredentials()
   if (!credentials) return
 
+  clearExtractedCookie()
+
   submitting.value = true
   try {
     await saveAuthCookies(credentials.memberId, credentials.passHash)
@@ -265,6 +275,7 @@ function resolveAuthCredentials() {
 }
 
 async function logout() {
+  clearExtractedCookie()
   loggingOut.value = true
   try {
     await clearAuthCookies()
@@ -278,6 +289,49 @@ async function logout() {
     loggingOut.value = false
   }
 }
+
+function clearExtractedCookie() {
+  extractionController?.abort()
+  extractionController = undefined
+  extracting.value = false
+  extractedCookie.value = ''
+}
+
+async function extractCurrentCookie() {
+  if (extracting.value || submitting.value || loggingOut.value) return
+  clearExtractedCookie()
+  const controller = new AbortController()
+  extractionController = controller
+  extracting.value = true
+  try {
+    const cookie = await extractAuthCookies(controller.signal)
+    if (extractionController === controller) extractedCookie.value = cookie
+  } catch (error) {
+    if (!controller.signal.aborted) {
+      ElMessage.error(error instanceof Error ? error.message : '提取认证 Cookie 失败')
+    }
+  } finally {
+    if (extractionController === controller) {
+      extractionController = undefined
+      extracting.value = false
+    }
+  }
+}
+
+async function copyExtractedCookie() {
+  try {
+    await navigator.clipboard.writeText(extractedCookie.value)
+    ElMessage.success('认证 Cookie 已复制')
+  } catch {
+    ElMessage.warning('无法自动复制，请在文本框中选择并复制')
+  }
+}
+
+watch(
+  () => [authState.memberId, authState.lastLoginAt, authState.loggedIn, activeTab.value],
+  clearExtractedCookie,
+)
+onBeforeUnmount(clearExtractedCookie)
 
 async function loadAccountSection(section: AccountDataSection, force = false) {
   if (!authState.loggedIn) return
@@ -805,17 +859,39 @@ onBeforeUnmount(resetAccountData)
               </div>
               <div class="status-meta">保存时间 {{ loginTime }}</div>
             </div>
-            <el-button
-              type="danger"
-              plain
-              :icon="SwitchButton"
-              :loading="loggingOut"
-              @click="logout"
-            >
-              退出
-            </el-button>
+            <div class="auth-status-actions">
+              <el-button
+                :loading="extracting"
+                :disabled="submitting || loggingOut"
+                @click="extractCurrentCookie"
+              >
+                提取 Cookie
+              </el-button>
+              <el-button
+                type="danger"
+                plain
+                :icon="SwitchButton"
+                :loading="loggingOut"
+                @click="logout"
+              >
+                退出
+              </el-button>
+            </div>
           </div>
           <el-empty v-else :image-size="56" description="尚未维护登录态" />
+          <div v-if="extractedCookie" class="auth-cookie-export">
+            <el-input
+              :model-value="extractedCookie"
+              type="textarea"
+              :rows="3"
+              readonly
+              aria-label="当前使用中的认证 Cookie"
+            />
+            <div class="auth-status-actions">
+              <el-button type="primary" @click="copyExtractedCookie">复制 Cookie</el-button>
+              <el-button @click="clearExtractedCookie">关闭</el-button>
+            </div>
+          </div>
         </section>
 
         <section class="account-section">
@@ -882,6 +958,27 @@ onBeforeUnmount(resetAccountData)
 </template>
 
 <style scoped>
+.auth-status-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.auth-status-actions :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.auth-cookie-export {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.auth-cookie-export :deep(textarea) {
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
 .account-view {
   width: min(100%, 860px);
   margin: 0 auto;
