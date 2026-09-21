@@ -3,6 +3,11 @@
  * 支持多个代理目标的灵活配置
  */
 
+import {
+  isTrustedAuthExportOrigin,
+  parseAllowedAuthExportOrigins,
+} from './auth-export-origin.js'
+
 /**
  * 代理配置映射
  * 可以在 wrangler.toml 或环境变量中配置
@@ -164,13 +169,29 @@ async function handleAuthRequest(request, requestUrl) {
   )
 }
 
-function handleAuthExport(request, requestUrl) {
+function authExportJsonResponse(request, payload, status, trustedOrigin) {
+  const headers = new Headers({
+    'Cache-Control': 'no-store',
+    'Content-Type': 'application/json',
+  })
   const origin = request.headers.get('Origin')
-  const trustedOrigin = origin && (origin === requestUrl.origin ||
-    ORIGIN_MAP.some((config) => config.allowedOrigins.includes(origin)) ||
-    /^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/.test(origin))
+  if (trustedOrigin && origin) {
+    headers.set('Access-Control-Allow-Origin', origin)
+    headers.set('Access-Control-Allow-Credentials', 'true')
+    headers.set('Vary', 'Origin')
+  }
+  return new Response(JSON.stringify(payload), { status, headers })
+}
+
+function handleAuthExport(request, requestUrl, allowedAuthExportOrigins) {
+  const origin = request.headers.get('Origin')
+  const trustedOrigin = isTrustedAuthExportOrigin(
+    origin,
+    requestUrl.origin,
+    allowedAuthExportOrigins,
+  )
   if (!trustedOrigin || !/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type') || '')) {
-    return jsonResponse(request, { success: false, message: '不允许提取认证信息，请配置可信的前端来源' }, 403)
+    return authExportJsonResponse(request, { success: false, message: '不允许提取认证信息，请配置可信的前端来源' }, 403, trustedOrigin)
   }
   const cookie = getAllowedAuthCookieHeader(request.headers.get('Cookie') || '')
   const values = new Map(cookie.split('; ').map((part) => {
@@ -178,9 +199,9 @@ function handleAuthExport(request, requestUrl) {
     return [part.slice(0, separator), part.slice(separator + 1)]
   }))
   if (!AUTH_COOKIE_NAMES.every((name) => values.get(name))) {
-    return jsonResponse(request, { success: false, message: '当前没有完整的认证 Cookie，请重新登录' }, 401)
+    return authExportJsonResponse(request, { success: false, message: '当前没有完整的认证 Cookie，请重新登录' }, 401, trustedOrigin)
   }
-  return jsonResponse(request, { success: true, cookie })
+  return authExportJsonResponse(request, { success: true, cookie }, 200, trustedOrigin)
 }
 
 function getAllowedAuthCookieHeader(cookieHeader = '') {
@@ -739,9 +760,12 @@ async function handleProxyRequest(request, config, pathname) {
 /**
  * 处理 OPTIONS 请求（CORS 预检）
  */
-function handleCorsPreFlight(request) {
+function handleCorsPreFlight(request, requestUrl, allowedAuthExportOrigins) {
   const requesterOrigin = getRequesterOrigin(request)
-  if (!requesterOrigin || !isAllowedRequesterOrigin(requesterOrigin)) {
+  const allowed = requestUrl.pathname === '/ehentai/auth/export'
+    ? isTrustedAuthExportOrigin(requesterOrigin, requestUrl.origin, allowedAuthExportOrigins)
+    : isAllowedRequesterOrigin(requesterOrigin)
+  if (!requesterOrigin || !allowed) {
     return new Response('Forbidden', { status: 403 })
   }
 
@@ -784,9 +808,10 @@ function handle404(pathname) {
 /**
  * 主处理函数
  */
-async function handleRequest(request) {
+async function handleRequest(request, env = {}) {
   const url = new URL(request.url)
   const pathname = url.pathname
+  const allowedAuthExportOrigins = parseAllowedAuthExportOrigins(env.ALLOWED_AUTH_EXPORT_ORIGINS)
 
   // 查找匹配的配置
   const config = findOriginConfig(pathname)
@@ -803,12 +828,12 @@ async function handleRequest(request) {
   }
 
   if (request.method === 'POST' && pathname === '/ehentai/auth/export') {
-    return handleAuthExport(request, url)
+    return handleAuthExport(request, url, allowedAuthExportOrigins)
   }
 
   // CORS 预检
   if (request.method === 'OPTIONS') {
-    return handleCorsPreFlight(request)
+    return handleCorsPreFlight(request, url, allowedAuthExportOrigins)
   }
 
   if (
@@ -866,7 +891,7 @@ async function handleRequest(request) {
  * Cloudflare Worker 导出
  */
 export default {
-  async fetch(request) {
-    return handleRequest(request)
+  async fetch(request, env) {
+    return handleRequest(request, env)
   },
 }

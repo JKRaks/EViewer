@@ -9,7 +9,7 @@ This template should help get you started developing with Vue 3 in Vite.
 ## Recommended Browser Setup
 
 - Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd) 
+  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
   - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
 - Firefox:
   - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
@@ -31,10 +31,27 @@ See [Vite Configuration Reference](https://vite.dev/config/).
 `ipb_member_id` 和 `ipb_pass_hash`。关闭结果、切换认证页签、切换账号或离开页面会清空提取内容。
 需要同步更新前端和代理；已有 HttpOnly Cookie 无需重新保存。
 
-导出接口为 `POST /ehentai/auth/export`，响应禁止缓存。来源仅接受同源、明确配置的前端来源及
-本地 HTTP 开发地址。跨域部署时，Node 代理在 `ALLOWED_ORIGINS` 环境变量中填写前端完整 origin
-（多个用逗号分隔）；Cloudflare Workers 在 `ORIGIN_MAP` 的 `allowedOrigins` 中填写。
-例如 `https://viewer.example.com`；通配符 `*` 不会授权提取认证信息。
+导出接口为 `POST /ehentai/auth/export`，响应禁止缓存。来源仅接受同源、明确配置的前端完整
+origin 及带端口的本地 HTTP 开发地址。多个 origin 用逗号分隔，不要包含路径或末尾斜杠：
+
+```sh
+# Node 代理
+ALLOWED_ORIGINS="https://viewer.example.com,https://admin.example.com" node proxy-server.js
+```
+
+Cloudflare Worker 请使用 binding，无需修改 `ORIGIN_MAP`：
+
+```toml
+# wrangler.toml
+[vars]
+ALLOWED_AUTH_EXPORT_ORIGINS = "https://viewer.example.com,https://admin.example.com"
+```
+
+`VITE_EH_URL` 决定前端请求的代理地址；如果它与前端页面不同源，必须把**前端页面的
+origin**（而不是 `VITE_EH_URL` 的值）加入 Node `ALLOWED_ORIGINS` 或 Worker
+`ALLOWED_AUTH_EXPORT_ORIGINS`。例如页面为 `https://viewer.example.com/app`、
+`VITE_EH_URL=https://proxy.example.com/ehentai`，应配置 `https://viewer.example.com`。通配符 `*`
+仅可用于普通代理 CORS，绝不会授权 Cookie 导出。
 
 ```sh
 npm install
