@@ -96,6 +96,8 @@ export class galleryFavoriteUpdateInput extends galleryFavoriteInput {
 
   getRequestData(): Record<string, unknown> {
     return {
+      // 源站收藏表单通过此隐藏字段识别保存请求；缺失时仅重新显示表单。
+      update: '1',
       favcat: this.categoryValue,
       favnote: this.note,
       apply: this.applyValue,
