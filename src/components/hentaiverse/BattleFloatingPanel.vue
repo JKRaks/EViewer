@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   Aim,
   Box,
@@ -28,6 +28,18 @@ import type { HentaiVerseBattleAction, HentaiVerseBattleVital } from '@/core/hen
 const selectedTarget = ref(1)
 const battle = computed(() => hentaiVerseState.battle)
 const livingMonsters = computed(() => battle.value?.monsters.filter((monster) => !monster.defeated) || [])
+const newestLogFirst = computed(() => [...(battle.value?.log ?? [])].reverse())
+const monsterGaugeWidth = ref(64)
+
+function updateGaugeWidth() {
+  monsterGaugeWidth.value = window.innerWidth < 768 ? 54 : 64
+}
+
+onMounted(() => {
+  updateGaugeWidth()
+  window.addEventListener('resize', updateGaugeWidth)
+})
+onUnmounted(() => window.removeEventListener('resize', updateGaugeWidth))
 const vitalColors: Record<HentaiVerseBattleVital['key'], string> = {
   health: '#4f9f64',
   magic: '#4f7fc4',
@@ -142,8 +154,23 @@ function closeLocalBattle() {
             @click="selectedTarget = monster.id"
           >
             <strong>{{ monster.name }}</strong>
-            <span>{{ monster.status }}</span>
+            <span v-if="monster.status">{{ monster.status }}</span>
+            <div class="monster-gauges">
+              <div v-if="monster.healthPercent !== undefined" class="monster-gauge">
+                <el-progress type="dashboard" :percentage="monster.healthPercent" :width="monsterGaugeWidth" :stroke-width="6" color="#4f9f64" />
+                <span>生命</span>
+              </div>
+              <div v-if="monster.magicPercent !== undefined" class="monster-gauge">
+                <el-progress type="dashboard" :percentage="monster.magicPercent" :width="monsterGaugeWidth" :stroke-width="6" color="#4f7fc4" />
+                <span>魔力</span>
+              </div>
+            </div>
           </button>
+        </div>
+
+        <div class="battle-log" role="log" aria-label="战斗日志">
+          <p v-for="(line, index) in newestLogFirst" :key="`${index}:${line}`">{{ line }}</p>
+          <p v-if="!battle.log.length" class="battle-log-empty">等待战斗记录</p>
         </div>
 
         <el-alert
@@ -187,10 +214,6 @@ function closeLocalBattle() {
           <span v-if="!battle.actions.length" class="battle-action-empty">未能解析当前回合的可用操作，请刷新战斗状态</span>
         </div>
 
-        <div class="battle-log">
-          <p v-for="(line, index) in battle.log" :key="`${index}:${line}`">{{ line }}</p>
-          <p v-if="!battle.log.length" class="battle-log-empty">等待战斗记录</p>
-        </div>
       </div>
     </section>
   </Transition>
@@ -291,7 +314,7 @@ function closeLocalBattle() {
 
 .battle-monsters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 8px;
 }
 
@@ -319,6 +342,25 @@ function closeLocalBattle() {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.monster-gauges {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.monster-gauge {
+  display: grid;
+  justify-items: center;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+
+.monster-gauge :deep(.el-progress__text) {
+  font-size: 11px !important;
 }
 
 .battle-actions :deep(.el-button + .el-button) {
@@ -392,6 +434,9 @@ function closeLocalBattle() {
 }
 
 @media (max-width: 767px) {
+  .battle-monsters {
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  }
   .battle-panel {
     inset: 0;
     width: 100vw;
