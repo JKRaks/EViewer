@@ -135,6 +135,7 @@ onMounted(() => {
 
 onActivated(() => {
   bindScrollListener()
+  consumeFavoriteIntent()
 
   const routeBookId = getRouteBookId()
   if (!funcData.loading && pageData.value.bookId === routeBookId && authState.loggedIn) {
@@ -154,6 +155,8 @@ watch(
     }
   },
 )
+
+watch(() => route.query.favorite, () => consumeFavoriteIntent())
 
 watch(
   () => [authState.loggedIn, authState.memberId] as const,
@@ -209,8 +212,15 @@ async function fetchBookInfo() {
     if (requestVersion === bookRequestVersion) {
       loadingBookId = ''
       funcData.loading = false
+      consumeFavoriteIntent()
     }
   }
+}
+
+function consumeFavoriteIntent() {
+  if (route.query.favorite !== '1' || funcData.loading || pageData.value.bookId !== getRouteBookId()) return
+  void router.replace({ path: route.path, query: { ...route.query, favorite: undefined } })
+  void openFavoriteDialog()
 }
 
 function getRouteBookId(): string {
