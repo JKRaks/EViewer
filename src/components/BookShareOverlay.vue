@@ -339,8 +339,6 @@ async function shareLinkWithSystem() {
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%);
-  -webkit-mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%);
 }
 
 .share-close:hover,
@@ -416,8 +414,6 @@ async function shareLinkWithSystem() {
   background: rgba(32, 49, 75, 0.3);
   backdrop-filter: blur(16px) saturate(1.15);
   -webkit-backdrop-filter: blur(16px) saturate(1.15);
-  mask-image: radial-gradient(ellipse farthest-corner, #000 58%, transparent 100%);
-  -webkit-mask-image: radial-gradient(ellipse farthest-corner, #000 58%, transparent 100%);
   content: '';
 }
 
