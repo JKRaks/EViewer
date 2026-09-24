@@ -6,6 +6,7 @@ import { bookImageBusi } from '@/core/books/bookImgBusi'
 import { bookImgInput } from '@/core/model/book/bookImgInput'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
 import { Loading, RefreshRight } from '@element-plus/icons-vue'
+import { ElMessageBox } from 'element-plus'
 import {
   cacheImageUrl,
   getBookInfoWithCache,
@@ -16,6 +17,7 @@ import {
   updateImagePageProgress,
 } from '@/core/cache/galleryCache'
 import type { GalleryImagePageRecord } from '@/core/cache/indexedDb'
+import { getReadingHistory, isReadingHistoryEnabled, recordViewedImage } from '@/core/cache/readingHistory'
 
 interface ViewerImageItem {
   key: string
@@ -40,8 +42,12 @@ const bookId = (route.query.bookId ?? route.params.bookId) as string | undefined
 const imageBusi = new bookImageBusi()
 
 let bookInfo: bookInfoOutput | null = null
+let bookMetadata: bookInfoOutput | null = null
 let currentPageQueue: PageImageQueue | null = null
 let isViewUnmounted = false
+let loadingPrevious = false
+let lastMainScrollTop = 0
+let scrollRoot: HTMLElement | null = null
 let cachedImagePages = new Map<number, GalleryImagePageRecord>()
 let cachedImageUrls = new Map<string, string>()
 
@@ -73,6 +79,8 @@ onMounted(() => {
   viewportQuery = window.matchMedia('(max-width: 767px) and (orientation: portrait)')
   isSmallPortrait.value = viewportQuery.matches
   viewportQuery.addEventListener('change', updateViewportMode)
+  scrollRoot = document.querySelector<HTMLElement>('.layout-main')
+  scrollRoot?.addEventListener('scroll', handleReaderScroll, { passive: true })
   void initialize()
 })
 
@@ -80,6 +88,16 @@ onUnmounted(() => {
   isViewUnmounted = true
   imageObserver?.disconnect()
   viewportQuery?.removeEventListener('change', updateViewportMode)
+  scrollRoot?.removeEventListener('scroll', handleReaderScroll)
+})
+
+watch(currentImageOrdinal, (ordinal) => {
+  if (!bookId || !bookMetadata || !ordinal || !isReadingHistoryEnabled()) return
+  void recordViewedImage(bookId, ordinal, {
+    title: bookMetadata.bookName,
+    coverUrl: bookMetadata.coverImage,
+    imageCount: totalImages.value,
+  })
 })
 
 watch(() => bookImages.value.length, () => void observeVisibleImages(), { flush: 'post' })
@@ -127,6 +145,7 @@ async function initialize() {
     cachedImagePages = new Map()
     cachedImageUrls = new Map()
     pageData.noMore = false
+    currentImageOrdinal.value = 0
 
     const [cachedPages, cachedUrls] = await Promise.all([
       getCachedImagePages(bookId),
@@ -135,20 +154,42 @@ async function initialize() {
     cachedImagePages = new Map(cachedPages.map((page) => [page.pageIndex, page]))
     cachedImageUrls = cachedUrls
 
-    bookInfo = await fetchBookInfo(bookId)
-    if (!bookInfo?.isSuccess) {
-      console.error('获取书籍信息失败:', bookInfo?.msg)
+    const firstPage = await fetchBookInfo(bookId)
+    if (!firstPage.isSuccess || isViewUnmounted) {
+      console.error('获取书籍信息失败:', firstPage.msg)
       return
     }
-
-    totalImages.value = bookInfo.imageCount
-    if (!totalImages.value) {
+    bookMetadata = firstPage
+    if (!firstPage.imageCount) {
       const detail = await getBookInfoWithCache(Object.assign(new bookInfoInput(), { bookId, page: 0 }), 'detail')
-      if (detail.isSuccess) totalImages.value = detail.imageCount
+      if (detail.isSuccess) bookMetadata = detail
     }
+    totalImages.value = bookMetadata.imageCount
 
+    const history = await getReadingHistory(bookId)
+    let resumeOrdinal = 1
+    if (history?.lastOrdinal && history.lastOrdinal <= totalImages.value && route.query.reading !== 'start') {
+      if (route.query.reading === 'continue') {
+        resumeOrdinal = history.lastOrdinal
+      } else {
+        try {
+          await ElMessageBox.confirm(
+            `上次看到第 ${history.lastOrdinal} 张，继续阅读吗？`,
+            '继续阅读',
+            { confirmButtonText: '继续阅读', cancelButtonText: '从头阅读', showClose: false },
+          )
+          resumeOrdinal = history.lastOrdinal
+        } catch {
+          resumeOrdinal = 1
+        }
+      }
+    }
+    if (isViewUnmounted) return
+    const targetPage = Math.floor((resumeOrdinal - 1) / 20)
+    bookInfo = targetPage ? await fetchBookInfo(bookId, targetPage) : firstPage
+    if (!bookInfo.isSuccess || isViewUnmounted) throw new Error(bookInfo.msg || '加载阅读位置失败')
     pageData.pageIndex = bookInfo.pageIndex
-    await appendPageInOrder(bookInfo)
+    await appendPageInOrder(bookInfo, (resumeOrdinal - 1) % 20)
   } catch (error) {
     console.error('初始化阅读页失败:', error)
   } finally {
@@ -203,7 +244,54 @@ async function loadMorePic() {
   }
 }
 
-async function appendPageInOrder(current: bookInfoOutput): Promise<void> {
+function handleReaderScroll() {
+  if (!scrollRoot || isViewUnmounted) return
+  const position = scrollRoot.scrollTop
+  if (position < lastMainScrollTop && position < 180 && (bookImages.value[0]?.ordinal ?? 1) > 1) {
+    void loadPreviousImages()
+  }
+  lastMainScrollTop = position
+}
+
+async function loadPreviousImages() {
+  if (!bookId || loadingPrevious || isViewUnmounted || !scrollRoot) return
+  const first = bookImages.value[0]
+  if (!first || first.ordinal <= 1) return
+  loadingPrevious = true
+  const anchor = document.querySelector<HTMLElement>(`.viewer-view .image-block[data-ordinal="${first.ordinal}"]`)
+  const anchorTop = anchor?.getBoundingClientRect().top ?? 0
+  try {
+    const previousOrdinal = first.ordinal - 1
+    const pageIndex = Math.floor((previousOrdinal - 1) / 20)
+    const page = await fetchBookInfo(bookId, pageIndex)
+    if (!page.isSuccess || isViewUnmounted) throw new Error(page.msg || '加载前面的图片失败')
+    const ids = getPageImageIds(page)
+    const end = (previousOrdinal - 1) % 20 + 1
+    const start = Math.max(0, end - imageBatchSize)
+    const previousItems: ViewerImageItem[] = ids.slice(start, end).map((imageId, index) => ({
+      key: `${bookId}-${pageIndex}-${start + index}`,
+      ordinal: pageIndex * 20 + start + index + 1,
+      imageId,
+      url: getReusableCachedImageUrl(imageId),
+      loading: false,
+      failed: false,
+      autoRetryAttempted: false,
+    }))
+    for (const item of previousItems) {
+      if (!item.url) await loadImageItem(item)
+      if (isViewUnmounted) return
+    }
+    bookImages.value.unshift(...previousItems)
+    await nextTick()
+    if (anchor && scrollRoot) scrollRoot.scrollTop += anchor.getBoundingClientRect().top - anchorTop
+  } catch (error) {
+    console.error('向上加载图片失败:', error)
+  } finally {
+    loadingPrevious = false
+  }
+}
+
+async function appendPageInOrder(current: bookInfoOutput, startImageIndex = 0): Promise<void> {
   if (isViewUnmounted) {
     return
   }
@@ -219,8 +307,10 @@ async function appendPageInOrder(current: bookInfoOutput): Promise<void> {
   const firstInvalidCachedIndex = imageIds
     .slice(0, cachedAttemptedImageCount)
     .findIndex((imageId) => !getReusableCachedImageUrl(imageId))
-  const attemptedImageCount =
-    firstInvalidCachedIndex === -1 ? cachedAttemptedImageCount : firstInvalidCachedIndex
+  const attemptedImageCount = Math.max(
+    startImageIndex,
+    firstInvalidCachedIndex === -1 ? cachedAttemptedImageCount : firstInvalidCachedIndex,
+  )
 
   currentPageQueue = {
     bookId: current.bookId,
@@ -230,11 +320,11 @@ async function appendPageInOrder(current: bookInfoOutput): Promise<void> {
   }
 
   bookImages.value.push(
-    ...imageIds.slice(0, attemptedImageCount).map((imageId, index) => {
+    ...imageIds.slice(startImageIndex, attemptedImageCount).map((imageId, index) => {
       const url = getReusableCachedImageUrl(imageId)
       return {
-        key: `${current.bookId}-${current.pageIndex}-${index}`,
-        ordinal: current.pageIndex * 20 + index + 1,
+        key: `${current.bookId}-${current.pageIndex}-${startImageIndex + index}`,
+        ordinal: current.pageIndex * 20 + startImageIndex + index + 1,
         imageId,
         url,
         loading: false,
