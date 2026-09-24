@@ -50,6 +50,7 @@ let isViewUnmounted = false
 let loadingPrevious = false
 let lastMainScrollTop = 0
 let scrollRoot: HTMLElement | null = null
+let lastRecordedOrdinal = 0
 let cachedImagePages = new Map<number, GalleryImagePageRecord>()
 let cachedImageUrls = new Map<string, string>()
 
@@ -70,6 +71,7 @@ const progressPercentage = computed(() =>
 )
 const showLineProgress = computed(() => isSmallPortrait.value !== compactProgress.value)
 let imageObserver: IntersectionObserver | null = null
+let visibleImageFrame = 0
 let viewportQuery: MediaQueryList | null = null
 
 const infiniteScrollDisabled = computed(() => {
@@ -89,6 +91,7 @@ onMounted(() => {
 onUnmounted(() => {
   isViewUnmounted = true
   imageObserver?.disconnect()
+  cancelAnimationFrame(visibleImageFrame)
   viewportQuery?.removeEventListener('change', updateViewportMode)
   scrollRoot?.removeEventListener('scroll', handleReaderScroll)
 })
@@ -99,7 +102,8 @@ watch(currentImageOrdinal, (ordinal) => {
 })
 
 function persistViewedImage(ordinal: number) {
-  if (!bookId || !bookMetadata || !ordinal || !isReadingHistoryEnabled()) return
+  if (!bookId || !bookMetadata || !ordinal || !isReadingHistoryEnabled() || ordinal === lastRecordedOrdinal) return
+  lastRecordedOrdinal = ordinal
   void recordViewedImage(bookId, ordinal, {
     title: bookMetadata.bookName,
     coverUrl: bookMetadata.coverImage,
@@ -109,7 +113,32 @@ function persistViewedImage(ordinal: number) {
 
 function handleImageRendered(image: ViewerImageItem) {
   image.rendered = true
-  if (image.ordinal === currentImageOrdinal.value) persistViewedImage(image.ordinal)
+  requestVisibleImageUpdate()
+}
+
+function requestVisibleImageUpdate() {
+  if (visibleImageFrame) return
+  visibleImageFrame = requestAnimationFrame(() => {
+    visibleImageFrame = 0
+    if (!scrollRoot || isViewUnmounted) return
+    const center = scrollRoot.getBoundingClientRect().top + scrollRoot.clientHeight / 2
+    let closest: { ordinal: number; distance: number } | undefined
+    document.querySelectorAll<HTMLElement>('.viewer-view .image-block[data-ordinal]').forEach((node) => {
+      const rect = node.getBoundingClientRect()
+      const distance = rect.top <= center && rect.bottom >= center
+        ? 0
+        : Math.min(Math.abs(rect.top - center), Math.abs(rect.bottom - center))
+      const ordinal = Number(node.dataset.ordinal)
+      if (Number.isFinite(ordinal) && (!closest || distance < closest.distance)) {
+        closest = { ordinal, distance }
+      }
+    })
+    const visibleOrdinal = closest?.ordinal ?? 0
+    if (visibleOrdinal > 0) currentImageOrdinal.value = visibleOrdinal
+    if (visibleOrdinal && bookImages.value.some((item) => item.ordinal === visibleOrdinal && item.rendered)) {
+      persistViewedImage(visibleOrdinal)
+    }
+  })
 }
 
 watch(() => bookImages.value.length, () => void observeVisibleImages(), { flush: 'post' })
@@ -125,22 +154,13 @@ async function observeVisibleImages() {
   const scrollRoot = document.querySelector<HTMLElement>('.layout-main')
   if (!scrollRoot) return
   imageObserver = new IntersectionObserver(
-    (entries) => {
-      const visible = entries.filter((entry) => entry.isIntersecting)
-      if (!visible.length) return
-      const center = scrollRoot.getBoundingClientRect().top + scrollRoot.clientHeight / 2
-      visible.sort((left, right) =>
-        Math.abs(left.boundingClientRect.top + left.boundingClientRect.height / 2 - center) -
-        Math.abs(right.boundingClientRect.top + right.boundingClientRect.height / 2 - center),
-      )
-      const ordinal = Number((visible[0]?.target as HTMLElement | undefined)?.dataset.ordinal)
-      if (Number.isFinite(ordinal) && ordinal > 0) currentImageOrdinal.value = ordinal
-    },
+    () => requestVisibleImageUpdate(),
     { root: scrollRoot, rootMargin: '-35% 0px -35% 0px' },
   )
   document.querySelectorAll<HTMLElement>('.viewer-view .image-block[data-ordinal]').forEach((node) =>
     imageObserver?.observe(node),
   )
+  requestVisibleImageUpdate()
 }
 
 async function initialize() {
@@ -158,6 +178,7 @@ async function initialize() {
     cachedImageUrls = new Map()
     pageData.noMore = false
     currentImageOrdinal.value = 0
+    lastRecordedOrdinal = 0
 
     const [cachedPages, cachedUrls] = await Promise.all([
       getCachedImagePages(bookId),
@@ -258,6 +279,7 @@ async function loadMorePic() {
 
 function handleReaderScroll() {
   if (!scrollRoot || isViewUnmounted) return
+  requestVisibleImageUpdate()
   const position = scrollRoot.scrollTop
   if (position < lastMainScrollTop && position < 180 && (bookImages.value[0]?.ordinal ?? 1) > 1) {
     void loadPreviousImages()
@@ -677,12 +699,21 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
   width: 136px;
   height: 112px;
   padding: 6px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-radius: 12px;
+  border: 0;
+  border-radius: 50%;
   color: var(--el-text-color-primary);
-  background: color-mix(in srgb, var(--el-bg-color-overlay) 72%, transparent);
-  backdrop-filter: blur(12px);
+  background: color-mix(in srgb, var(--el-bg-color-overlay) 18%, transparent);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
   cursor: pointer;
+}
+
+.reader-progress:not(.reader-progress--line) :deep(.el-progress-circle svg) {
+  transform: rotate(90deg);
+}
+
+.reader-progress:not(.reader-progress--line) :deep(.el-progress-circle__track) {
+  stroke: color-mix(in srgb, var(--el-text-color-primary) 22%, transparent);
 }
 
 .reader-progress--line {
@@ -690,6 +721,7 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
   display: flex;
   width: clamp(88px, 16.67dvh, 150px);
   height: 34px;
+  border-radius: 12px;
   flex-direction: row-reverse;
   gap: 5px;
   transform: rotate(-90deg);

@@ -366,7 +366,7 @@ async function shareLinkWithSystem() {
 .share-preview {
   display: block;
   width: 100%;
-  max-height: calc(100dvh - 190px);
+  max-height: calc(100dvh - 350px);
   object-fit: contain;
   filter: drop-shadow(0 24px 44px rgba(0, 0, 0, 0.34));
 }
