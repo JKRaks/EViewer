@@ -4,7 +4,6 @@ import { getCategoryDisplayName } from '@/core/common/category'
 import { resolveTagDisplayInfos } from '@/core/common/tagTranslations'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
 import type { ShareQrSource } from '@/core/share/shareSettings'
-import { getBookShareUrl } from '@/core/share/bookShareLinks'
 
 export type { ShareQrSource } from '@/core/share/shareSettings'
 
@@ -12,6 +11,14 @@ export interface GeneratedShareCard {
   blob: Blob
   targetUrl: string
   filename: string
+}
+
+export function getBookShareTargetUrl(bookId: string, source: ShareQrSource): string {
+  const normalizedBookId = bookId.trim().replace('-', '/')
+  if (source === 'source') return `https://e-hentai.org/g/${normalizedBookId}`
+  const siteUrl = new URL('/bookinfo', window.location.origin)
+  siteUrl.searchParams.set('bookId', bookId)
+  return siteUrl.toString()
 }
 
 interface ShareTag {
@@ -97,6 +104,7 @@ async function buildShareCardData(
   book: bookInfoOutput,
   source: ShareQrSource,
 ): Promise<ShareCardData> {
+
   const tagInputs = book.tags.flatMap((collection) =>
     collection.items.map((tag) => ({ collection: collection.collection, tag })),
   )
@@ -117,7 +125,7 @@ async function buildShareCardData(
     language: book.language || '未知',
     favorited: book.favorited,
     tags,
-    targetUrl: getBookShareUrl(book, source),
+    targetUrl: getBookShareTargetUrl(book.bookId, source),
   }
 }
 
