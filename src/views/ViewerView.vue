@@ -7,6 +7,7 @@ import { bookImgInput } from '@/core/model/book/bookImgInput'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
 import { Loading, RefreshRight } from '@element-plus/icons-vue'
 import { ElMessageBox } from 'element-plus'
+import 'element-plus/es/components/message-box/style/css'
 import {
   cacheImageUrl,
   getBookInfoWithCache,
@@ -25,6 +26,7 @@ interface ViewerImageItem {
   imageId: string
   url: string
   loading: boolean
+  rendered: boolean
   failed: boolean
   autoRetryAttempted: boolean
 }
@@ -92,13 +94,23 @@ onUnmounted(() => {
 })
 
 watch(currentImageOrdinal, (ordinal) => {
+  if (!bookImages.value.some((image) => image.ordinal === ordinal && image.rendered)) return
+  persistViewedImage(ordinal)
+})
+
+function persistViewedImage(ordinal: number) {
   if (!bookId || !bookMetadata || !ordinal || !isReadingHistoryEnabled()) return
   void recordViewedImage(bookId, ordinal, {
     title: bookMetadata.bookName,
     coverUrl: bookMetadata.coverImage,
     imageCount: totalImages.value,
   })
-})
+}
+
+function handleImageRendered(image: ViewerImageItem) {
+  image.rendered = true
+  if (image.ordinal === currentImageOrdinal.value) persistViewedImage(image.ordinal)
+}
 
 watch(() => bookImages.value.length, () => void observeVisibleImages(), { flush: 'post' })
 
@@ -274,6 +286,7 @@ async function loadPreviousImages() {
       imageId,
       url: getReusableCachedImageUrl(imageId),
       loading: false,
+      rendered: false,
       failed: false,
       autoRetryAttempted: false,
     }))
@@ -328,6 +341,7 @@ async function appendPageInOrder(current: bookInfoOutput, startImageIndex = 0): 
         imageId,
         url,
         loading: false,
+        rendered: false,
         failed: !url,
         autoRetryAttempted: false,
       }
@@ -363,6 +377,7 @@ async function loadNextImageBatch(): Promise<void> {
         imageId,
         url: getReusableCachedImageUrl(imageId),
         loading: false,
+        rendered: false,
         failed: false,
         autoRetryAttempted: false,
       })),
@@ -402,6 +417,7 @@ async function loadImageItem(target: ViewerImageItem): Promise<void> {
   }
 
   target.url = ''
+  target.rendered = false
   target.failed = false
   target.loading = true
 
@@ -444,6 +460,7 @@ async function handleImageLoadError(image: ViewerImageItem) {
   const shouldAutoRetry = !image.autoRetryAttempted
   image.autoRetryAttempted = true
   image.url = ''
+  image.rendered = false
   image.loading = shouldAutoRetry
   image.failed = !shouldAutoRetry
   cachedImageUrls.delete(image.imageId)
@@ -538,6 +555,7 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
               :src="image.url"
               class="reader-image"
               lazy
+              @load="handleImageRendered(image)"
               @error="handleImageLoadError(image)"
             />
             <button
@@ -668,12 +686,13 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
 }
 
 .reader-progress--line {
+  left: calc(48px + env(safe-area-inset-left));
   display: flex;
   width: clamp(88px, 16.67dvh, 150px);
   height: 34px;
   flex-direction: row-reverse;
   gap: 5px;
-  transform: rotate(-90deg) translateY(100%);
+  transform: rotate(-90deg);
   transform-origin: left bottom;
 }
 

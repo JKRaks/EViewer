@@ -538,7 +538,7 @@ async function shareLinkWithSystem() {
 
   .share-floating-content {
     width: calc(100vw - 24px);
-    gap: 64px;
+    gap: 18px;
   }
 
   .share-preview-stage {
@@ -546,12 +546,12 @@ async function shareLinkWithSystem() {
   }
 
   .share-preview {
-    max-height: calc(100dvh - 210px);
+    max-height: calc(100dvh - 330px);
   }
 
   .share-controls {
     width: 100%;
-    gap: 56px;
+    gap: 14px;
     padding-inline: 48px;
   }
 
