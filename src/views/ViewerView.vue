@@ -713,6 +713,10 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
   background: color-mix(in srgb, var(--el-bg-color-overlay) 20%, transparent);
   backdrop-filter: blur(18px) saturate(1.2);
   -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  content: '';
+}
+
+.reader-progress:not(.reader-progress--line)::before {
   mask-image:
     radial-gradient(circle closest-side, transparent 0 14%, #000 44% 78%, transparent 100%),
     conic-gradient(#000 0deg 215deg, transparent 235deg 305deg, #000 325deg 360deg);
@@ -721,7 +725,6 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
     conic-gradient(#000 0deg 215deg, transparent 235deg 305deg, #000 325deg 360deg);
   mask-composite: intersect;
   -webkit-mask-composite: source-in;
-  content: '';
 }
 
 .reader-progress :deep(.el-progress),
@@ -745,12 +748,6 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
   gap: 5px;
   transform: rotate(-90deg);
   transform-origin: left bottom;
-}
-
-.reader-progress--line::before {
-  mask-image: linear-gradient(to right, transparent, #000 12% 88%, transparent);
-  -webkit-mask-image: linear-gradient(to right, transparent, #000 12% 88%, transparent);
-  mask-composite: add;
 }
 
 .reader-progress--line :deep(.el-progress) {
