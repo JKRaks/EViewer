@@ -1,5 +1,5 @@
 <script lang="ts" setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { bookImageBusi } from '@/core/books/bookImgBusi'
@@ -19,6 +19,7 @@ import type { GalleryImagePageRecord } from '@/core/cache/indexedDb'
 
 interface ViewerImageItem {
   key: string
+  ordinal: number
   imageId: string
   url: string
   loading: boolean
@@ -52,6 +53,16 @@ const pageData = reactive({
   noMore: false,
 })
 const bookImages = ref<ViewerImageItem[]>([])
+const totalImages = ref(0)
+const currentImageOrdinal = ref(0)
+const compactProgress = ref(false)
+const isSmallPortrait = ref(false)
+const progressPercentage = computed(() =>
+  totalImages.value ? Math.min(100, Math.round((currentImageOrdinal.value / totalImages.value) * 100)) : 0,
+)
+const showLineProgress = computed(() => isSmallPortrait.value !== compactProgress.value)
+let imageObserver: IntersectionObserver | null = null
+let viewportQuery: MediaQueryList | null = null
 
 const infiniteScrollDisabled = computed(() => {
   return pageData.loading || pageData.loadingMore || pageData.pageRendering || pageData.noMore
@@ -59,12 +70,48 @@ const infiniteScrollDisabled = computed(() => {
 
 onMounted(() => {
   isViewUnmounted = false
+  viewportQuery = window.matchMedia('(max-width: 767px) and (orientation: portrait)')
+  isSmallPortrait.value = viewportQuery.matches
+  viewportQuery.addEventListener('change', updateViewportMode)
   void initialize()
 })
 
 onUnmounted(() => {
   isViewUnmounted = true
+  imageObserver?.disconnect()
+  viewportQuery?.removeEventListener('change', updateViewportMode)
 })
+
+watch(() => bookImages.value.length, () => void observeVisibleImages(), { flush: 'post' })
+
+function updateViewportMode() {
+  isSmallPortrait.value = viewportQuery?.matches ?? false
+}
+
+async function observeVisibleImages() {
+  await nextTick()
+  if (isViewUnmounted) return
+  imageObserver?.disconnect()
+  const scrollRoot = document.querySelector<HTMLElement>('.layout-main')
+  if (!scrollRoot) return
+  imageObserver = new IntersectionObserver(
+    (entries) => {
+      const visible = entries.filter((entry) => entry.isIntersecting)
+      if (!visible.length) return
+      const center = scrollRoot.getBoundingClientRect().top + scrollRoot.clientHeight / 2
+      visible.sort((left, right) =>
+        Math.abs(left.boundingClientRect.top + left.boundingClientRect.height / 2 - center) -
+        Math.abs(right.boundingClientRect.top + right.boundingClientRect.height / 2 - center),
+      )
+      const ordinal = Number((visible[0]?.target as HTMLElement | undefined)?.dataset.ordinal)
+      if (Number.isFinite(ordinal) && ordinal > 0) currentImageOrdinal.value = ordinal
+    },
+    { root: scrollRoot, rootMargin: '-35% 0px -35% 0px' },
+  )
+  document.querySelectorAll<HTMLElement>('.viewer-view .image-block[data-ordinal]').forEach((node) =>
+    imageObserver?.observe(node),
+  )
+}
 
 async function initialize() {
   if (!bookId) {
@@ -92,6 +139,12 @@ async function initialize() {
     if (!bookInfo?.isSuccess) {
       console.error('获取书籍信息失败:', bookInfo?.msg)
       return
+    }
+
+    totalImages.value = bookInfo.imageCount
+    if (!totalImages.value) {
+      const detail = await getBookInfoWithCache(Object.assign(new bookInfoInput(), { bookId, page: 0 }), 'detail')
+      if (detail.isSuccess) totalImages.value = detail.imageCount
     }
 
     pageData.pageIndex = bookInfo.pageIndex
@@ -181,6 +234,7 @@ async function appendPageInOrder(current: bookInfoOutput): Promise<void> {
       const url = getReusableCachedImageUrl(imageId)
       return {
         key: `${current.bookId}-${current.pageIndex}-${index}`,
+        ordinal: current.pageIndex * 20 + index + 1,
         imageId,
         url,
         loading: false,
@@ -215,6 +269,7 @@ async function loadNextImageBatch(): Promise<void> {
     bookImages.value.push(
       ...batchImageIds.map((imageId, index) => ({
         key: `${queue.bookId}-${queue.pageIndex}-${batchStart + index}`,
+        ordinal: queue.pageIndex * 20 + batchStart + index + 1,
         imageId,
         url: getReusableCachedImageUrl(imageId),
         loading: false,
@@ -382,7 +437,7 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
     </div>
 
     <div v-else class="image-list">
-      <div v-for="image in bookImages" :key="image.key" class="image-block">
+      <div v-for="image in bookImages" :key="image.key" class="image-block" :data-ordinal="image.ordinal">
         <el-skeleton :loading="image.loading" animated class="image-skeleton">
           <template #template>
             <el-skeleton-item variant="image" class="image-skeleton__media" />
@@ -421,6 +476,21 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
     <div v-else-if="pageData.noMore && bookImages.length > 0" class="load-state">
       没有更多图片了
     </div>
+
+    <button
+      v-if="totalImages && currentImageOrdinal"
+      type="button"
+      class="reader-progress"
+      :class="{ 'reader-progress--line': showLineProgress }"
+      :aria-label="`阅读进度 ${currentImageOrdinal} / ${totalImages}，点击切换样式`"
+      @click="compactProgress = !compactProgress"
+    >
+      <template v-if="showLineProgress">
+        <span class="reader-progress__count">{{ currentImageOrdinal }}/{{ totalImages }}</span>
+        <el-progress :percentage="progressPercentage" :show-text="false" :stroke-width="7" />
+      </template>
+      <el-progress v-else type="dashboard" :percentage="progressPercentage" :width="112" :stroke-width="9" />
+    </button>
   </div>
 </template>
 
@@ -487,6 +557,45 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
   gap: 8px;
   padding: 20px 0 8px;
   color: var(--el-text-color-secondary);
+}
+
+.reader-progress {
+  position: fixed;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  left: calc(14px + env(safe-area-inset-left));
+  z-index: 1500;
+  display: grid;
+  place-items: center;
+  width: 136px;
+  height: 112px;
+  padding: 6px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 12px;
+  color: var(--el-text-color-primary);
+  background: color-mix(in srgb, var(--el-bg-color-overlay) 72%, transparent);
+  backdrop-filter: blur(12px);
+  cursor: pointer;
+}
+
+.reader-progress--line {
+  display: flex;
+  width: clamp(88px, 16.67dvh, 150px);
+  height: 34px;
+  flex-direction: row-reverse;
+  gap: 5px;
+  transform: rotate(-90deg) translateY(100%);
+  transform-origin: left bottom;
+}
+
+.reader-progress--line :deep(.el-progress) {
+  flex: 1;
+  min-width: 0;
+}
+
+.reader-progress__count {
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 @media (max-width: 768px) {
