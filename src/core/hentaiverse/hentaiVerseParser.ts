@@ -780,9 +780,9 @@ function parseBattleLog(document: Document) {
       ':scope > tbody > tr, :scope > tr, :scope > table > tbody > tr, :scope > table > tr',
     ),
   )
-  if (!topLevelRows.length) return readTextRows(log).map(translateHentaiVerseBattleLog)
+  if (!topLevelRows.length) return readTextRows(log).reverse().map(translateHentaiVerseBattleLog)
 
-  return topLevelRows.flatMap((row) => {
+  return topLevelRows.reverse().flatMap((row) => {
     const nestedTable = row.querySelector('table')
     if (!nestedTable) return [translateHentaiVerseBattleLog(cleanText(row.textContent))]
 
