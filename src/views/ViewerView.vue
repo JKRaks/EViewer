@@ -697,16 +697,35 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
   display: grid;
   place-items: center;
   width: 136px;
-  height: 112px;
+  height: 136px;
   padding: 6px;
   border: 0;
   border-radius: 50%;
   color: var(--el-text-color-primary);
-  background: color-mix(in srgb, var(--el-bg-color-overlay) 18%, transparent);
-  backdrop-filter: blur(18px) saturate(1.2);
-  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  background: transparent;
   cursor: pointer;
 }
+
+.reader-progress::before {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: color-mix(in srgb, var(--el-bg-color-overlay) 20%, transparent);
+  backdrop-filter: blur(18px) saturate(1.2);
+  -webkit-backdrop-filter: blur(18px) saturate(1.2);
+  mask-image:
+    radial-gradient(circle closest-side, transparent 0 14%, #000 44% 78%, transparent 100%),
+    conic-gradient(#000 0deg 215deg, transparent 235deg 305deg, #000 325deg 360deg);
+  -webkit-mask-image:
+    radial-gradient(circle closest-side, transparent 0 14%, #000 44% 78%, transparent 100%),
+    conic-gradient(#000 0deg 215deg, transparent 235deg 305deg, #000 325deg 360deg);
+  mask-composite: intersect;
+  -webkit-mask-composite: source-in;
+  content: '';
+}
+
+.reader-progress :deep(.el-progress),
+.reader-progress__count { position: relative; }
 
 .reader-progress:not(.reader-progress--line) :deep(.el-progress-circle svg) {
   transform: rotate(90deg);
@@ -726,6 +745,12 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
   gap: 5px;
   transform: rotate(-90deg);
   transform-origin: left bottom;
+}
+
+.reader-progress--line::before {
+  mask-image: linear-gradient(to right, transparent, #000 12% 88%, transparent);
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 12% 88%, transparent);
+  mask-composite: add;
 }
 
 .reader-progress--line :deep(.el-progress) {
