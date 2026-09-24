@@ -602,6 +602,8 @@ onUnmounted(() => {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
+  mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%);
   transition:
     transform 0.18s ease,
     background-color 0.18s ease,

@@ -114,7 +114,7 @@ export class HentaiVerseBusi {
 
   /**
    * Input: 当前战斗令牌、动作、目标和技能编号。
-   * Output: 合并增量片段，并在响应不含日志时同步完整战斗页；动作不会自动重试。
+   * Output: 合并增量片段，再同步完整战斗页确认怪物状态；动作不会自动重试。
    */
   async sendBattleAction(
     current: HentaiVerseBattleSnapshot,
@@ -130,19 +130,25 @@ export class HentaiVerseBusi {
     })
     const updated = parseBattleResponse(payload, current)
     if (updated.completed) return updated
-    if (typeof payload.textlog === 'string' && payload.textlog.trim()) return updated
-
-    let html = ''
+    let html: string
     try {
       html = await this.requestText('/hentaiverse/page')
     } catch {
-      return updated
+      throw new Error('战斗动作已提交，但无法确认最新目标状态；请恢复战斗后再操作')
     }
     if (isHentaiVerseBattleHtml(html)) {
       const refreshed = parseBattlePage(html)
+      const maxOverlap = Math.min(updated.log.length, refreshed.log.length)
+      let overlap = 0
+      for (let count = maxOverlap; count > 0; count--) {
+        if (updated.log.slice(-count).every((line, index) => line === refreshed.log[index])) {
+          overlap = count
+          break
+        }
+      }
       return {
         ...refreshed,
-        log: [...updated.log, ...refreshed.log].slice(-40),
+        log: [...updated.log, ...refreshed.log.slice(overlap)].slice(-40),
       }
     }
 
@@ -167,6 +173,7 @@ export class HentaiVerseBusi {
     })
     const response = await fetch(url, {
       method: options.method || 'GET',
+      cache: path === '/hentaiverse/page' ? 'no-store' : 'default',
       credentials: 'include',
       headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
       body: options.body ? JSON.stringify(options.body) : undefined,

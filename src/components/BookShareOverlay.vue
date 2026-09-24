@@ -338,6 +338,9 @@ async function shareLinkWithSystem() {
   background: rgba(32, 49, 75, 0.72);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%);
+  -webkit-mask-image: radial-gradient(circle closest-side, #000 72%, transparent 100%);
 }
 
 .share-close:hover,
@@ -394,14 +397,28 @@ async function shareLinkWithSystem() {
 }
 
 .share-link-box {
+  position: relative;
+  isolation: isolate;
   width: min(560px, 100%);
   min-width: 0;
   padding: 10px 12px;
-  border: 1px solid rgba(255, 255, 255, 0.32);
+  border: 0;
   border-radius: 8px;
   color: #fff;
-  background: rgba(32, 49, 75, 0.7);
-  backdrop-filter: blur(10px);
+  background: transparent;
+}
+
+.share-link-box::before {
+  position: absolute;
+  z-index: -1;
+  inset: -8px;
+  border-radius: 16px;
+  background: rgba(32, 49, 75, 0.3);
+  backdrop-filter: blur(16px) saturate(1.15);
+  -webkit-backdrop-filter: blur(16px) saturate(1.15);
+  mask-image: radial-gradient(ellipse farthest-corner, #000 58%, transparent 100%);
+  -webkit-mask-image: radial-gradient(ellipse farthest-corner, #000 58%, transparent 100%);
+  content: '';
 }
 
 .share-link-title {

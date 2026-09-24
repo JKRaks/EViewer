@@ -33,7 +33,14 @@ interface QueuedBattleAction {
 
 const selectedTarget = ref(1)
 const battle = computed(() => hentaiVerseState.battle)
-const livingMonsters = computed(() => battle.value?.monsters.filter((monster) => !monster.defeated) || [])
+const livingMonsters = computed(() => battle.value?.monsters.filter(
+  (monster) => !monster.defeated && monster.healthPercent !== 0,
+) || [])
+const activeTarget = computed(() =>
+  livingMonsters.value.some((monster) => monster.id === selectedTarget.value)
+    ? selectedTarget.value
+    : livingMonsters.value[0]?.id,
+)
 const newestLogFirst = computed(() => [...(battle.value?.log ?? [])].reverse())
 const monsterGaugeWidth = ref(64)
 const queue = ref<QueuedBattleAction[]>([])
@@ -69,7 +76,7 @@ const vitalColors: Record<HentaiVerseBattleVital['key'], string> = {
 watch(
   livingMonsters,
   (monsters) => {
-    if (!monsters.some((monster) => monster.id === selectedTarget.value)) selectedTarget.value = monsters[0]?.id || 1
+    if (!monsters.some((monster) => monster.id === selectedTarget.value)) selectedTarget.value = monsters[0]?.id || 0
   },
   { immediate: true },
 )
@@ -91,7 +98,8 @@ watch(
 async function act(action: HentaiVerseBattleAction) {
   if (queueRunning.value) return
   try {
-    const target = action.target === 'enemy' ? selectedTarget.value : 0
+    const target = action.target === 'enemy' ? activeTarget.value : 0
+    if (target === undefined) throw new Error('没有可用的怪物目标')
     await performHentaiVerseBattleAction(action.mode, target, action.skill)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '战斗动作提交失败')
@@ -99,7 +107,9 @@ async function act(action: HentaiVerseBattleAction) {
 }
 
 function openQueueSettings() {
-  draftQueue.value = queue.value.map((item) => `${item.mode}:${item.skill}`)
+  draftQueue.value = queue.value.length
+    ? queue.value.map((item) => `${item.mode}:${item.skill}`)
+    : ['']
   queueDialogVisible.value = true
 }
 
@@ -165,8 +175,8 @@ async function executeQueue() {
       if (!current || current.completed) return
       const action = current.actions.find((item) => item.mode === step.mode && item.skill === step.skill)
       if (!action) throw new Error(`操作「${step.label}」当前不可用，队列已停止`)
-      const target = action.target === 'enemy' ? selectedTarget.value : 0
-      if (action.target === 'enemy' && !current.monsters.some((monster) => monster.id === target && !monster.defeated)) {
+      const target = action.target === 'enemy' ? activeTarget.value : 0
+      if (target === undefined) {
         throw new Error('没有可用的怪物目标，队列已停止')
       }
       await performHentaiVerseBattleAction(action.mode, target, action.skill)
@@ -255,7 +265,7 @@ function closeLocalBattle() {
             v-for="monster in livingMonsters"
             :key="monster.id"
             type="button"
-            :class="{ active: selectedTarget === monster.id }"
+            :class="{ active: activeTarget === monster.id }"
             @click="selectedTarget = monster.id"
           >
             <strong>{{ monster.name }}</strong>
@@ -336,12 +346,13 @@ function closeLocalBattle() {
     <div class="queue-editor">
       <div v-for="(_, index) in draftQueue" :key="index" class="queue-editor__row">
         <span>{{ index + 1 }}.</span>
-        <el-select v-model="draftQueue[index]" placeholder="选择操作">
+        <el-select v-model="draftQueue[index]" placeholder="选择操作" :teleported="false">
           <el-option v-for="option in actionOptions" :key="option.value" :label="option.label" :value="option.value" />
         </el-select>
         <el-button :icon="Close" aria-label="移除这项操作" @click="draftQueue.splice(index, 1)" />
       </div>
-      <el-button :disabled="draftQueue.length >= 5" @click="draftQueue.push('')">添加操作</el-button>
+      <p v-if="!actionOptions.length" class="queue-editor__empty">当前回合没有可选操作，请刷新战斗状态。</p>
+      <el-button :disabled="draftQueue.length >= 5 || !actionOptions.length" @click="draftQueue.push('')">添加操作</el-button>
     </div>
     <template #footer>
       <el-button @click="queueDialogVisible = false">取消</el-button>
@@ -428,8 +439,11 @@ function closeLocalBattle() {
 }
 
 .queue-editor { display: grid; gap: 10px; }
-.queue-editor__row { display: flex; align-items: center; gap: 8px; }
-.queue-editor__row :deep(.el-select) { flex: 1; min-width: 0; }
+.queue-editor__row { display: grid; grid-template-columns: 22px minmax(0, 1fr) 32px; align-items: center; gap: 8px; }
+.queue-editor__row > span { text-align: right; font-variant-numeric: tabular-nums; }
+.queue-editor__row :deep(.el-select) { width: 100%; min-width: 0; }
+.queue-editor__row :deep(.el-button) { width: 32px; margin: 0; }
+.queue-editor__empty { margin: 0; color: var(--el-text-color-secondary); font-size: 13px; }
 
 .battle-actions :deep(.el-button) {
   min-width: 0;
