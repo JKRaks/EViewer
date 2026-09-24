@@ -17,6 +17,7 @@ import {
 } from '@/core/common/tagTranslationWorkerClient'
 import type { TagTranslationCacheStatus } from '@/core/common/tagTranslationProtocol'
 import { clearGalleryDetailsCache, clearGalleryImageCache } from '@/core/cache/galleryCache'
+import { clearReadingHistory } from '@/core/cache/readingHistory'
 import { useShareSettings } from '@/core/share/shareSettings'
 import { useAuthState } from '@/core/auth/authState'
 import {
@@ -178,10 +179,24 @@ async function clearCache(kind: 'details' | 'images') {
   }
 }
 
+async function clearReadingHistoryFromSettings() {
+  try {
+    await ElMessageBox.confirm('确定清除全部浏览历史吗？', '清除浏览历史', {
+      confirmButtonText: '清除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await clearReadingHistory()
+    ElMessage.success('浏览历史已清除')
+  } catch (error) {
+    if (error !== 'cancel' && error !== 'close') ElMessage.error('清除浏览历史失败')
+  }
+}
+
 async function clearAllIndexedDb() {
   try {
     await ElMessageBox.confirm(
-      '确定完全清理 IndexedDB 中的标签翻译、画册详情和图片信息吗？',
+      '确定完全清理 IndexedDB 中的标签翻译、画册详情、图片信息和浏览历史吗？',
       '完全清理 IndexedDB',
       {
         confirmButtonText: '完全清理',
@@ -259,6 +274,13 @@ function formatDate(timestamp?: number) {
       <div class="setting-row">
         <span class="setting-name">缓存画册图片信息</span>
         <el-switch v-model="settings.cacheBookImageInfo" :disabled="!settings.enabled" />
+      </div>
+      <div class="setting-row">
+        <div>
+          <span class="setting-name">记录浏览历史</span>
+          <div class="setting-value">记录看过的图片和继续阅读的位置；关闭后隐藏历史入口</div>
+        </div>
+        <el-switch v-model="settings.cacheReadingHistory" :disabled="!settings.enabled" />
       </div>
     </section>
 
@@ -379,9 +401,13 @@ function formatDate(timestamp?: number) {
         </el-button>
       </div>
       <div class="setting-row">
+        <span class="setting-name">浏览历史</span>
+        <el-button :icon="Delete" :disabled="fullClearRunning" @click="clearReadingHistoryFromSettings">清除</el-button>
+      </div>
+      <div class="setting-row">
         <div>
           <div class="setting-name">全部 IndexedDB 数据</div>
-          <div class="setting-value">标签翻译、画册详情和图片信息</div>
+          <div class="setting-value">标签翻译、画册详情、图片信息和浏览历史</div>
         </div>
         <el-button
           type="danger"

@@ -14,12 +14,14 @@ import {
   Setting,
   StarFilled,
   Lightning,
+  Clock,
 } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import type { Component } from 'vue'
 import { useFloatingActions } from '@/composables/useFloatingActions'
 import { useAuthState } from '@/core/auth/authState'
+import { useIndexedDbCacheSettings } from '@/core/cache/cacheSettings'
 import { hentaiVerseState } from '@/core/hentaiverse/hentaiVerseRuntime'
 import { useGlobalState } from './core/common/globalStore'
 
@@ -51,6 +53,7 @@ const scrollThreshold = 48
 const { pageFloatingActions, clearFloatingActions } = useFloatingActions()
 const globalState = useGlobalState()
 const authState = useAuthState()
+const cacheSettings = useIndexedDbCacheSettings()
 const themeModeList = ['auto', 'dark', 'light'] as const
 let systemThemeMedia: MediaQueryList | null = null
 
@@ -101,6 +104,9 @@ const menuItems = computed<FloatingMenuItem[]>(() => [
       onClick: item.onClick,
       className: item.className,
     })),
+  ...(cacheSettings.enabled && cacheSettings.cacheReadingHistory
+    ? [{ key: 'reading-history', path: '/history', label: '浏览历史', icon: Clock }]
+    : []),
   {
     key: 'settings',
     path: '/settings',
