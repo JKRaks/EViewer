@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref, watch } from 'vue'
-import { Close, Download, Loading, Picture, Share, Link } from '@element-plus/icons-vue'
+import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { Close, CopyDocument, Download, Loading, Share } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import type { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
@@ -9,8 +9,8 @@ import {
   type GeneratedShareCard,
   type ShareQrSource,
 } from '@/core/share/bookShareCard'
+import { getBookShareUrl } from '@/core/share/bookShareLinks'
 import { useShareSettings } from '@/core/share/shareSettings'
-import BookShareLinkPanel from '@/components/BookShareLinkPanel.vue'
 
 const props = defineProps<{
   modelValue: boolean
@@ -23,8 +23,10 @@ const emit = defineEmits<{
 }>()
 
 const shareSettings = useShareSettings()
-const activeShareMode = ref<'image' | 'link'>('image')
 const qrSource = ref<ShareQrSource>(shareSettings.preferredLinkType)
+const shareLink = computed(() =>
+  props.book.bookId ? getBookShareUrl(props.book, qrSource.value) : '',
+)
 const generating = ref(false)
 const generationError = ref('')
 const generated = ref<GeneratedShareCard | null>(null)
@@ -41,7 +43,7 @@ watch(
       setBackgroundScrollLocked(true)
       window.addEventListener('keydown', handleKeydown)
       window.addEventListener('pagehide', handlePageHide)
-      if (activeShareMode.value === 'image' && qrSource.value === shareSettings.preferredLinkType) {
+      if (qrSource.value === shareSettings.preferredLinkType) {
         void renderPreview()
       } else {
         qrSource.value = shareSettings.preferredLinkType
@@ -198,6 +200,30 @@ async function shareImage() {
     ElMessage.error('调起系统分享失败')
   }
 }
+
+async function copyLink() {
+  if (!shareLink.value) return
+  try {
+    await navigator.clipboard.writeText(shareLink.value)
+    ElMessage.success('分享链接已复制')
+  } catch {
+    ElMessage.error('复制链接失败')
+  }
+}
+
+async function shareLinkWithSystem() {
+  if (!shareLink.value) return
+  if (!navigator.share) {
+    ElMessage.info('当前浏览器不支持系统分享，请复制链接')
+    return
+  }
+  try {
+    await navigator.share({ title: props.book.bookName, url: shareLink.value })
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return
+    ElMessage.error('调起系统分享失败')
+  }
+}
 </script>
 
 <template>
@@ -220,69 +246,68 @@ async function shareImage() {
         />
 
         <div class="share-floating-content" @click.stop>
-          <div class="share-mode-selector" role="tablist" aria-label="分享方式">
-            <el-radio-group v-model="activeShareMode">
-              <el-radio-button value="image"
-                ><el-icon><Picture /></el-icon> 图片分享</el-radio-button
-              >
-              <el-radio-button value="link"
-                ><el-icon><Link /></el-icon> 链接分享</el-radio-button
-              >
-            </el-radio-group>
+          <div class="share-preview-stage" aria-live="polite">
+            <el-icon v-if="generating" class="share-loading" :size="36"><Loading /></el-icon>
+            <div v-else-if="generationError" class="share-error">
+              <span>{{ generationError }}</span>
+              <el-button type="primary" @click="renderPreview">重新生成</el-button>
+            </div>
+            <img
+              v-else-if="previewUrl"
+              :src="previewUrl"
+              class="share-preview"
+              alt="EViewer 画册分享卡预览"
+            />
           </div>
 
-          <div v-show="activeShareMode === 'image'" class="share-image-content">
-            <div class="share-preview-stage" aria-live="polite">
-              <el-icon v-if="generating" class="share-loading" :size="36"><Loading /></el-icon>
-              <div v-else-if="generationError" class="share-error">
-                <span>{{ generationError }}</span>
-                <el-button type="primary" @click="renderPreview">重新生成</el-button>
-              </div>
-              <img
-                v-else-if="previewUrl"
-                :src="previewUrl"
-                class="share-preview"
-                alt="EViewer 画册分享卡预览"
-              />
+          <div class="share-controls">
+            <div class="share-source-control">
+              <span class="share-source-label">链接类型</span>
+              <el-radio-group
+                v-model="qrSource"
+                class="share-source-selector"
+                aria-label="链接类型"
+              >
+                <el-radio value="site">本站</el-radio>
+                <el-radio value="source">源站</el-radio>
+              </el-radio-group>
             </div>
-
-            <div class="share-controls">
-              <div class="share-source-control">
-                <span class="share-source-label">链接类型</span>
-                <el-radio-group
-                  v-model="qrSource"
-                  class="share-source-selector"
-                  aria-label="链接类型"
-                >
-                  <el-radio value="site">本站</el-radio>
-                  <el-radio value="source">源站</el-radio>
-                </el-radio-group>
-              </div>
-              <div class="share-action-row">
-                <el-tooltip content="下载分享图" placement="top">
-                  <el-button
-                    class="share-action-button"
-                    circle
-                    :icon="Download"
-                    :disabled="!generated || generating"
-                    aria-label="下载分享图"
-                    @click="downloadImage"
-                  />
-                </el-tooltip>
-                <el-tooltip content="系统分享" placement="top">
-                  <el-button
-                    class="share-action-button"
-                    circle
-                    :icon="Share"
-                    :disabled="!generated || generating"
-                    aria-label="系统分享"
-                    @click="shareImage"
-                  />
-                </el-tooltip>
-              </div>
+            <div class="share-action-row">
+              <el-tooltip content="下载分享图" placement="top">
+                <el-button
+                  class="share-action-button"
+                  circle
+                  :icon="Download"
+                  :disabled="!generated || generating"
+                  aria-label="下载分享图"
+                  @click="downloadImage"
+                />
+              </el-tooltip>
+              <el-tooltip content="系统分享" placement="top">
+                <el-button
+                  class="share-action-button"
+                  circle
+                  :icon="Share"
+                  :disabled="!generated || generating"
+                  aria-label="系统分享"
+                  @click="shareImage"
+                />
+              </el-tooltip>
             </div>
           </div>
-          <BookShareLinkPanel v-if="activeShareMode === 'link'" :book="book" />
+
+          <div class="share-link-box">
+            <span class="share-link-title">分享链接</span>
+            <div class="share-link-row">
+              <span class="share-link-value" :title="shareLink">{{ shareLink }}</span>
+              <el-tooltip content="复制链接" placement="top">
+                <el-button :icon="CopyDocument" aria-label="复制分享链接" :disabled="!shareLink" @click="copyLink" />
+              </el-tooltip>
+              <el-tooltip content="系统分享链接" placement="top">
+                <el-button :icon="Share" aria-label="系统分享链接" :disabled="!shareLink" @click="shareLinkWithSystem" />
+              </el-tooltip>
+            </div>
+          </div>
         </div>
       </div>
     </Transition>
@@ -331,22 +356,6 @@ async function shareImage() {
   gap: 20px;
 }
 
-.share-mode-selector :deep(.el-radio-button__inner) {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  min-width: 126px;
-  justify-content: center;
-}
-
-.share-image-content {
-  display: flex;
-  width: 100%;
-  flex-direction: column;
-  align-items: center;
-  gap: 20px;
-}
-
 .share-preview-stage {
   display: grid;
   width: 100%;
@@ -357,7 +366,7 @@ async function shareImage() {
 .share-preview {
   display: block;
   width: 100%;
-  max-height: calc(100dvh - 190px);
+  max-height: calc(100dvh - 350px);
   object-fit: contain;
   filter: drop-shadow(0 24px 44px rgba(0, 0, 0, 0.34));
 }
@@ -382,6 +391,43 @@ async function shareImage() {
   flex-direction: column;
   align-items: center;
   gap: 12px;
+}
+
+.share-link-box {
+  width: min(560px, 100%);
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255, 255, 255, 0.32);
+  border-radius: 8px;
+  color: #fff;
+  background: rgba(32, 49, 75, 0.7);
+  backdrop-filter: blur(10px);
+}
+
+.share-link-title {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+.share-link-row {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 6px;
+}
+
+.share-link-value {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: all;
+}
+
+.share-link-row :deep(.el-button + .el-button) {
+  margin-left: 0;
 }
 
 .share-source-control {
@@ -492,7 +538,7 @@ async function shareImage() {
 
   .share-floating-content {
     width: calc(100vw - 24px);
-    gap: 64px;
+    gap: 18px;
   }
 
   .share-preview-stage {
@@ -500,13 +546,17 @@ async function shareImage() {
   }
 
   .share-preview {
-    max-height: calc(100dvh - 210px);
+    max-height: calc(100dvh - 330px);
   }
 
   .share-controls {
     width: 100%;
-    gap: 56px;
+    gap: 14px;
     padding-inline: 48px;
+  }
+
+  .share-link-box {
+    width: 100%;
   }
 
   .share-action-row {

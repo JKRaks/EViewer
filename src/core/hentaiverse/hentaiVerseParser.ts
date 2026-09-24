@@ -780,9 +780,9 @@ function parseBattleLog(document: Document) {
       ':scope > tbody > tr, :scope > tr, :scope > table > tbody > tr, :scope > table > tr',
     ),
   )
-  if (!topLevelRows.length) return readTextRows(log).map(translateHentaiVerseBattleLog)
+  if (!topLevelRows.length) return readTextRows(log).reverse().map(translateHentaiVerseBattleLog)
 
-  return topLevelRows.flatMap((row) => {
+  return topLevelRows.reverse().flatMap((row) => {
     const nestedTable = row.querySelector('table')
     if (!nestedTable) return [translateHentaiVerseBattleLog(cleanText(row.textContent))]
 
@@ -813,17 +813,13 @@ function parseMonsters(document: Document): HentaiVerseBattleMonster[] {
       const level = cleanText(node.querySelector('.btm2 > div:nth-child(2)')?.textContent)
       const health = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="health"]'))
       const magic = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="magic"]'))
-      const status = [
-        level && `等级 ${level}`,
-        health !== undefined && `生命 ${health}%`,
-        magic !== undefined && `魔力 ${magic}%`,
-      ]
-        .filter(Boolean)
-        .join(' · ')
+      const status = level ? `等级 ${level}` : ''
       monsters.set(id, {
         id,
         name,
         status,
+        healthPercent: health,
+        magicPercent: magic,
         defeated: health === 0 || /dead|defeated/i.test(`${node.className} ${node.textContent}`),
       })
     })

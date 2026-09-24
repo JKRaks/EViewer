@@ -1,7 +1,7 @@
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb'
 
 const databaseName = 'eviewer-cache'
-const databaseVersion = 1
+const databaseVersion = 2
 const databaseOpenTimeout = 5000
 
 export interface CacheMetaRecord {
@@ -41,6 +41,16 @@ export interface GalleryImageUrlRecord {
   resolvedAt: number
 }
 
+export interface ReadingHistoryRecord {
+  bookId: string
+  title: string
+  coverUrl: string
+  imageCount: number
+  viewedOrdinals: number[]
+  lastOrdinal: number
+  updatedAt: number
+}
+
 interface EViewerCacheDatabase extends DBSchema {
   meta: {
     key: string
@@ -65,6 +75,11 @@ interface EViewerCacheDatabase extends DBSchema {
     key: [string, string]
     value: GalleryImageUrlRecord
     indexes: { 'by-book': string; 'by-resolved-at': number }
+  }
+  readingHistory: {
+    key: string
+    value: ReadingHistoryRecord
+    indexes: { 'by-updated-at': number }
   }
 }
 
@@ -105,6 +120,10 @@ export function openCacheDatabase(): Promise<IDBPDatabase<EViewerCacheDatabase>>
           })
           store.createIndex('by-book', 'bookId')
           store.createIndex('by-resolved-at', 'resolvedAt')
+        }
+        if (!database.objectStoreNames.contains('readingHistory')) {
+          const store = database.createObjectStore('readingHistory', { keyPath: 'bookId' })
+          store.createIndex('by-updated-at', 'updatedAt')
         }
       },
       terminated() {
@@ -194,7 +213,7 @@ export async function validateIndexedDbEnvironment(): Promise<IndexedDbEnvironme
 }
 
 export async function clearCacheStore(
-  storeName: 'tagTranslations' | 'galleryDetails' | 'galleryImagePages' | 'galleryImageUrls',
+  storeName: 'tagTranslations' | 'galleryDetails' | 'galleryImagePages' | 'galleryImageUrls' | 'readingHistory',
 ) {
   const database = await openCacheDatabase()
   await database.clear(storeName)

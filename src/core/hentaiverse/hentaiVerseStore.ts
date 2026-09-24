@@ -44,7 +44,8 @@ export async function performHentaiVerseBattleAction(
   skill = 0,
 ) {
   const current = hentaiVerseState.battle
-  if (!current || hentaiVerseState.actionPending || current.completed) return
+  if (!current || current.completed) throw new Error('当前没有可执行的战斗动作')
+  if (hentaiVerseState.actionPending) throw new Error('前一战斗动作尚未完成')
   hentaiVerseState.actionPending = true
   hentaiVerseState.error = ''
   try {

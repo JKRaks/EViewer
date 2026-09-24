@@ -7,6 +7,7 @@ export interface IndexedDbCacheSettings {
   cacheTagTranslations: boolean
   cacheBookDetails: boolean
   cacheBookImageInfo: boolean
+  cacheReadingHistory: boolean
 }
 
 const defaultSettings: IndexedDbCacheSettings = {
@@ -14,6 +15,7 @@ const defaultSettings: IndexedDbCacheSettings = {
   cacheTagTranslations: true,
   cacheBookDetails: true,
   cacheBookImageInfo: true,
+  cacheReadingHistory: true,
 }
 
 function loadSettings(): IndexedDbCacheSettings {

@@ -97,6 +97,7 @@ async function buildShareCardData(
   book: bookInfoOutput,
   source: ShareQrSource,
 ): Promise<ShareCardData> {
+
   const tagInputs = book.tags.flatMap((collection) =>
     collection.items.map((tag) => ({ collection: collection.collection, tag })),
   )

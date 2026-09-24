@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue'
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import {
   Aim,
   Box,
@@ -23,11 +23,43 @@ import {
   performHentaiVerseBattleAction,
   showHentaiVerseBattle,
 } from '@/core/hentaiverse/hentaiVerseStore'
-import type { HentaiVerseBattleAction, HentaiVerseBattleVital } from '@/core/hentaiverse/model/hentaiVerse'
+import type { HentaiVerseBattleAction, HentaiVerseBattleMode, HentaiVerseBattleVital } from '@/core/hentaiverse/model/hentaiVerse'
+
+interface QueuedBattleAction {
+  mode: HentaiVerseBattleMode
+  skill: number
+  label: string
+}
 
 const selectedTarget = ref(1)
 const battle = computed(() => hentaiVerseState.battle)
 const livingMonsters = computed(() => battle.value?.monsters.filter((monster) => !monster.defeated) || [])
+const newestLogFirst = computed(() => [...(battle.value?.log ?? [])].reverse())
+const monsterGaugeWidth = ref(64)
+const queue = ref<QueuedBattleAction[]>([])
+const draftQueue = ref<string[]>([])
+const queueDialogVisible = ref(false)
+const queueRunning = ref(false)
+const queueCountdown = ref(0)
+let cancelDelay: (() => void) | undefined
+let queueRunId = 0
+const actionOptions = computed(() => battle.value?.actions.map((action) => ({
+  value: `${action.mode}:${action.skill}`,
+  label: action.label,
+})) ?? [])
+
+function updateGaugeWidth() {
+  monsterGaugeWidth.value = window.innerWidth < 768 ? 54 : 64
+}
+
+onMounted(() => {
+  updateGaugeWidth()
+  window.addEventListener('resize', updateGaugeWidth)
+})
+onUnmounted(() => {
+  window.removeEventListener('resize', updateGaugeWidth)
+  cancelQueue()
+})
 const vitalColors: Record<HentaiVerseBattleVital['key'], string> = {
   health: '#4f9f64',
   magic: '#4f7fc4',
@@ -57,11 +89,95 @@ watch(
 )
 
 async function act(action: HentaiVerseBattleAction) {
+  if (queueRunning.value) return
   try {
     const target = action.target === 'enemy' ? selectedTarget.value : 0
     await performHentaiVerseBattleAction(action.mode, target, action.skill)
   } catch (error) {
     ElMessage.error(error instanceof Error ? error.message : '战斗动作提交失败')
+  }
+}
+
+function openQueueSettings() {
+  draftQueue.value = queue.value.map((item) => `${item.mode}:${item.skill}`)
+  queueDialogVisible.value = true
+}
+
+function saveQueue() {
+  if (!draftQueue.value.length || draftQueue.value.some((key) => !key)) {
+    ElMessage.warning('请设置至少一项操作')
+    return
+  }
+  const actions = draftQueue.value.map((key) => battle.value?.actions.find(
+    (action) => `${action.mode}:${action.skill}` === key,
+  ))
+  if (actions.some((action) => !action)) {
+    ElMessage.warning('队列中有当前不可用的操作，请重新选择')
+    return
+  }
+  queue.value = actions.map((action) => ({
+    mode: action!.mode,
+    skill: action!.skill,
+    label: action!.label,
+  }))
+  queueDialogVisible.value = false
+}
+
+function cancelQueue() {
+  queueRunId++
+  cancelDelay?.()
+  cancelDelay = undefined
+  queueCountdown.value = 0
+}
+
+function waitThreeSeconds(runId: number): Promise<boolean> {
+  queueCountdown.value = 3
+  return new Promise((resolve) => {
+    const timer = window.setInterval(() => {
+      if (runId !== queueRunId) {
+        window.clearInterval(timer)
+        cancelDelay = undefined
+        resolve(false)
+        return
+      }
+      queueCountdown.value--
+      if (queueCountdown.value === 0) {
+        window.clearInterval(timer)
+        cancelDelay = undefined
+        resolve(true)
+      }
+    }, 1000)
+    cancelDelay = () => {
+      window.clearInterval(timer)
+      resolve(false)
+    }
+  })
+}
+
+async function executeQueue() {
+  if (!queue.value.length || queueRunning.value || hentaiVerseState.actionPending || battle.value?.completed) return
+  const runId = ++queueRunId
+  queueRunning.value = true
+  try {
+    for (const step of [...queue.value]) {
+      if (!(await waitThreeSeconds(runId)) || runId !== queueRunId) return
+      const current = battle.value
+      if (!current || current.completed) return
+      const action = current.actions.find((item) => item.mode === step.mode && item.skill === step.skill)
+      if (!action) throw new Error(`操作「${step.label}」当前不可用，队列已停止`)
+      const target = action.target === 'enemy' ? selectedTarget.value : 0
+      if (action.target === 'enemy' && !current.monsters.some((monster) => monster.id === target && !monster.defeated)) {
+        throw new Error('没有可用的怪物目标，队列已停止')
+      }
+      await performHentaiVerseBattleAction(action.mode, target, action.skill)
+      if (runId !== queueRunId || battle.value?.completed) return
+    }
+    ElMessage.success('自动队列执行完成')
+  } catch (error) {
+    ElMessage.error(error instanceof Error ? error.message : '自动队列执行失败')
+  } finally {
+    if (runId === queueRunId) queueCountdown.value = 0
+    queueRunning.value = false
   }
 }
 
@@ -86,6 +202,7 @@ async function recover() {
 }
 
 function closeLocalBattle() {
+  cancelQueue()
   hentaiVerseState.battle = undefined
   hentaiVerseState.battleVisible = false
   hentaiVerseState.error = ''
@@ -112,8 +229,8 @@ function closeLocalBattle() {
           <span v-else>回合进行中</span>
         </div>
         <div class="battle-window-actions">
-          <el-button v-if="!battle.completed" text circle :icon="Minus" title="隐藏战斗" @click="hideHentaiVerseBattle" />
-          <el-button text circle :icon="Close" title="关闭本地战斗面板" @click="closeLocalBattle" />
+          <el-button v-if="!battle.completed" text circle :icon="Minus" title="隐藏战斗" @click="cancelQueue(); hideHentaiVerseBattle()" />
+          <el-button text circle :icon="Close" title="关闭本地战斗面板" :disabled="hentaiVerseState.actionPending" @click="closeLocalBattle" />
         </div>
       </header>
 
@@ -142,8 +259,23 @@ function closeLocalBattle() {
             @click="selectedTarget = monster.id"
           >
             <strong>{{ monster.name }}</strong>
-            <span>{{ monster.status }}</span>
+            <span v-if="monster.status">{{ monster.status }}</span>
+            <div class="monster-gauges">
+              <div v-if="monster.healthPercent !== undefined" class="monster-gauge">
+                <el-progress type="dashboard" :percentage="monster.healthPercent" :width="monsterGaugeWidth" :stroke-width="6" color="#4f9f64" />
+                <span>生命</span>
+              </div>
+              <div v-if="monster.magicPercent !== undefined" class="monster-gauge">
+                <el-progress type="dashboard" :percentage="monster.magicPercent" :width="monsterGaugeWidth" :stroke-width="6" color="#4f7fc4" />
+                <span>魔力</span>
+              </div>
+            </div>
           </button>
+        </div>
+
+        <div class="battle-log" role="log" aria-label="战斗日志">
+          <p v-for="(line, index) in newestLogFirst" :key="`${index}:${line}`">{{ line }}</p>
+          <p v-if="!battle.log.length" class="battle-log-empty">等待战斗记录</p>
         </div>
 
         <el-alert
@@ -165,6 +297,13 @@ function closeLocalBattle() {
           <el-button type="primary" :icon="Close" @click="closeLocalBattle">关闭战斗面板</el-button>
         </div>
         <div v-else class="battle-actions">
+          <div class="battle-queue-controls">
+            <el-button :disabled="queueRunning || hentaiVerseState.actionPending" @click="openQueueSettings">设置队列</el-button>
+            <el-button type="primary" :disabled="!queue.length || queueRunning || hentaiVerseState.actionPending" @click="executeQueue">执行队列</el-button>
+            <el-button v-if="queueRunning" type="warning" @click="cancelQueue">取消后续操作</el-button>
+            <span v-if="queueRunning" role="status">{{ queueCountdown ? `${queueCountdown} 秒后执行下一项` : '等待操作返回…' }}</span>
+          </div>
+          <div v-if="queue.length" class="battle-queue-summary">队列：{{ queue.map((item) => item.label).join(' → ') }}</div>
           <el-tooltip
             v-for="action in battle.actions"
             :key="`${action.mode}:${action.skill}`"
@@ -178,6 +317,7 @@ function closeLocalBattle() {
               :plain="action.mode !== 'attack'"
               :icon="getActionIcon(action)"
               :loading="hentaiVerseState.actionPending"
+              :disabled="queueRunning"
               :aria-label="`${action.label}：${action.description}`"
               @click="act(action)"
             >
@@ -187,13 +327,27 @@ function closeLocalBattle() {
           <span v-if="!battle.actions.length" class="battle-action-empty">未能解析当前回合的可用操作，请刷新战斗状态</span>
         </div>
 
-        <div class="battle-log">
-          <p v-for="(line, index) in battle.log" :key="`${index}:${line}`">{{ line }}</p>
-          <p v-if="!battle.log.length" class="battle-log-empty">等待战斗记录</p>
-        </div>
       </div>
     </section>
   </Transition>
+
+  <el-dialog v-model="queueDialogVisible" title="设置自动战斗队列" width="min(460px, 92vw)" :z-index="3300" append-to-body>
+    <p>按顺序选择最多五项操作。每项执行前会等待三秒。</p>
+    <div class="queue-editor">
+      <div v-for="(_, index) in draftQueue" :key="index" class="queue-editor__row">
+        <span>{{ index + 1 }}.</span>
+        <el-select v-model="draftQueue[index]" placeholder="选择操作">
+          <el-option v-for="option in actionOptions" :key="option.value" :label="option.label" :value="option.value" />
+        </el-select>
+        <el-button :icon="Close" aria-label="移除这项操作" @click="draftQueue.splice(index, 1)" />
+      </div>
+      <el-button :disabled="draftQueue.length >= 5" @click="draftQueue.push('')">添加操作</el-button>
+    </div>
+    <template #footer>
+      <el-button @click="queueDialogVisible = false">取消</el-button>
+      <el-button type="primary" @click="saveQueue">保存队列</el-button>
+    </template>
+  </el-dialog>
 </template>
 
 <style scoped>
@@ -251,6 +405,32 @@ function closeLocalBattle() {
   gap: 8px;
 }
 
+.battle-queue-controls,
+.battle-queue-summary {
+  grid-column: 1 / -1;
+}
+
+.battle-queue-controls {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.battle-queue-controls :deep(.el-button + .el-button) {
+  margin-left: 0;
+}
+
+.battle-queue-controls span,
+.battle-queue-summary {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.queue-editor { display: grid; gap: 10px; }
+.queue-editor__row { display: flex; align-items: center; gap: 8px; }
+.queue-editor__row :deep(.el-select) { flex: 1; min-width: 0; }
+
 .battle-actions :deep(.el-button) {
   min-width: 0;
   width: 100%;
@@ -291,7 +471,7 @@ function closeLocalBattle() {
 
 .battle-monsters {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
   gap: 8px;
 }
 
@@ -319,6 +499,25 @@ function closeLocalBattle() {
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.monster-gauges {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.monster-gauge {
+  display: grid;
+  justify-items: center;
+  color: var(--el-text-color-secondary);
+  font-size: 11px;
+}
+
+.monster-gauge :deep(.el-progress__text) {
+  font-size: 11px !important;
 }
 
 .battle-actions :deep(.el-button + .el-button) {
@@ -392,6 +591,9 @@ function closeLocalBattle() {
 }
 
 @media (max-width: 767px) {
+  .battle-monsters {
+    grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  }
   .battle-panel {
     inset: 0;
     width: 100vw;
