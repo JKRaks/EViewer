@@ -251,6 +251,8 @@ export interface HentaiVerseBattleMonster {
   id: number
   name: string
   status: string
+  healthPercent?: number
+  magicPercent?: number
   defeated: boolean
 }
 

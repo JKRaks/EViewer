@@ -27,6 +27,11 @@ const router = createRouter({
       component: () => import('@/views/ViewerView.vue'),
     },
     {
+      path: '/history',
+      name: 'reading-history',
+      component: () => import('@/views/ReadingHistoryView.vue'),
+    },
+    {
       path: '/download',
       name: 'download',
       component: () => import('@/views/DownloadView.vue'),
