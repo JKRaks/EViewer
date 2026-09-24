@@ -4,6 +4,7 @@ import { getCategoryDisplayName } from '@/core/common/category'
 import { resolveTagDisplayInfos } from '@/core/common/tagTranslations'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
 import type { ShareQrSource } from '@/core/share/shareSettings'
+import { getBookShareUrl } from '@/core/share/bookShareLinks'
 
 export type { ShareQrSource } from '@/core/share/shareSettings'
 
@@ -96,11 +97,6 @@ async function buildShareCardData(
   book: bookInfoOutput,
   source: ShareQrSource,
 ): Promise<ShareCardData> {
-  const normalizedBookId = book.bookId.trim().replace('-', '/')
-  const sourceUrl = `https://e-hentai.org/g/${normalizedBookId}`
-  const siteUrl = new URL('/bookinfo', window.location.origin)
-  siteUrl.searchParams.set('bookId', book.bookId)
-
   const tagInputs = book.tags.flatMap((collection) =>
     collection.items.map((tag) => ({ collection: collection.collection, tag })),
   )
@@ -121,7 +117,7 @@ async function buildShareCardData(
     language: book.language || '未知',
     favorited: book.favorited,
     tags,
-    targetUrl: source === 'source' ? sourceUrl : siteUrl.toString(),
+    targetUrl: getBookShareUrl(book, source),
   }
 }
 
