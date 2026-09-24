@@ -6,10 +6,10 @@ import 'element-plus/es/components/message/style/css'
 import type { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import {
   generateBookShareCard,
-  getBookShareTargetUrl,
   type GeneratedShareCard,
   type ShareQrSource,
 } from '@/core/share/bookShareCard'
+import { getBookShareUrl } from '@/core/share/bookShareLinks'
 import { useShareSettings } from '@/core/share/shareSettings'
 
 const props = defineProps<{
@@ -25,7 +25,7 @@ const emit = defineEmits<{
 const shareSettings = useShareSettings()
 const qrSource = ref<ShareQrSource>(shareSettings.preferredLinkType)
 const shareLink = computed(() =>
-  props.book.bookId ? getBookShareTargetUrl(props.book.bookId, qrSource.value) : '',
+  props.book.bookId ? getBookShareUrl(props.book, qrSource.value) : '',
 )
 const generating = ref(false)
 const generationError = ref('')
