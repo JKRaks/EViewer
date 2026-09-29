@@ -34,13 +34,16 @@ interface QueuedBattleAction {
 const selectedTarget = ref(1)
 const battle = computed(() => hentaiVerseState.battle)
 const livingMonsters = computed(() => battle.value?.monsters.filter(
-  (monster) => !monster.defeated && monster.healthPercent !== 0,
+  (monster) => !monster.defeated && monster.healthPercent !== undefined && monster.healthPercent > 0,
 ) || [])
-const activeTarget = computed(() =>
-  livingMonsters.value.some((monster) => monster.id === selectedTarget.value)
-    ? selectedTarget.value
-    : livingMonsters.value[0]?.id,
-)
+const activeTarget = computed(() => {
+  const monsters = battle.value?.monsters ?? []
+  const available = new Set(livingMonsters.value.map((monster) => monster.id))
+  if (available.has(selectedTarget.value)) return selectedTarget.value
+  const previousIndex = monsters.findIndex((monster) => monster.id === selectedTarget.value)
+  return monsters.slice(previousIndex + 1).find((monster) => available.has(monster.id))?.id
+    ?? livingMonsters.value[0]?.id
+})
 const newestLogFirst = computed(() => [...(battle.value?.log ?? [])].reverse())
 const monsterGaugeWidth = ref(64)
 const queue = ref<QueuedBattleAction[]>([])
@@ -74,9 +77,9 @@ const vitalColors: Record<HentaiVerseBattleVital['key'], string> = {
 }
 
 watch(
-  livingMonsters,
-  (monsters) => {
-    if (!monsters.some((monster) => monster.id === selectedTarget.value)) selectedTarget.value = monsters[0]?.id || 0
+  activeTarget,
+  (target) => {
+    selectedTarget.value = target ?? 0
   },
   { immediate: true },
 )
@@ -260,16 +263,19 @@ function closeLocalBattle() {
           </div>
         </div>
 
-        <div v-if="livingMonsters.length" class="battle-monsters">
+        <div v-if="battle.monsters.length" class="battle-monsters">
           <button
-            v-for="monster in livingMonsters"
+            v-for="monster in battle.monsters"
             :key="monster.id"
             type="button"
             :class="{ active: activeTarget === monster.id }"
+            :disabled="!livingMonsters.some((target) => target.id === monster.id)"
             @click="selectedTarget = monster.id"
           >
             <strong>{{ monster.name }}</strong>
             <span v-if="monster.status">{{ monster.status }}</span>
+            <span v-if="monster.healthPercent === undefined">无血条 · 不可选择</span>
+            <span v-else-if="monster.defeated || monster.healthPercent <= 0">已击败</span>
             <div class="monster-gauges">
               <div v-if="monster.healthPercent !== undefined" class="monster-gauge">
                 <el-progress type="dashboard" :percentage="monster.healthPercent" :width="monsterGaugeWidth" :stroke-width="6" color="#4f9f64" />
@@ -505,6 +511,13 @@ function closeLocalBattle() {
 .battle-monsters button.active {
   border-color: var(--el-color-danger);
   box-shadow: 0 0 0 1px var(--el-color-danger) inset;
+}
+
+.battle-monsters button:disabled {
+  color: var(--el-text-color-secondary);
+  background: var(--el-fill-color-light);
+  border-style: dashed;
+  cursor: not-allowed;
 }
 
 .battle-monsters span {
