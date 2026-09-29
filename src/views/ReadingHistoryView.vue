@@ -176,12 +176,17 @@ async function removeAll() {
   padding: 12px;
   border: 1px solid var(--el-border-color);
   border-radius: 8px;
-  background: var(--el-fill-color);
+  background: var(--el-bg-color);
+  color: var(--el-text-color-primary);
   cursor: pointer;
-  transition: transform 0.22s ease;
+  transition: transform 0.22s ease, border-color 0.2s ease, box-shadow 0.2s ease;
   touch-action: pan-y;
 }
 .history-item__surface.is-dragging { transition: none; }
+.history-item__surface:hover {
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 1px var(--el-color-primary-light-5) inset;
+}
 .history-item__surface:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: -2px; }
 .history-item img { width: 82px; height: 112px; flex: none; object-fit: contain; }
 .history-item__content { min-width: 0; flex: 1; }

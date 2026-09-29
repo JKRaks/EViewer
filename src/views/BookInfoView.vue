@@ -13,6 +13,8 @@ import { useRoute } from 'vue-router'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
 import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { getBookInfoWithCache } from '@/core/cache/galleryCache'
+import { getReadingHistory, isReadingHistoryEnabled } from '@/core/cache/readingHistory'
+import type { ReadingHistoryRecord } from '@/core/cache/indexedDb'
 import CategoryTag from '@/components/CategoryTag.vue'
 import BookShareOverlay from '@/components/BookShareOverlay.vue'
 import {
@@ -53,6 +55,32 @@ const funcData = reactive({
   readMode: false,
 })
 const pageData = ref(new bookInfoOutput())
+const readingHistory = ref<ReadingHistoryRecord>()
+let readingRequestVersion = 0
+const readingProgress = computed(() => {
+  const total = Number(pageData.value.imageCount)
+  const record = readingHistory.value
+  if (!isReadingHistoryEnabled() || !record || total <= 0 || !Number.isFinite(total)) {
+    return { label: '开始阅读', percent: 0 }
+  }
+  const count = new Set(record.viewedOrdinals.filter(
+    (ordinal) => Number.isInteger(ordinal) && ordinal > 0 && ordinal <= total,
+  )).size
+  const percent = count / total * 100
+  return {
+    label: count === 0 ? '开始阅读' : count === total ? '已读完' : `${Math.min(99, Math.floor(percent))}% · ${count}/${total} 张`,
+    percent,
+  }
+})
+
+async function refreshReadingProgress() {
+  const bookId = getRouteBookId()
+  const version = ++readingRequestVersion
+  readingHistory.value = undefined
+  if (!bookId) return
+  const record = await getReadingHistory(bookId)
+  if (version === readingRequestVersion && getRouteBookId() === bookId) readingHistory.value = record
+}
 const shareVisible = ref(false)
 const shareCoverElement = ref<HTMLImageElement | null>(null)
 const favoriteDialogVisible = ref(false)
@@ -130,11 +158,13 @@ const formatCommentDate = (dateStr: string | Date | undefined) => {
 
 onMounted(() => {
   bindScrollListener()
+  void refreshReadingProgress()
   void fetchBookInfo()
 })
 
 onActivated(() => {
   bindScrollListener()
+  void refreshReadingProgress()
   consumeFavoriteIntent()
 
   const routeBookId = getRouteBookId()
@@ -151,6 +181,7 @@ watch(
   () => route.query.bookId,
   (bookId, previousBookId) => {
     if (bookId !== previousBookId) {
+      void refreshReadingProgress()
       void fetchBookInfo()
     }
   },
@@ -174,6 +205,7 @@ watch(
 )
 
 onDeactivated(() => {
+  readingRequestVersion++
   bookRequestVersion++
   loadingBookId = ''
   resetBookActions()
@@ -182,6 +214,7 @@ onDeactivated(() => {
 })
 
 onUnmounted(() => {
+  readingRequestVersion++
   bookRequestVersion++
   resetBookActions()
   persistScrollPosition()
@@ -531,13 +564,15 @@ function toDownload() {
             <div class="action-buttons">
               <el-button
                 class="read-button"
+                :class="{ 'has-progress': readingProgress.percent > 0 }"
+                :style="{ '--reading-progress': `${readingProgress.percent}%` }"
                 type="primary"
                 size="large"
                 :icon="View"
                 @click="toRead"
                 :loading="funcData.loading"
               >
-                开始阅读
+                {{ readingProgress.label }}
               </el-button>
               <div class="secondary-action-buttons">
                 <el-tooltip :content="favoriteButtonLabel" placement="bottom">
@@ -695,6 +730,20 @@ function toDownload() {
 </template>
 
 <style scoped>
+.read-button.has-progress {
+  color: var(--el-text-color-primary);
+  border-color: var(--el-color-success);
+  background: linear-gradient(to right,
+    var(--el-color-success-light-7) 0 var(--reading-progress),
+    var(--el-bg-color) var(--reading-progress) 100%);
+}
+
+.read-button.has-progress:hover,
+.read-button.has-progress:focus-visible {
+  border-color: var(--el-color-success);
+  box-shadow: 0 0 0 1px var(--el-color-success) inset;
+}
+
 .bookinfo-view {
   width: 100%;
   max-width: 1200px;
