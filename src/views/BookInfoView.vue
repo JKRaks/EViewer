@@ -568,11 +568,17 @@ function toDownload() {
                 :style="{ '--reading-progress': `${readingProgress.percent}%` }"
                 type="primary"
                 size="large"
-                :icon="View"
+                :aria-label="readingProgress.label"
                 @click="toRead"
                 :loading="funcData.loading"
               >
-                {{ readingProgress.label }}
+                <span v-if="readingProgress.percent > 0" class="read-button__liquid" aria-hidden="true">
+                  <i v-for="bubble in 5" :key="bubble" class="read-button__bubble" :style="{ '--bubble-index': bubble }" />
+                </span>
+                <span class="read-button__label"><el-icon><View /></el-icon>{{ readingProgress.label }}</span>
+                <span v-if="readingProgress.percent > 0" class="read-button__filled-label" aria-hidden="true">
+                  <el-icon><View /></el-icon>{{ readingProgress.label }}
+                </span>
               </el-button>
               <div class="secondary-action-buttons">
                 <el-tooltip :content="favoriteButtonLabel" placement="bottom">
@@ -730,18 +736,110 @@ function toDownload() {
 </template>
 
 <style scoped>
+.read-button {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+}
+
 .read-button.has-progress {
-  color: var(--el-text-color-primary);
-  border-color: var(--el-color-success);
-  background: linear-gradient(to right,
-    var(--el-color-success-light-7) 0 var(--reading-progress),
-    var(--el-bg-color) var(--reading-progress) 100%);
+  color: #164b78;
+  border-color: var(--el-color-primary);
+  background: #fff;
+}
+
+.read-button__label,
+.read-button__filled-label {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.read-button__label { position: relative; z-index: 1; }
+
+.read-button__filled-label {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  color: #fff;
+  clip-path: inset(0 calc(100% - var(--reading-progress)) 0 0);
+  transition: clip-path 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: reading-text-reveal 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  pointer-events: none;
+}
+
+.read-button__liquid {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--reading-progress);
+  overflow: hidden;
+  background: linear-gradient(110deg, #1765b3, #247aca);
+  transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: reading-liquid-enter 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transform-origin: left;
+  pointer-events: none;
+}
+
+.read-button__liquid::after {
+  position: absolute;
+  top: -25%;
+  right: -7px;
+  width: 12px;
+  height: 150%;
+  border-radius: 45%;
+  background: rgb(255 255 255 / 25%);
+  content: '';
+  animation: reading-liquid-wave 3s ease-in-out infinite alternate;
+}
+
+.read-button__bubble {
+  position: absolute;
+  left: calc(var(--bubble-index) * 17% - 5%);
+  bottom: -10px;
+  width: calc(3px + var(--bubble-index) * 1px);
+  height: calc(3px + var(--bubble-index) * 1px);
+  border: 1px solid rgb(255 255 255 / 65%);
+  border-radius: 50%;
+  background: rgb(255 255 255 / 15%);
+  animation: reading-bubble-rise calc(2.4s + var(--bubble-index) * 0.3s) linear infinite;
+  animation-delay: calc(var(--bubble-index) * -0.7s);
 }
 
 .read-button.has-progress:hover,
 .read-button.has-progress:focus-visible {
-  border-color: var(--el-color-success);
-  box-shadow: 0 0 0 1px var(--el-color-success) inset;
+  color: #164b78;
+  background: #fff;
+  border-color: var(--el-color-primary);
+  box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+}
+
+@keyframes reading-liquid-enter {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes reading-text-reveal {
+  from { clip-path: inset(0 100% 0 0); }
+  to { clip-path: inset(0 calc(100% - var(--reading-progress)) 0 0); }
+}
+@keyframes reading-liquid-wave {
+  from { transform: translateY(-3px) rotate(-8deg); }
+  to { transform: translateY(3px) rotate(8deg); }
+}
+@keyframes reading-bubble-rise {
+  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
+  20% { opacity: 0.7; }
+  100% { transform: translate(5px, -56px) scale(1); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .read-button__liquid,
+  .read-button__liquid::after,
+  .read-button__bubble,
+  .read-button__filled-label {
+    animation: none;
+    transition: none;
+  }
+  .read-button__bubble { display: none; }
 }
 
 .bookinfo-view {
