@@ -9,6 +9,7 @@ export function isReadingHistoryEnabled() {
 export async function getReadingHistory(bookId: string): Promise<ReadingHistoryRecord | undefined> {
   if (!isReadingHistoryEnabled()) return undefined
   try {
+    await pendingWrites.get(normalizeBookId(bookId))
     return await (await openCacheDatabase()).get('readingHistory', normalizeBookId(bookId))
   } catch (error) {
     console.warn('读取浏览记录失败:', error)
@@ -33,6 +34,7 @@ export function recordViewedImage(
   bookId: string,
   ordinal: number,
   metadata: Pick<ReadingHistoryRecord, 'title' | 'coverUrl' | 'imageCount'>,
+  updatePosition = true,
 ): Promise<void> {
   if (!isReadingHistoryEnabled() || !Number.isInteger(ordinal) || ordinal < 1) return Promise.resolve()
   const key = normalizeBookId(bookId)
@@ -50,7 +52,7 @@ export function recordViewedImage(
         coverUrl: metadata.coverUrl || record?.coverUrl || '',
         imageCount: metadata.imageCount || record?.imageCount || 0,
         viewedOrdinals: Array.from(viewedOrdinals).sort((a, b) => a - b),
-        lastOrdinal: ordinal,
+        lastOrdinal: updatePosition ? ordinal : record?.lastOrdinal ?? ordinal,
         updatedAt: Date.now(),
       })
     } catch (error) {
