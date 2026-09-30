@@ -47,7 +47,12 @@ let bookInfo: bookInfoOutput | null = null
 let bookMetadata: bookInfoOutput | null = null
 let currentPageQueue: PageImageQueue | null = null
 let isViewUnmounted = false
-let loadingPrevious = false
+const loadingPrevious = ref(false)
+let upwardIntentUntil = 0
+let touchY = 0
+let retainedAnchor: { node: HTMLElement; top: number } | undefined
+let layoutObserver: ResizeObserver | undefined
+const viewedThisVisit = new Set<number>()
 let lastMainScrollTop = 0
 let scrollRoot: HTMLElement | null = null
 let lastRecordedOrdinal = 0
@@ -75,7 +80,7 @@ let visibleImageFrame = 0
 let viewportQuery: MediaQueryList | null = null
 
 const infiniteScrollDisabled = computed(() => {
-  return pageData.loading || pageData.loadingMore || pageData.pageRendering || pageData.noMore
+  return pageData.loading || loadingPrevious.value || pageData.loadingMore || pageData.pageRendering || pageData.noMore
 })
 
 onMounted(() => {
@@ -85,30 +90,44 @@ onMounted(() => {
   viewportQuery.addEventListener('change', updateViewportMode)
   scrollRoot = document.querySelector<HTMLElement>('.layout-main')
   scrollRoot?.addEventListener('scroll', handleReaderScroll, { passive: true })
+  scrollRoot?.addEventListener('wheel', handleReaderIntent, { passive: true })
+  scrollRoot?.addEventListener('touchstart', handleReaderIntent, { passive: true })
+  scrollRoot?.addEventListener('touchmove', handleReaderIntent, { passive: true })
+  scrollRoot?.addEventListener('keydown', handleReaderIntent)
+  layoutObserver = new ResizeObserver(() => {
+    if (retainedAnchor && scrollRoot) {
+      scrollRoot.scrollTop += retainedAnchor.node.getBoundingClientRect().top - retainedAnchor.top
+      lastMainScrollTop = scrollRoot.scrollTop
+    }
+    requestVisibleImageUpdate()
+  })
+  if (scrollRoot) layoutObserver.observe(scrollRoot)
   void initialize()
 })
 
 onUnmounted(() => {
   isViewUnmounted = true
   imageObserver?.disconnect()
+  layoutObserver?.disconnect()
   cancelAnimationFrame(visibleImageFrame)
   viewportQuery?.removeEventListener('change', updateViewportMode)
   scrollRoot?.removeEventListener('scroll', handleReaderScroll)
+  scrollRoot?.removeEventListener('wheel', handleReaderIntent)
+  scrollRoot?.removeEventListener('touchstart', handleReaderIntent)
+  scrollRoot?.removeEventListener('touchmove', handleReaderIntent)
+  scrollRoot?.removeEventListener('keydown', handleReaderIntent)
 })
 
-watch(currentImageOrdinal, (ordinal) => {
-  if (!bookImages.value.some((image) => image.ordinal === ordinal && image.rendered)) return
-  persistViewedImage(ordinal)
-})
-
-function persistViewedImage(ordinal: number) {
-  if (!bookId || !bookMetadata || !ordinal || !isReadingHistoryEnabled() || ordinal === lastRecordedOrdinal) return
-  lastRecordedOrdinal = ordinal
+function persistViewedImage(ordinal: number, updatePosition = true) {
+  if (!bookId || !bookMetadata || !ordinal || !isReadingHistoryEnabled()) return
+  if (updatePosition ? ordinal === lastRecordedOrdinal : viewedThisVisit.has(ordinal)) return
+  if (updatePosition) lastRecordedOrdinal = ordinal
+  viewedThisVisit.add(ordinal)
   void recordViewedImage(bookId, ordinal, {
     title: bookMetadata.bookName,
     coverUrl: bookMetadata.coverImage,
     imageCount: totalImages.value,
-  })
+  }, updatePosition)
 }
 
 function handleImageRendered(image: ViewerImageItem) {
@@ -120,20 +139,32 @@ function requestVisibleImageUpdate() {
   if (visibleImageFrame) return
   visibleImageFrame = requestAnimationFrame(() => {
     visibleImageFrame = 0
-    if (!scrollRoot || isViewUnmounted) return
-    const center = scrollRoot.getBoundingClientRect().top + scrollRoot.clientHeight / 2
+    if (!scrollRoot || isViewUnmounted || pageData.loading || loadingPrevious.value) return
+    const top = scrollRoot.getBoundingClientRect().top + scrollRoot.clientTop
+    const bottom = top + scrollRoot.clientHeight
+    const center = (top + bottom) / 2
+    const atEnd = pageData.noMore && scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight <= 2
+    let finalImageVisible = false
     let closest: { ordinal: number; distance: number } | undefined
     document.querySelectorAll<HTMLElement>('.viewer-view .image-block[data-ordinal]').forEach((node) => {
       const rect = node.getBoundingClientRect()
+      const ordinal = Number(node.dataset.ordinal)
+      const image = bookImages.value.find((item) => item.ordinal === ordinal)
+      const visibleHeight = Math.min(rect.bottom, bottom) - Math.max(rect.top, top)
+      if (!image?.rendered || image.failed || visibleHeight <= 0 || rect.height <= 0) return
+      // 短图至少显示一半，长图至少覆盖半个视口，才计入已读。
+      if (visibleHeight >= Math.min(rect.height, scrollRoot!.clientHeight) / 2) {
+        persistViewedImage(ordinal, false)
+      }
+      if (ordinal === totalImages.value && rect.bottom <= bottom + 2) finalImageVisible = true
       const distance = rect.top <= center && rect.bottom >= center
         ? 0
         : Math.min(Math.abs(rect.top - center), Math.abs(rect.bottom - center))
-      const ordinal = Number(node.dataset.ordinal)
       if (Number.isFinite(ordinal) && (!closest || distance < closest.distance)) {
         closest = { ordinal, distance }
       }
     })
-    const visibleOrdinal = closest?.ordinal ?? 0
+    const visibleOrdinal = atEnd && finalImageVisible ? totalImages.value : closest?.ordinal ?? 0
     if (visibleOrdinal > 0) currentImageOrdinal.value = visibleOrdinal
     if (visibleOrdinal && bookImages.value.some((item) => item.ordinal === visibleOrdinal && item.rendered)) {
       persistViewedImage(visibleOrdinal)
@@ -155,11 +186,12 @@ async function observeVisibleImages() {
   if (!scrollRoot) return
   imageObserver = new IntersectionObserver(
     () => requestVisibleImageUpdate(),
-    { root: scrollRoot, rootMargin: '-35% 0px -35% 0px' },
+    { root: scrollRoot, threshold: [0, 0.5, 1] },
   )
-  document.querySelectorAll<HTMLElement>('.viewer-view .image-block[data-ordinal]').forEach((node) =>
-    imageObserver?.observe(node),
-  )
+  document.querySelectorAll<HTMLElement>('.viewer-view .image-block[data-ordinal]').forEach((node) => {
+    imageObserver?.observe(node)
+    layoutObserver?.observe(node)
+  })
   requestVisibleImageUpdate()
 }
 
@@ -229,6 +261,9 @@ async function initialize() {
     if (!isViewUnmounted) {
       pageData.loading = false
       refreshNoMoreState()
+      await nextTick()
+      if (scrollRoot) lastMainScrollTop = scrollRoot.scrollTop
+      requestVisibleImageUpdate()
     }
   }
 }
@@ -277,23 +312,38 @@ async function loadMorePic() {
   }
 }
 
+function handleReaderIntent(event: Event) {
+  let upward = false
+  if (event instanceof WheelEvent) upward = event.deltaY < 0
+  else if (event instanceof TouchEvent) {
+    const y = event.touches[0]?.clientY ?? touchY
+    upward = event.type === 'touchmove' && y > touchY + 2
+    touchY = y
+  } else if (event instanceof KeyboardEvent) {
+    upward = ['ArrowUp', 'PageUp', 'Home'].includes(event.key) || (event.key === ' ' && event.shiftKey)
+  }
+  retainedAnchor = undefined
+  upwardIntentUntil = upward ? performance.now() + 800 : 0
+  if (upward && !pageData.loading && scrollRoot && scrollRoot.scrollTop < 180) void loadPreviousImages()
+}
+
 function handleReaderScroll() {
   if (!scrollRoot || isViewUnmounted) return
   requestVisibleImageUpdate()
   const position = scrollRoot.scrollTop
-  if (position < lastMainScrollTop && position < 180 && (bookImages.value[0]?.ordinal ?? 1) > 1) {
+  if (!pageData.loading && performance.now() < upwardIntentUntil && position < lastMainScrollTop && position < 180 && (bookImages.value[0]?.ordinal ?? 1) > 1) {
     void loadPreviousImages()
   }
   lastMainScrollTop = position
 }
 
 async function loadPreviousImages() {
-  if (!bookId || loadingPrevious || isViewUnmounted || !scrollRoot) return
+  if (!bookId || loadingPrevious.value || pageData.loading || pageData.loadingMore || pageData.pageRendering || isViewUnmounted || !scrollRoot) return
   const first = bookImages.value[0]
   if (!first || first.ordinal <= 1) return
-  loadingPrevious = true
+  loadingPrevious.value = true
+  upwardIntentUntil = 0
   const anchor = document.querySelector<HTMLElement>(`.viewer-view .image-block[data-ordinal="${first.ordinal}"]`)
-  const anchorTop = anchor?.getBoundingClientRect().top ?? 0
   try {
     const previousOrdinal = first.ordinal - 1
     const pageIndex = Math.floor((previousOrdinal - 1) / 20)
@@ -316,13 +366,18 @@ async function loadPreviousImages() {
       if (!item.url) await loadImageItem(item)
       if (isViewUnmounted) return
     }
+    // 网络等待期间用户可能继续滚动，插入前再取锚点位置。
+    const anchorTop = anchor?.getBoundingClientRect().top ?? 0
+    retainedAnchor = anchor ? { node: anchor, top: anchorTop } : undefined
     bookImages.value.unshift(...previousItems)
     await nextTick()
     if (anchor && scrollRoot) scrollRoot.scrollTop += anchor.getBoundingClientRect().top - anchorTop
+    if (scrollRoot) lastMainScrollTop = scrollRoot.scrollTop
   } catch (error) {
     console.error('向上加载图片失败:', error)
   } finally {
-    loadingPrevious = false
+    loadingPrevious.value = false
+    requestVisibleImageUpdate()
   }
 }
 
@@ -538,6 +593,7 @@ function isLastLoadedPage(): boolean {
 
 function refreshNoMoreState() {
   pageData.noMore = !hasPendingCurrentPageImages() && isLastLoadedPage()
+  requestVisibleImageUpdate()
 }
 
 function createFailedBookInfo(msg: string): bookInfoOutput {
@@ -557,6 +613,9 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
     :infinite-scroll-delay="200"
     :infinite-scroll-immediate="true"
   >
+    <div v-if="!pageData.loading && (bookImages[0]?.ordinal ?? 1) > 1" class="previous-images">
+      <el-button :loading="loadingPrevious" :disabled="pageData.loadingMore || pageData.pageRendering" @click="loadPreviousImages">加载前面的图片</el-button>
+    </div>
     <div v-if="pageData.loading && bookImages.length === 0" class="viewer-skeleton">
       <el-skeleton v-for="index in 3" :key="index" animated class="image-skeleton">
         <template #template>
@@ -626,10 +685,13 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
 
 <style scoped>
 .viewer-view {
+  overflow-anchor: none;
   width: 100%;
   max-width: 960px;
   margin: 0 auto;
 }
+
+.previous-images { display: flex; justify-content: center; height: 48px; }
 
 .viewer-skeleton,
 .image-list {
