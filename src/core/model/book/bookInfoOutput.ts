@@ -77,6 +77,8 @@ export class bookInfoOutput extends P<string[]> {
 export class userComment {
   username: string = ''
   comment: string = ''
+  /** 源站评论正文 HTML；展示时必须经过白名单转换。 */
+  contentHtml?: string
   date: Date | undefined = undefined
   score: number = 0
   isUploader: boolean = false
