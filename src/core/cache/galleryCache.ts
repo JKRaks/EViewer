@@ -14,6 +14,7 @@ const pendingRequests = new Map<string, Promise<bookInfoOutput>>()
 const imageUrlExpiryBufferMs = 30_000
 
 interface CachedBookInfoPayload {
+  commentFormatVersion?: number
   isSuccess: boolean
   data?: string[]
   msg: string
@@ -56,7 +57,10 @@ export async function getBookInfoWithCache(
       const database = await openCacheDatabase()
       if (purpose === 'detail' && indexedDbCacheSettings.cacheBookDetails && pageIndex === 0) {
         staleDetail = await database.get('galleryDetails', bookId)
-        if (staleDetail && !forceRefresh) {
+        if (
+          staleDetail && !forceRefresh &&
+          (staleDetail.payload as CachedBookInfoPayload).commentFormatVersion === 1
+        ) {
           return hydrateBookInfo(staleDetail.payload)
         }
       }
@@ -259,6 +263,7 @@ async function persistBookInfo(result: bookInfoOutput, purpose: BookInfoCachePur
 
 function serializeBookInfo(result: bookInfoOutput): CachedBookInfoPayload {
   return {
+    commentFormatVersion: 1,
     isSuccess: result.isSuccess,
     data: result.data ? [...result.data] : undefined,
     msg: result.msg,
@@ -284,6 +289,7 @@ function serializeBookInfo(result: bookInfoOutput): CachedBookInfoPayload {
     userComments: result.userComments?.map((comment) => ({
       username: comment.username,
       comment: comment.comment,
+      contentHtml: comment.contentHtml,
       date: comment.date?.toISOString(),
       score: comment.score,
       isUploader: comment.isUploader,

@@ -17,6 +17,7 @@ import { getReadingHistory, isReadingHistoryEnabled } from '@/core/cache/reading
 import type { ReadingHistoryRecord } from '@/core/cache/indexedDb'
 import CategoryTag from '@/components/CategoryTag.vue'
 import BookShareOverlay from '@/components/BookShareOverlay.vue'
+import CommentContent from '@/components/CommentContent.vue'
 import {
   Picture,
   Clock,
@@ -685,7 +686,7 @@ function toDownload() {
                 size="small"
               />
             </div>
-            <div class="comment-content">{{ comment.comment }}</div>
+            <CommentContent :key="`${pageData.bookId}-${index}`" class="comment-content" :comment="comment" />
           </div>
         </div>
       </el-card>
