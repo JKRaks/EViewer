@@ -446,31 +446,36 @@ function parseAbilities(
 
   const slots: HentaiVerseAbilitySlot[] = []
   document
-    .querySelectorAll<HTMLElement>('.ability_slotbar > div, .ability_slotbox > div')
+    .querySelectorAll<HTMLElement>('.ability_slotbar > div')
     .forEach((node, index) => {
       const source = getActionSource(node, true)
       const action = readAbilityAction(source)
       const id =
         node.dataset.slot ||
         node.dataset.abilitySlot ||
+        matchValue(node.querySelector<HTMLElement>('[id^="slot_"]')?.id || '', /^slot_(\d+)$/i) ||
         readNamedValue(source, 'equip_slot') ||
         readNamedValue(source, 'unlock_slot') ||
-        String(index + 1)
+        ''
+      if (!id) return
+      const presentation = readAbilityPresentation(node)
+      const abilityName = translateHentaiVerseText(presentation.name)
       const abilityId =
         node.dataset.abilityId ||
         readNamedValue(source, 'equip_ability') ||
         matchValue(
           node.querySelector<HTMLImageElement>('img[src*="/a/"]')?.src || '',
           /\/a\/(\d+)/i,
-        )
-      const abilityName = abilityId ? readNodeLabel(node) : ''
+        ) ||
+        abilities.find((ability) => ability.name === abilityName)?.id ||
+        ''
       const locked =
         action?.name === 'unlock_slot' || node.matches('.locked, .disabled, [aria-disabled="true"]')
       slots.push({
         id,
         label: `槽位 ${index + 1}`,
         abilityId,
-        abilityName: locked ? '' : abilityName,
+        abilityName: locked ? '' : abilityName || (abilityId ? readNodeLabel(node) : ''),
         locked,
         action: action?.name,
       })
