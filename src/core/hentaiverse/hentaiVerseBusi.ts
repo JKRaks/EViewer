@@ -82,7 +82,18 @@ export class HentaiVerseBusi {
 
   /** Input: 能力槽位和已解锁能力编号。Output: 更新后的能力页。 */
   async equipAbility(slotId: string, abilityId: string, target: HentaiVersePageTarget) {
-    return this.submitForm('abilities', { equip_slot: slotId, equip_ability: abilityId }, target)
+    const result = await this.submitForm('abilities', { equip_slot: slotId, equip_ability: abilityId }, target)
+    if (result.battle || !result.page?.authenticated) return result
+
+    // A successful HTTP response can still leave a rejected assignment unchanged.
+    // Read the selected tree again and confirm the actual destination slot.
+    const refreshed = await this.getPage(target)
+    if (refreshed.battle || !refreshed.page?.authenticated) return refreshed
+    const slot = refreshed.page.abilities?.slots.find((item) => item.id === slotId)
+    if (!slot || slot.abilityId !== abilityId) {
+      throw new Error('源站未确认能力装配，请检查能力是否已解锁、槽位类型是否匹配，并刷新后重试')
+    }
+    return refreshed
   }
 
   /** Input: 训练项目编号。Output: 开始训练后的训练页。 */
