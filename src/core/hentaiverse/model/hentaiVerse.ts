@@ -142,7 +142,7 @@ export interface HentaiVerseAbility {
   id: string
   name: string
   description: string
-  level: number
+  level: number | null
   maxLevel: number
   cost: string
   action?: HentaiVerseAbilityActionName
@@ -182,6 +182,8 @@ export interface HentaiVerseTrainingPage {
   activeName: string
   progress: string
   remaining: string
+  endsAt?: number
+  durationSeconds?: number
   canCancel: boolean
   options: HentaiVerseTrainingOption[]
 }
@@ -192,6 +194,7 @@ export interface HentaiVerseInventoryItem {
   description: string
   quantity: string
   selected: boolean
+  canAssign: boolean
 }
 
 export interface HentaiVerseInventorySlot {

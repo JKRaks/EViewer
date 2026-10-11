@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "include": [
+    "/ehentai",
+    "/ehentai/*",
+    "/exhentai",
+    "/exhentai/*",
+    "/github",
+    "/github/*",
+    "/auth/cookies",
+    "/auth/logout",
+    "/hentaiverse/page",
+    "/hentaiverse/form",
+    "/hentaiverse/action",
+    "/image-proxy",
+    "/health"
+  ],
+  "exclude": []
+}

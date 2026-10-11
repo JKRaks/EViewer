@@ -108,12 +108,6 @@ const menuItems = computed<FloatingMenuItem[]>(() => [
     ? [{ key: 'reading-history', path: '/history', label: '浏览历史', icon: Clock }]
     : []),
   {
-    key: 'settings',
-    path: '/settings',
-    label: '系统设置',
-    icon: Setting,
-  },
-  {
     key: 'favorites',
     path: '/favorites',
     label: '个人收藏',
@@ -123,7 +117,7 @@ const menuItems = computed<FloatingMenuItem[]>(() => [
   {
     key: 'hentaiverse',
     path: '/hentaiverse',
-    label: '角色养成与战斗',
+    label: 'HentaiVerse',
     icon: Lightning,
     requiresAuth: true,
   },
@@ -139,6 +133,12 @@ const menuItems = computed<FloatingMenuItem[]>(() => [
     path: '/login',
     label: '账号信息',
     icon: UserFilled,
+  },
+  {
+    key: 'settings',
+    path: '/settings',
+    label: '系统设置',
+    icon: Setting,
   },
 ])
 

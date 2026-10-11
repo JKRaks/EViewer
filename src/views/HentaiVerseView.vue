@@ -361,6 +361,7 @@ onMounted(() => {
             :loading="loading"
             @start="startTraining"
             @cancel="cancelTraining"
+            @refresh="loadSection()"
           />
 
           <InventoryPanel

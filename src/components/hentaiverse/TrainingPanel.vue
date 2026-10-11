@@ -1,21 +1,66 @@
 <script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { HentaiVerseTrainingPage } from '@/core/hentaiverse/model/hentaiVerse'
 
-defineProps<{ data: HentaiVerseTrainingPage; loading?: boolean }>()
-const emit = defineEmits<{ start: [id: string]; cancel: [] }>()
+const props = defineProps<{ data: HentaiVerseTrainingPage; loading?: boolean }>()
+const emit = defineEmits<{ start: [id: string]; cancel: []; refresh: [] }>()
+const now = ref(Date.now())
+let clock: ReturnType<typeof setInterval> | undefined
+const updateClock = () => { now.value = Date.now() }
+onMounted(() => {
+  clock = setInterval(updateClock, 1_000)
+  document.addEventListener('visibilitychange', updateClock)
+})
+onUnmounted(() => {
+  clearInterval(clock)
+  document.removeEventListener('visibilitychange', updateClock)
+})
+const active = computed(() => Boolean(props.data.activeName || props.data.progress || props.data.canCancel))
+const progressPercent = computed(() => {
+  if (props.data.endsAt !== undefined && props.data.durationSeconds) {
+    return Math.max(0, Math.min(100, 100 - (props.data.endsAt - now.value) / (props.data.durationSeconds * 10)))
+  }
+  const match = props.data.progress.match(/(\d+(?:\.\d+)?)\s*%/)
+  return match ? Math.max(0, Math.min(100, Number(match[1]))) : undefined
+})
+const progressLabel = computed(() => progressPercent.value !== undefined
+  ? `${progressPercent.value.toFixed(2)}%`
+  : props.data.progress)
+let completionRefreshed = false
+watch([active, () => props.data.activeName], () => {
+  completionRefreshed = false
+})
+watch(
+  [() => active.value && progressPercent.value === 100, () => props.loading],
+  ([completed, loading]) => {
+    if (!completed || loading || completionRefreshed) return
+    completionRefreshed = true
+    emit('refresh')
+  },
+  { immediate: true },
+)
+const remaining = computed(() => {
+  if (props.data.endsAt === undefined) return props.data.remaining
+  const seconds = Math.max(0, Math.ceil((props.data.endsAt - now.value) / 1000))
+  if (!seconds) return '训练时间已到'
+  const hours = Math.floor(seconds / 3600)
+  const minutes = Math.floor(seconds % 3600 / 60)
+  return `剩余 ${hours ? `${hours} 小时 ` : ''}${minutes} 分 ${seconds % 60} 秒`
+})
 </script>
 
 <template>
   <section class="training-panel">
-    <div v-if="data.activeName || data.progress" class="training-progress">
+    <div v-if="active" class="training-progress">
       <div>
         <span>进行中的训练</span>
         <h3>{{ data.activeName || '训练进行中' }}</h3>
-        <p v-if="data.remaining">{{ data.remaining }}</p>
+        <p v-if="remaining">{{ remaining }}</p>
       </div>
-      <strong>{{ data.progress }}</strong>
+      <strong>{{ progressLabel }}</strong>
       <el-button v-if="data.canCancel" type="danger" plain :loading="loading" @click="emit('cancel')">取消训练</el-button>
     </div>
+    <el-progress v-if="active && progressPercent !== undefined" :percentage="progressPercent" :show-text="false" />
 
     <div v-if="data.options.length" class="training-list">
       <article v-for="option in data.options" :key="option.id">
