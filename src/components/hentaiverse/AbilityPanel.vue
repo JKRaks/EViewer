@@ -28,6 +28,15 @@ function selectAbility(ability: HentaiVerseAbility) {
   if (!isAcquired(ability) || props.loading) return
   selectedAbilityId.value = selectedAbilityId.value === ability.id ? '' : ability.id
 }
+
+function getEquipLabel(ability: HentaiVerseAbility) {
+  const slots = props.data.slots
+    .filter((slot) => !slot.locked && (
+      slot.abilityId === ability.id || (!slot.abilityId && slot.abilityName === ability.name)
+    ))
+    .map((slot) => slot.label.replace(/^槽位\s*/, ''))
+  return slots.length ? `已装配在 ${slots.join('、')} 位` : '选择装配'
+}
 </script>
 
 <template>
@@ -89,11 +98,11 @@ function selectAbility(ability: HentaiVerseAbility) {
               type="button"
               class="ability-select"
               :aria-pressed="selectedAbilityId === ability.id"
-              :aria-label="`选择装配 ${ability.name}`"
+              :aria-label="`${ability.name}，${getEquipLabel(ability)}`"
               :disabled="loading"
               @click.stop="selectAbility(ability)"
             >
-              {{ selectedAbilityId === ability.id ? '已选中' : '选择装配' }}
+              {{ getEquipLabel(ability) }}
             </button>
             <span v-if="ability.cost">{{ ability.cost }}</span>
           </div>

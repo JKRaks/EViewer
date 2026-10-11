@@ -19,6 +19,14 @@ import {
 import { ElMessage } from 'element-plus'
 import 'element-plus/es/components/message/style/css'
 import type { Component } from 'vue'
+import {
+  getLayoutScrollElement,
+  getLayoutScrollTarget,
+  getLayoutScrollTop,
+  initializeLayoutScrollMode,
+  layoutScrollModeChange,
+  scrollLayoutTo,
+} from '@/composables/layoutScroll'
 import { useFloatingActions } from '@/composables/useFloatingActions'
 import { useAuthState } from '@/core/auth/authState'
 import { useIndexedDbCacheSettings } from '@/core/cache/cacheSettings'
@@ -50,6 +58,8 @@ const isMobile = ref(false)
 const showFloatingButtons = ref(true)
 const lastScrollTop = ref(0)
 const scrollThreshold = 48
+const stopScrollModeSync = initializeLayoutScrollMode()
+let scrollTarget: HTMLElement | Window | null = null
 const { pageFloatingActions, clearFloatingActions } = useFloatingActions()
 const globalState = useGlobalState()
 const authState = useAuthState()
@@ -146,27 +156,23 @@ const showBackButton = computed(() => {
   return route.name !== 'home'
 })
 
-const getLayoutMainElement = () => {
-  return document.querySelector('.layout-main') as HTMLElement | null
-}
-
 const getRouteScrollKey = (routePath: string) => {
   return `layout-scroll:${routePath}`
 }
 
 const persistCurrentRouteScroll = (routePath = route.fullPath) => {
-  const mainElement = getLayoutMainElement()
+  const mainElement = getLayoutScrollElement()
   if (!mainElement) {
     return
   }
 
-  sessionStorage.setItem(getRouteScrollKey(routePath), String(mainElement.scrollTop))
+  sessionStorage.setItem(getRouteScrollKey(routePath), String(getLayoutScrollTop()))
 }
 
 const restoreRouteScroll = async (routePath = route.fullPath) => {
   await nextTick()
 
-  const mainElement = getLayoutMainElement()
+  const mainElement = getLayoutScrollElement()
   if (!mainElement) {
     return
   }
@@ -182,10 +188,9 @@ const restoreRouteScroll = async (routePath = route.fullPath) => {
   lastScrollTop.value = targetPosition
 
   requestAnimationFrame(() => {
-    mainElement.scrollTo({ top: targetPosition, behavior: 'auto' })
+    scrollLayoutTo(targetPosition)
     requestAnimationFrame(() => {
-      const secondMainElement = getLayoutMainElement()
-      secondMainElement?.scrollTo({ top: targetPosition, behavior: 'auto' })
+      scrollLayoutTo(targetPosition)
     })
   })
 }
@@ -258,15 +263,14 @@ const goHome = () => {
   }
 }
 
-const handleMainScroll = (event: Event) => {
+const handleMainScroll = () => {
   persistCurrentRouteScroll()
 
   if (!isMobile.value) {
     return
   }
 
-  const target = event.target as HTMLElement
-  const scrollTop = target.scrollTop
+  const scrollTop = getLayoutScrollTop()
 
   if (scrollTop > lastScrollTop.value && scrollTop > scrollThreshold) {
     showFloatingButtons.value = false
@@ -277,7 +281,15 @@ const handleMainScroll = (event: Event) => {
   lastScrollTop.value = scrollTop
 }
 
+const bindLayoutScroll = () => {
+  scrollTarget?.removeEventListener('scroll', handleMainScroll)
+  scrollTarget = getLayoutScrollTarget()
+  scrollTarget?.addEventListener('scroll', handleMainScroll, { passive: true })
+}
+
 onMounted(() => {
+  bindLayoutScroll()
+  window.addEventListener(layoutScrollModeChange, bindLayoutScroll)
   if ('scrollRestoration' in history) {
     history.scrollRestoration = 'manual'
   }
@@ -307,6 +319,9 @@ watch(
 )
 
 onUnmounted(() => {
+  stopScrollModeSync()
+  scrollTarget?.removeEventListener('scroll', handleMainScroll)
+  window.removeEventListener(layoutScrollModeChange, bindLayoutScroll)
   systemThemeMedia?.removeEventListener('change', handleSystemThemeChange)
   window.removeEventListener('resize', checkViewport)
   window.removeEventListener('orientationchange', checkViewport)
@@ -316,7 +331,7 @@ onUnmounted(() => {
 <template>
   <el-config-provider size="small" :z-index="3000">
     <el-container class="layout-container" :class="{ 'is-mobile': isMobile }">
-      <el-main class="layout-main" @scroll="handleMainScroll">
+      <el-main class="layout-main">
         <Suspense>
           <template #default>
             <RouterView v-slot="{ Component, route }">

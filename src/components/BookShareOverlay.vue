@@ -10,6 +10,7 @@ import {
   type ShareQrSource,
 } from '@/core/share/bookShareCard'
 import { getBookShareUrl } from '@/core/share/bookShareLinks'
+import { getLayoutScrollElement, layoutScrollModeChange } from '@/composables/layoutScroll'
 import { useShareSettings } from '@/core/share/shareSettings'
 
 const props = defineProps<{
@@ -43,6 +44,7 @@ watch(
       setBackgroundScrollLocked(true)
       window.addEventListener('keydown', handleKeydown)
       window.addEventListener('pagehide', handlePageHide)
+      window.addEventListener(layoutScrollModeChange, handleScrollModeChange)
       if (qrSource.value === shareSettings.preferredLinkType) {
         void renderPreview()
       } else {
@@ -52,6 +54,7 @@ watch(
       setBackgroundScrollLocked(false)
       window.removeEventListener('keydown', handleKeydown)
       window.removeEventListener('pagehide', handlePageHide)
+      window.removeEventListener(layoutScrollModeChange, handleScrollModeChange)
       generationId++
       generated.value = null
       releasePreviewUrl()
@@ -75,6 +78,7 @@ onBeforeUnmount(() => {
   setBackgroundScrollLocked(false)
   window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('pagehide', handlePageHide)
+  window.removeEventListener(layoutScrollModeChange, handleScrollModeChange)
   clearGeneratedCache()
 })
 
@@ -145,10 +149,15 @@ function handlePageHide() {
   setBackgroundScrollLocked(false)
 }
 
+function handleScrollModeChange() {
+  setBackgroundScrollLocked(false)
+  if (props.modelValue) setBackgroundScrollLocked(true)
+}
+
 function setBackgroundScrollLocked(locked: boolean) {
   if (locked) {
     if (lockedMainElement) return
-    lockedMainElement = document.querySelector<HTMLElement>('.layout-main')
+    lockedMainElement = getLayoutScrollElement()
     if (!lockedMainElement) return
     previousMainOverflowY = lockedMainElement.style.overflowY
     lockedMainElement.style.overflowY = 'hidden'
