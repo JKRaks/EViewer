@@ -15,6 +15,7 @@ const emit = defineEmits<{
 }>()
 
 const selectedAbilityId = ref('')
+const expandedSlotGroups = ref<string[]>([])
 const selectedAbility = computed(() =>
   props.data.abilities.find((ability) => ability.id === selectedAbilityId.value),
 )
@@ -24,6 +25,27 @@ const slotGroups = computed(() =>
     slots: props.data.slots.filter((slot) => slot.group === group),
   })),
 )
+
+watch(
+  () => props.data.selectedTree,
+  () => {
+    const preferred = props.data.abilities[0]?.group || slotGroups.value[0]?.label
+    expandedSlotGroups.value = preferred ? [preferred] : []
+  },
+  { immediate: true },
+)
+
+watch(selectedAbility, (ability) => {
+  if (ability && !expandedSlotGroups.value.includes(ability.group)) {
+    expandedSlotGroups.value = [...expandedSlotGroups.value, ability.group]
+  }
+})
+
+function toggleSlotGroup(group: string) {
+  expandedSlotGroups.value = expandedSlotGroups.value.includes(group)
+    ? expandedSlotGroups.value.filter((value) => value !== group)
+    : [...expandedSlotGroups.value, group]
+}
 
 function canEquip(slot: HentaiVerseAbilitySlot) {
   return Boolean(selectedAbility.value && selectedAbility.value.group === slot.group)
@@ -85,6 +107,75 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
       >
     </div>
 
+    <div v-if="data.abilities.length" class="ability-list">
+      <article
+        v-for="ability in data.abilities"
+        :key="ability.id"
+        :class="{ selected: selectedAbilityId === ability.id, selectable: isAcquired(ability) }"
+        @click="selectAbility(ability)"
+      >
+        <div class="ability-main">
+          <div>
+            <span class="ability-category">{{ ability.group }}</span>
+            <h3>{{ ability.name }}</h3>
+            <p v-if="ability.description">{{ ability.description }}</p>
+          </div>
+          <span class="ability-level"
+            >{{ ability.level === null ? '等级未知' : `等级 ${ability.level}`
+            }}<template v-if="ability.maxLevel"> / {{ ability.maxLevel }}</template></span
+          >
+        </div>
+        <div class="ability-meta">
+          <div class="ability-selection">
+            <button
+              v-if="isAcquired(ability)"
+              type="button"
+              class="ability-select"
+              :aria-pressed="selectedAbilityId === ability.id"
+              :aria-label="`${ability.name}，${getEquipLabel(ability)}`"
+              :disabled="loading"
+              @click.stop="selectAbility(ability)"
+            >
+              {{ getEquipLabel(ability) }}
+            </button>
+            <span v-if="ability.cost">{{ ability.cost }}</span>
+          </div>
+          <div class="ability-actions">
+            <el-button
+              v-if="ability.action"
+              size="small"
+              :type="ability.action === 'reset_ability' ? 'danger' : 'primary'"
+              :plain="ability.action === 'reset_ability'"
+              :disabled="ability.disabled"
+              :loading="loading"
+              @click.stop="emit('action', ability.action, ability.id)"
+            >
+              {{ ability.actionLabel || (ability.action === 'reset_ability' ? '重置' : '解锁') }}
+            </el-button>
+            <el-button
+              v-if="ability.action !== 'reset_ability' && ability.resetCost !== undefined"
+              size="small"
+              type="danger"
+              plain
+              :loading="loading"
+              @click.stop="emit('action', 'reset_ability', ability.id)"
+              >重置</el-button
+            >
+          </div>
+        </div>
+        <details
+          v-if="ability.currentEffect || ability.nextEffect"
+          class="ability-effects"
+          @click.stop
+        >
+          <summary>查看当前与下一阶效果 · {{ ability.group }}</summary>
+          <p v-if="ability.currentEffect"><b>当前阶：</b>{{ ability.currentEffect }}</p>
+          <p v-if="ability.nextEffect"><b>下一阶：</b>{{ ability.nextEffect }}</p>
+        </details>
+      </article>
+    </div>
+    <el-empty v-else description="未能从源站解析当前能力树" />
+
     <div v-if="data.slots.length" class="ability-slots">
       <header>
         <div>
@@ -104,8 +195,19 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
           </p>
         </div>
       </header>
-      <section v-for="group in slotGroups" :key="group.label" class="slot-group">
-        <h4>{{ group.label }}</h4>
+      <details
+        v-for="group in slotGroups"
+        :key="group.label"
+        class="slot-group"
+        :open="expandedSlotGroups.includes(group.label)"
+      >
+        <summary @click.prevent="toggleSlotGroup(group.label)">
+          {{ group.label }}
+          <small
+            >{{ group.slots.filter(isSlotEquipped).length }} /
+            {{ group.slots.length }} 已装配</small
+          >
+        </summary>
         <div class="slot-grid">
           <div v-for="slot in group.slots" :key="slot.id" class="slot-entry">
             <button
@@ -158,74 +260,8 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
             >
           </div>
         </div>
-      </section>
+      </details>
     </div>
-
-    <div v-if="data.abilities.length" class="ability-list">
-      <article
-        v-for="ability in data.abilities"
-        :key="ability.id"
-        :class="{ selected: selectedAbilityId === ability.id, selectable: isAcquired(ability) }"
-        @click="selectAbility(ability)"
-      >
-        <div class="ability-main">
-          <div>
-            <h3>{{ ability.name }}</h3>
-            <p v-if="ability.description">{{ ability.description }}</p>
-          </div>
-          <span class="ability-level"
-            >{{ ability.level ?? '等级未知'
-            }}<template v-if="ability.maxLevel"> / {{ ability.maxLevel }}</template></span
-          >
-        </div>
-        <div class="ability-meta">
-          <div class="ability-selection">
-            <button
-              v-if="isAcquired(ability)"
-              type="button"
-              class="ability-select"
-              :aria-pressed="selectedAbilityId === ability.id"
-              :aria-label="`${ability.name}，${getEquipLabel(ability)}`"
-              :disabled="loading"
-              @click.stop="selectAbility(ability)"
-            >
-              {{ getEquipLabel(ability) }}
-            </button>
-            <span v-if="ability.cost">{{ ability.cost }}</span>
-          </div>
-          <el-button
-            v-if="ability.action"
-            size="small"
-            :type="ability.action === 'reset_ability' ? 'danger' : 'primary'"
-            :plain="ability.action === 'reset_ability'"
-            :disabled="ability.disabled"
-            :loading="loading"
-            @click.stop="emit('action', ability.action, ability.id)"
-          >
-            {{ ability.actionLabel || (ability.action === 'reset_ability' ? '重置' : '解锁') }}
-          </el-button>
-          <el-button
-            v-if="ability.action !== 'reset_ability' && ability.resetCost !== undefined"
-            size="small"
-            type="danger"
-            plain
-            :loading="loading"
-            @click.stop="emit('action', 'reset_ability', ability.id)"
-            >重置</el-button
-          >
-        </div>
-        <details
-          v-if="ability.currentEffect || ability.nextEffect"
-          class="ability-effects"
-          @click.stop
-        >
-          <summary>查看当前与下一阶效果 · {{ ability.group }}</summary>
-          <p v-if="ability.currentEffect"><b>当前阶：</b>{{ ability.currentEffect }}</p>
-          <p v-if="ability.nextEffect"><b>下一阶：</b>{{ ability.nextEffect }}</p>
-        </details>
-      </article>
-    </div>
-    <el-empty v-else description="未能从源站解析当前能力树" />
 
     <div v-if="data.canResetAll" class="ability-footer">
       <el-button type="danger" plain :loading="loading" @click="emit('action', 'reset_all', '1')">
@@ -315,10 +351,25 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
   flex-direction: column;
   min-width: 0;
 }
-.slot-group h4 {
-  margin: 12px 0 6px;
+.slot-group {
+  margin-top: 10px;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+}
+.slot-group summary {
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 600;
+}
+.slot-group summary small {
+  margin-left: 8px;
+  font-size: 12px;
+  font-weight: 400;
   color: var(--el-text-color-secondary);
-  font-size: 13px;
+}
+.slot-group[open] summary {
+  margin-bottom: 12px;
 }
 .ability-effects {
   margin-top: 10px;
@@ -401,13 +452,16 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 
 .ability-list {
   display: grid;
-  gap: 8px;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 14px;
+  align-items: start;
 }
 
 .ability-list article {
-  padding: 15px 10px;
+  min-width: 0;
+  padding: 18px;
   border: 1px solid var(--el-border-color-lighter);
-  border-radius: 6px;
+  border-radius: 12px;
   transition:
     border-color 0.15s,
     background-color 0.15s,
@@ -458,15 +512,39 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 
 .ability-level {
   flex: 0 0 auto;
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: var(--el-fill-color);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
   font-weight: 700;
 }
 
 .ability-meta {
   align-items: center;
   min-height: 26px;
-  margin-top: 8px;
+  flex-wrap: wrap;
+  padding-top: 14px;
+  border-top: 1px solid var(--el-border-color-lighter);
+  margin-top: 14px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+
+.ability-category {
+  display: block;
+  margin-bottom: 5px;
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
+
+.ability-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.ability-actions .el-button + .el-button {
+  margin-left: 0;
 }
 
 .ability-selection {
@@ -477,15 +555,26 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 }
 
 .ability-select {
+  min-height: 34px;
   min-width: 5em;
-  padding: 4px;
-  border: 0;
+  padding: 6px 8px;
+  border: 1px solid var(--el-color-primary-light-5);
   border-radius: 3px;
   color: var(--el-color-primary);
-  background: transparent;
+  background: var(--el-color-primary-light-9);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
+}
+
+.ability-select[aria-pressed='true'] {
+  color: var(--el-color-white);
+  background: var(--el-color-primary);
+}
+
+.ability-actions :deep(.el-button),
+.slot-entry > .el-button {
+  min-height: 34px;
 }
 
 .ability-select:focus-visible {

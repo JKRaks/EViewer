@@ -103,8 +103,8 @@ function getTotalExperienceCost(level: number) {
       </div>
     </section>
 
-    <section class="character-section">
-      <div class="section-heading">
+    <details class="character-section persona-section">
+      <summary class="section-heading">
         <div>
           <h2>人格</h2>
           <p>当前人格：{{ page.personaName || '默认人格' }}</p>
@@ -112,7 +112,7 @@ function getTotalExperienceCost(level: number) {
             人格槽：{{ page.personaCapacity.used }} / {{ page.personaCapacity.total }}
           </p>
         </div>
-      </div>
+      </summary>
       <div class="persona-controls">
         <el-select
           v-if="page.personas.length"
@@ -158,21 +158,22 @@ function getTotalExperienceCost(level: number) {
         :closable="false"
         show-icon
       />
-    </section>
+    </details>
   </div>
 </template>
 
 <style scoped>
 .metric-band {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 1px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   overflow: hidden;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-border-color-lighter);
 }
 
 .metric-item {
+  flex: 1 1 130px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -246,7 +247,10 @@ function getTotalExperienceCost(level: number) {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 10px 0;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
 }
 
 .attribute-row > div {
@@ -263,6 +267,29 @@ function getTotalExperienceCost(level: number) {
   font-size: 20px;
 }
 
+.persona-section > summary {
+  cursor: pointer;
+}
+
+.persona-section > summary::after {
+  content: '展开';
+  flex-shrink: 0;
+  color: var(--el-color-primary);
+  font-size: 13px;
+}
+
+.persona-section[open] > summary::after {
+  content: '收起';
+}
+
+.persona-section:not([open]) > summary {
+  margin-bottom: 0;
+}
+
+.persona-section > summary h2 {
+  display: inline;
+}
+
 .persona-controls {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto auto;
@@ -273,6 +300,10 @@ function getTotalExperienceCost(level: number) {
 @media (max-width: 767px) {
   .attribute-grid {
     grid-template-columns: 1fr;
+  }
+
+  .persona-section > summary {
+    flex-direction: row;
   }
 
   .section-heading {
