@@ -1,6 +1,15 @@
 <script lang="ts" setup>
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
+import {
+  getLayoutScrollElement,
+  getLayoutScrollTarget,
+  getLayoutScrollTop,
+  getLayoutScrollViewport,
+  layoutScrollModeChange,
+  scrollLayoutTo,
+  usesInternalLayoutScroll,
+} from '@/composables/layoutScroll'
 import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { bookImageBusi } from '@/core/books/bookImgBusi'
 import { bookImgInput } from '@/core/model/book/bookImgInput'
@@ -55,6 +64,7 @@ let layoutObserver: ResizeObserver | undefined
 const viewedThisVisit = new Set<number>()
 let lastMainScrollTop = 0
 let scrollRoot: HTMLElement | null = null
+let scrollTarget: HTMLElement | Window | null = null
 let lastRecordedOrdinal = 0
 let cachedImagePages = new Map<number, GalleryImagePageRecord>()
 let cachedImageUrls = new Map<string, string>()
@@ -88,16 +98,13 @@ onMounted(() => {
   viewportQuery = window.matchMedia('(max-width: 767px) and (orientation: portrait)')
   isSmallPortrait.value = viewportQuery.matches
   viewportQuery.addEventListener('change', updateViewportMode)
-  scrollRoot = document.querySelector<HTMLElement>('.layout-main')
-  scrollRoot?.addEventListener('scroll', handleReaderScroll, { passive: true })
-  scrollRoot?.addEventListener('wheel', handleReaderIntent, { passive: true })
-  scrollRoot?.addEventListener('touchstart', handleReaderIntent, { passive: true })
-  scrollRoot?.addEventListener('touchmove', handleReaderIntent, { passive: true })
-  scrollRoot?.addEventListener('keydown', handleReaderIntent)
+  bindReaderScroll()
+  window.addEventListener(layoutScrollModeChange, handleReaderScrollModeChange)
+  window.addEventListener('resize', requestVisibleImageUpdate)
   layoutObserver = new ResizeObserver(() => {
     if (retainedAnchor && scrollRoot) {
-      scrollRoot.scrollTop += retainedAnchor.node.getBoundingClientRect().top - retainedAnchor.top
-      lastMainScrollTop = scrollRoot.scrollTop
+      scrollLayoutTo(getLayoutScrollTop() + retainedAnchor.node.getBoundingClientRect().top - retainedAnchor.top)
+      lastMainScrollTop = getLayoutScrollTop()
     }
     requestVisibleImageUpdate()
   })
@@ -111,12 +118,37 @@ onUnmounted(() => {
   layoutObserver?.disconnect()
   cancelAnimationFrame(visibleImageFrame)
   viewportQuery?.removeEventListener('change', updateViewportMode)
-  scrollRoot?.removeEventListener('scroll', handleReaderScroll)
-  scrollRoot?.removeEventListener('wheel', handleReaderIntent)
-  scrollRoot?.removeEventListener('touchstart', handleReaderIntent)
-  scrollRoot?.removeEventListener('touchmove', handleReaderIntent)
-  scrollRoot?.removeEventListener('keydown', handleReaderIntent)
+  unbindReaderScroll()
+  window.removeEventListener(layoutScrollModeChange, handleReaderScrollModeChange)
+  window.removeEventListener('resize', requestVisibleImageUpdate)
 })
+
+function unbindReaderScroll() {
+  scrollTarget?.removeEventListener('scroll', handleReaderScroll)
+  scrollTarget?.removeEventListener('wheel', handleReaderIntent)
+  scrollTarget?.removeEventListener('touchstart', handleReaderIntent)
+  scrollTarget?.removeEventListener('touchmove', handleReaderIntent)
+  scrollTarget?.removeEventListener('keydown', handleReaderIntent)
+}
+
+function bindReaderScroll() {
+  unbindReaderScroll()
+  if (scrollRoot) layoutObserver?.unobserve(scrollRoot)
+  scrollRoot = getLayoutScrollElement()
+  scrollTarget = getLayoutScrollTarget()
+  scrollTarget?.addEventListener('scroll', handleReaderScroll, { passive: true })
+  scrollTarget?.addEventListener('wheel', handleReaderIntent, { passive: true })
+  scrollTarget?.addEventListener('touchstart', handleReaderIntent, { passive: true })
+  scrollTarget?.addEventListener('touchmove', handleReaderIntent, { passive: true })
+  scrollTarget?.addEventListener('keydown', handleReaderIntent)
+  if (scrollRoot) layoutObserver?.observe(scrollRoot)
+  lastMainScrollTop = getLayoutScrollTop()
+}
+
+function handleReaderScrollModeChange() {
+  bindReaderScroll()
+  void observeVisibleImages()
+}
 
 function persistViewedImage(ordinal: number, updatePosition = true) {
   if (!bookId || !bookMetadata || !ordinal || !isReadingHistoryEnabled()) return
@@ -140,10 +172,9 @@ function requestVisibleImageUpdate() {
   visibleImageFrame = requestAnimationFrame(() => {
     visibleImageFrame = 0
     if (!scrollRoot || isViewUnmounted || pageData.loading || loadingPrevious.value) return
-    const top = scrollRoot.getBoundingClientRect().top + scrollRoot.clientTop
-    const bottom = top + scrollRoot.clientHeight
+    const { top, bottom } = getLayoutScrollViewport()
     const center = (top + bottom) / 2
-    const atEnd = pageData.noMore && scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight <= 2
+    const atEnd = pageData.noMore && scrollRoot.scrollHeight - getLayoutScrollTop() - (bottom - top) <= 2
     let finalImageVisible = false
     let closest: { ordinal: number; distance: number } | undefined
     document.querySelectorAll<HTMLElement>('.viewer-view .image-block[data-ordinal]').forEach((node) => {
@@ -153,7 +184,7 @@ function requestVisibleImageUpdate() {
       const visibleHeight = Math.min(rect.bottom, bottom) - Math.max(rect.top, top)
       if (!image?.rendered || image.failed || visibleHeight <= 0 || rect.height <= 0) return
       // 短图至少显示一半，长图至少覆盖半个视口，才计入已读。
-      if (visibleHeight >= Math.min(rect.height, scrollRoot!.clientHeight) / 2) {
+      if (visibleHeight >= Math.min(rect.height, bottom - top) / 2) {
         persistViewedImage(ordinal, false)
       }
       if (ordinal === totalImages.value && rect.bottom <= bottom + 2) finalImageVisible = true
@@ -182,11 +213,11 @@ async function observeVisibleImages() {
   await nextTick()
   if (isViewUnmounted) return
   imageObserver?.disconnect()
-  const scrollRoot = document.querySelector<HTMLElement>('.layout-main')
+  const scrollRoot = getLayoutScrollElement()
   if (!scrollRoot) return
   imageObserver = new IntersectionObserver(
     () => requestVisibleImageUpdate(),
-    { root: scrollRoot, threshold: [0, 0.5, 1] },
+    { root: usesInternalLayoutScroll() ? scrollRoot : null, threshold: [0, 0.5, 1] },
   )
   document.querySelectorAll<HTMLElement>('.viewer-view .image-block[data-ordinal]').forEach((node) => {
     imageObserver?.observe(node)
@@ -262,7 +293,7 @@ async function initialize() {
       pageData.loading = false
       refreshNoMoreState()
       await nextTick()
-      if (scrollRoot) lastMainScrollTop = scrollRoot.scrollTop
+      if (scrollRoot) lastMainScrollTop = getLayoutScrollTop()
       requestVisibleImageUpdate()
     }
   }
@@ -324,13 +355,13 @@ function handleReaderIntent(event: Event) {
   }
   retainedAnchor = undefined
   upwardIntentUntil = upward ? performance.now() + 800 : 0
-  if (upward && !pageData.loading && scrollRoot && scrollRoot.scrollTop < 180) void loadPreviousImages()
+  if (upward && !pageData.loading && scrollRoot && getLayoutScrollTop() < 180) void loadPreviousImages()
 }
 
 function handleReaderScroll() {
   if (!scrollRoot || isViewUnmounted) return
   requestVisibleImageUpdate()
-  const position = scrollRoot.scrollTop
+  const position = getLayoutScrollTop()
   if (!pageData.loading && performance.now() < upwardIntentUntil && position < lastMainScrollTop && position < 180 && (bookImages.value[0]?.ordinal ?? 1) > 1) {
     void loadPreviousImages()
   }
@@ -371,8 +402,8 @@ async function loadPreviousImages() {
     retainedAnchor = anchor ? { node: anchor, top: anchorTop } : undefined
     bookImages.value.unshift(...previousItems)
     await nextTick()
-    if (anchor && scrollRoot) scrollRoot.scrollTop += anchor.getBoundingClientRect().top - anchorTop
-    if (scrollRoot) lastMainScrollTop = scrollRoot.scrollTop
+    if (anchor && scrollRoot) scrollLayoutTo(getLayoutScrollTop() + anchor.getBoundingClientRect().top - anchorTop)
+    if (scrollRoot) lastMainScrollTop = getLayoutScrollTop()
   } catch (error) {
     console.error('向上加载图片失败:', error)
   } finally {

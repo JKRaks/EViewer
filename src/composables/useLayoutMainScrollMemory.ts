@@ -1,26 +1,31 @@
 import { nextTick, ref } from 'vue'
 
-const getLayoutMainElement = () => {
-  return document.querySelector('.layout-main') as HTMLElement | null
-}
+import {
+  getLayoutScrollElement,
+  getLayoutScrollTarget,
+  getLayoutScrollTop,
+  layoutScrollModeChange,
+  scrollLayoutTo,
+} from './layoutScroll'
 
 export function useLayoutMainScrollMemory(storageKey: string) {
   const scrollPosition = ref(0)
+  let scrollTarget: HTMLElement | Window | null = null
 
   const persistScrollPosition = () => {
-    const mainElement = getLayoutMainElement()
+    const mainElement = getLayoutScrollElement()
     if (!mainElement) {
       return
     }
 
-    scrollPosition.value = mainElement.scrollTop
+    scrollPosition.value = getLayoutScrollTop()
     sessionStorage.setItem(storageKey, String(scrollPosition.value))
   }
 
   const applyScrollTop = (scrollTop: number) => {
-    const mainElement = getLayoutMainElement()
+    const mainElement = getLayoutScrollElement()
     if (mainElement) {
-      mainElement.scrollTo({ top: scrollTop, behavior: 'auto' })
+      scrollLayoutTo(scrollTop)
     }
   }
 
@@ -42,14 +47,16 @@ export function useLayoutMainScrollMemory(storageKey: string) {
   }
 
   const bindScrollListener = () => {
-    const mainElement = getLayoutMainElement()
-    mainElement?.removeEventListener('scroll', handleScroll)
-    mainElement?.addEventListener('scroll', handleScroll, { passive: true })
+    unbindScrollListener()
+    scrollTarget = getLayoutScrollTarget()
+    scrollTarget?.addEventListener('scroll', handleScroll, { passive: true })
+    window.addEventListener(layoutScrollModeChange, bindScrollListener)
   }
 
   const unbindScrollListener = () => {
-    const mainElement = getLayoutMainElement()
-    mainElement?.removeEventListener('scroll', handleScroll)
+    scrollTarget?.removeEventListener('scroll', handleScroll)
+    scrollTarget = null
+    window.removeEventListener(layoutScrollModeChange, bindScrollListener)
   }
 
   return {
