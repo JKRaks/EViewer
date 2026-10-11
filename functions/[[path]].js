@@ -28,7 +28,12 @@ export async function onRequest({ request, env, next }) {
   }
 
   try {
-    return await env.EPROXY.fetch(request)
+    const boundRequest = new Request(request)
+    boundRequest.headers.delete('X-EViewer-Proxy-Revision')
+    if (env.EVIEWER_PROXY_REVISION) {
+      boundRequest.headers.set('X-EViewer-Proxy-Revision', env.EVIEWER_PROXY_REVISION)
+    }
+    return await env.EPROXY.fetch(boundRequest)
   } catch {
     return Response.json(
       { error: '代理服务暂时不可用' },

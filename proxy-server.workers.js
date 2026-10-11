@@ -590,7 +590,7 @@ function escapeRegExp(string) {
 /**
  * 处理健康检查
  */
-function handleHealthCheck() {
+function handleHealthCheck(env) {
   const routes = ORIGIN_MAP.map((config) => ({
     path: config.path,
     target: `${config.schema}://${config.host}`,
@@ -601,10 +601,12 @@ function handleHealthCheck() {
       status: 'ok',
       message: 'Proxy server is running',
       routes,
+      revision: env.EVIEWER_PROXY_REVISION || null,
+      environment: env.EVIEWER_PROXY_ENVIRONMENT || null,
     }),
     {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     },
   )
 }
@@ -925,7 +927,7 @@ async function handleRequest(request, env = {}) {
 
   // 健康检查路由
   if (pathname === '/health') {
-    return handleHealthCheck()
+    return handleHealthCheck(env)
   }
 
   if (request.method === 'POST' && (pathname === '/auth/cookies' || pathname === '/auth/logout')) {
@@ -997,6 +999,14 @@ async function handleRequest(request, env = {}) {
  */
 export default {
   async fetch(request, env) {
+    const expectedRevision = request.headers.get('X-EViewer-Proxy-Revision')
+    if (
+      expectedRevision &&
+      env?.EVIEWER_PROXY_REVISION &&
+      expectedRevision !== env.EVIEWER_PROXY_REVISION
+    ) {
+      return jsonResponse(request, { error: '代理服务版本未同步，请等待部署完成后刷新页面' }, 503)
+    }
     return handleRequest(request, env)
   },
 }
