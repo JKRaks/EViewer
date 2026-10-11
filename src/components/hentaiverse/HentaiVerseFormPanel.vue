@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, reactive, watch } from 'vue'
+import { computed, reactive, ref, watch } from 'vue'
 import type {
   HentaiVerseFormAction,
   HentaiVerseFormBlock,
@@ -17,6 +17,7 @@ const emit = defineEmits<{
   ]
 }>()
 
+const expandedGroups = ref<string[]>([])
 const values = reactive<Record<string, string | boolean>>({})
 const controlGroups = computed(() => {
   const definitions = props.form.groups?.length
@@ -56,6 +57,24 @@ const controlGroups = computed(() => {
 })
 
 watch(
+  () => props.form.id,
+  () => {
+    expandedGroups.value = controlGroups.value.slice(0, 1).map((group) => group.key)
+  },
+  { immediate: true },
+)
+
+function toggleGroup(key: string) {
+  expandedGroups.value = expandedGroups.value.includes(key)
+    ? expandedGroups.value.filter((value) => value !== key)
+    : [...expandedGroups.value, key]
+}
+
+const allExpanded = computed(() =>
+  controlGroups.value.every((group) => expandedGroups.value.includes(group.key)),
+)
+
+watch(
   () => props.form,
   (form) => {
     Object.keys(values).forEach((key) => delete values[key])
@@ -93,13 +112,34 @@ function submit(action?: HentaiVerseFormAction) {
         <h2>{{ form.title }}</h2>
         <p v-if="form.description">{{ form.description }}</p>
       </div>
+      <el-button
+        v-if="controlGroups.length > 1"
+        text
+        type="primary"
+        @click="expandedGroups = allExpanded ? [] : controlGroups.map((group) => group.key)"
+        >{{ allExpanded ? '全部收起' : '全部展开' }}</el-button
+      >
     </header>
 
-    <section v-for="group in controlGroups" :key="group.key" class="hv-form-group">
-      <header v-if="group.title" class="hv-form-group-heading">
-        <h3>{{ group.title }}</h3>
+    <component
+      :is="group.title ? 'details' : 'section'"
+      v-for="group in controlGroups"
+      :key="group.key"
+      class="hv-form-group"
+      :class="{ 'is-grouped': group.title }"
+      :open="group.title && expandedGroups.includes(group.key)"
+    >
+      <summary
+        v-if="group.title"
+        class="hv-form-group-heading"
+        @click.prevent="toggleGroup(group.key)"
+      >
+        <span class="group-title"
+          >{{ group.title }}
+          <small>{{ group.controls.length + group.radioGroups.length }} 项</small>
+        </span>
         <p v-if="group.description">{{ group.description }}</p>
-      </header>
+      </summary>
 
       <div class="hv-form-grid">
         <template v-for="control in group.controls" :key="`${control.name}:${control.value}`">
@@ -122,6 +162,7 @@ function submit(action?: HentaiVerseFormAction) {
           <el-input
             v-else-if="control.type === 'textarea'"
             v-model="values[control.name] as string"
+            :aria-label="control.label"
             type="textarea"
             :rows="3"
             :disabled="loading || control.disabled"
@@ -129,6 +170,7 @@ function submit(action?: HentaiVerseFormAction) {
           <el-input-number
             v-else-if="control.type === 'number'"
             v-model="values[control.name] as string"
+            :aria-label="control.label"
             :min="control.min"
             :max="control.max"
             :step="control.step || 1"
@@ -169,7 +211,7 @@ function submit(action?: HentaiVerseFormAction) {
           </el-radio-group>
         </template>
       </div>
-    </section>
+    </component>
 
     <footer class="hv-form-actions">
       <el-button
@@ -197,6 +239,18 @@ function submit(action?: HentaiVerseFormAction) {
   border-top: 1px solid var(--el-border-color-lighter);
 }
 
+.hv-panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.hv-panel-heading .el-button {
+  flex-shrink: 0;
+}
+
 .hv-panel-heading h2 {
   margin: 0;
   font-size: 17px;
@@ -215,14 +269,29 @@ function submit(action?: HentaiVerseFormAction) {
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
-.hv-form-group:last-of-type {
-  border-bottom: 0;
+.hv-form-group.is-grouped {
+  padding: 16px;
+  margin-bottom: 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
+  background: var(--el-bg-color);
 }
 
-.hv-form-group-heading h3 {
-  margin: 0;
+.hv-form-group-heading {
+  cursor: pointer;
+}
+.group-title {
   font-size: 15px;
-  letter-spacing: 0;
+  font-weight: 600;
+}
+.group-title small {
+  margin-left: 8px;
+  font-weight: 400;
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+}
+.hv-form-group-heading p {
+  padding-left: 16px;
 }
 
 .hv-form-group-heading p {
@@ -274,6 +343,13 @@ function submit(action?: HentaiVerseFormAction) {
 
 .hv-checkbox {
   grid-column: 1 / -1;
+  height: auto;
+  white-space: normal;
+}
+
+.hv-checkbox :deep(.el-checkbox__label) {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
 }
 
 .hv-form-actions {
