@@ -15,8 +15,9 @@ onUnmounted(() => {
   clearInterval(clock)
   document.removeEventListener('visibilitychange', updateClock)
 })
-const active = computed(() => Boolean(props.data.activeName || props.data.progress || props.data.canCancel))
+const active = computed(() => props.data.active)
 const progressPercent = computed(() => {
+  if (!active.value) return undefined
   if (props.data.endsAt !== undefined && props.data.durationSeconds) {
     return Math.max(0, Math.min(100, 100 - (props.data.endsAt - now.value) / (props.data.durationSeconds * 10)))
   }
@@ -60,6 +61,7 @@ const remaining = computed(() => {
       <strong>{{ progressLabel }}</strong>
       <el-button v-if="data.canCancel" type="danger" plain :loading="loading" @click="emit('cancel')">取消训练</el-button>
     </div>
+    <p v-else class="training-idle">当前没有进行中的训练</p>
     <el-progress v-if="active && progressPercent !== undefined" :percentage="progressPercent" :show-text="false" />
 
     <div v-if="data.options.length" class="training-list">
@@ -78,7 +80,7 @@ const remaining = computed(() => {
         </el-button>
       </article>
     </div>
-    <el-empty v-else-if="!data.activeName" description="当前没有可用训练项目" />
+    <el-empty v-else-if="!active" description="当前没有可用训练项目" />
   </section>
 </template>
 
@@ -86,6 +88,11 @@ const remaining = computed(() => {
 .training-panel {
   display: grid;
   gap: 24px;
+}
+
+.training-idle {
+  margin: 0;
+  color: var(--el-text-color-secondary);
 }
 
 .training-progress,

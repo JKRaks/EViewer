@@ -179,6 +179,7 @@ export interface HentaiVerseTrainingOption {
 }
 
 export interface HentaiVerseTrainingPage {
+  active: boolean
   activeName: string
   progress: string
   remaining: string

@@ -111,11 +111,14 @@ function selectAbility(ability: HentaiVerseAbility) {
 <style scoped>
 .ability-panel {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-width: 0;
   gap: 24px;
 }
 
 .ability-summary {
   display: flex;
+  min-width: 0;
   align-items: center;
   justify-content: space-between;
   gap: 20px;
@@ -123,6 +126,7 @@ function selectAbility(ability: HentaiVerseAbility) {
 
 .ability-trees {
   min-width: 0;
+  max-width: 100%;
   flex: 1;
 }
 
@@ -162,6 +166,7 @@ function selectAbility(ability: HentaiVerseAbility) {
 }
 
 .slot-grid button {
+  min-width: 0;
   min-height: 62px;
   padding: 8px 10px;
   border: 1px solid var(--el-border-color);
@@ -227,6 +232,11 @@ function selectAbility(ability: HentaiVerseAbility) {
   margin: 0;
   font-size: 16px;
   letter-spacing: 0;
+}
+
+.ability-main > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .ability-main p {

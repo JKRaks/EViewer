@@ -492,6 +492,9 @@ function parseAbilities(
 
 function parseTraining(document: Document, scriptText: string): HentaiVerseTrainingPage {
   const progressPane = document.querySelector<HTMLElement>('#train_progress')
+  // The source keeps a hidden cancel_train=0 field even while idle.
+  // Only an actual progress pane indicates that a training is running.
+  const active = Boolean(progressPane)
   const progress = cleanText(document.querySelector('#train_progcnt')?.textContent)
   const progressText = cleanText(progressPane?.textContent)
   const totalSeconds = Number(matchValue(scriptText, /\btotal_time\s*=\s*(\d+(?:\.\d+)?)/))
@@ -520,14 +523,15 @@ function parseTraining(document: Document, scriptText: string): HentaiVerseTrain
     })
   })
   return {
+    active,
     activeName: translateHentaiVerseText(cleanText(progressPane?.querySelector('strong')?.textContent)),
     progress: progress && !progress.includes('%') ? `${progress}%` : progress,
     remaining: matchValue(progressText, /(?:Remaining|Time Left)\s*:?\s*(.+)$/i),
-    ...(totalSeconds > 0 && endTime > 0 && serverNow > 0 && {
+    ...(active && totalSeconds > 0 && endTime > 0 && serverNow > 0 && {
       endsAt: Date.now() + Math.max(0, endTime - serverNow) * 1000,
       durationSeconds: totalSeconds,
     }),
-    canCancel: Boolean(
+    canCancel: active && Boolean(
       document.querySelector('[name="cancel_train"], [onclick*="cancel_training"]'),
     ),
     options,
