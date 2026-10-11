@@ -1,43 +1,75 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { computed, ref, watch } from 'vue'
 import type { HentaiVerseInventoryPage } from '@/core/hentaiverse/model/hentaiVerse'
 
 const props = defineProps<{ data: HentaiVerseInventoryPage; loading?: boolean }>()
 const emit = defineEmits<{ assign: [slotId: string, itemId: string] }>()
 const selectedItemId = ref('')
+const selectedItem = computed(() =>
+  props.data.items.find((item) => item.id === selectedItemId.value),
+)
 
-watch(() => props.data.items, (items) => {
-  selectedItemId.value = items.find((item) => item.selected)?.id || ''
-}, { immediate: true })
+watch(
+  () => props.data.items,
+  (items) => {
+    selectedItemId.value = items.find((item) => item.selected)?.id || ''
+  },
+  { immediate: true },
+)
 </script>
 
 <template>
   <section class="inventory-panel">
     <div v-if="data.items.length" class="inventory-layout">
       <div class="inventory-items">
-        <header><h3>物品</h3><span>{{ data.items.length }} 种</span></header>
+        <header>
+          <h3>物品</h3>
+          <span>{{ data.items.length }} 种</span>
+        </header>
         <el-radio-group v-model="selectedItemId">
-          <el-radio v-for="item in data.items" :key="item.id" :value="item.id" :disabled="loading || !item.canAssign">
+          <el-radio v-for="item in data.items" :key="item.id" :value="item.id" :disabled="loading">
             <span>{{ item.name }}</span>
             <small v-if="item.description">{{ item.description }}</small>
             <strong>{{ item.quantity }}</strong>
           </el-radio>
         </el-radio-group>
+        <p v-if="selectedItem && !selectedItem.canAssign">
+          {{ selectedItem.category }}可查看说明，无法装配到战斗槽位。
+        </p>
       </div>
 
       <div class="inventory-slots">
-        <header><h3>战斗槽位</h3><span>选择物品后点击槽位</span></header>
+        <header>
+          <h3>战斗槽位</h3>
+          <span>选择物品后点击槽位</span>
+        </header>
         <div v-if="data.slots.length" class="inventory-slot-grid">
-          <button
-            v-for="slot in data.slots"
-            :key="slot.id"
-            type="button"
-            :disabled="loading || !selectedItemId"
-            @click="emit('assign', slot.id, selectedItemId)"
-          >
-            <span>{{ slot.label }}</span>
-            <strong>{{ slot.itemName || '空槽位' }}</strong>
-          </button>
+          <div v-for="slot in data.slots" :key="slot.id" class="inventory-slot">
+            <button
+              type="button"
+              :disabled="
+                loading || !selectedItem?.canAssign || selectedItem.category !== slot.category
+              "
+              :title="
+                selectedItem && selectedItem.category !== slot.category
+                  ? `此槽位仅能装配${slot.category}`
+                  : slot.itemName
+              "
+              @click="emit('assign', slot.id, selectedItemId)"
+            >
+              <span>{{ slot.label }}</span>
+              <strong>{{ slot.itemName || '空槽位' }}</strong>
+            </button>
+            <el-button
+              v-if="slot.itemId"
+              size="small"
+              type="danger"
+              text
+              :disabled="loading"
+              @click="emit('assign', slot.id, '0')"
+              >清空槽位</el-button
+            >
+          </div>
         </div>
         <el-empty v-else description="没有可配置的物品槽位" :image-size="70" />
       </div>
@@ -47,6 +79,11 @@ watch(() => props.data.items, (items) => {
 </template>
 
 <style scoped>
+.inventory-slot {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
 .inventory-layout {
   display: grid;
   grid-template-columns: minmax(280px, 1.2fr) minmax(240px, 0.8fr);
@@ -108,7 +145,7 @@ watch(() => props.data.items, (items) => {
   margin-top: 12px;
 }
 
-.inventory-slot-grid button {
+.inventory-slot > button:first-child {
   min-height: 60px;
   padding: 9px;
   border: 1px solid var(--el-border-color);

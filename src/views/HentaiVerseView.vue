@@ -8,11 +8,15 @@ import EquipmentPanel from '@/components/hentaiverse/EquipmentPanel.vue'
 import HentaiVerseFormPanel from '@/components/hentaiverse/HentaiVerseFormPanel.vue'
 import InventoryPanel from '@/components/hentaiverse/InventoryPanel.vue'
 import TrainingPanel from '@/components/hentaiverse/TrainingPanel.vue'
+import StatGroupsPanel from '@/components/hentaiverse/StatGroupsPanel.vue'
+import ChallengePanel from '@/components/hentaiverse/ChallengePanel.vue'
+import ItemWorldPanel from '@/components/hentaiverse/ItemWorldPanel.vue'
 import { HentaiVerseBusi } from '@/core/hentaiverse/hentaiVerseBusi'
 import { HENTAIVERSE_SECTIONS } from '@/core/hentaiverse/hentaiVerseProtocol'
 import type {
   HentaiVerseAbilityActionName,
   HentaiVerseFormSection,
+  HentaiVerseFormData,
   HentaiVersePage,
   HentaiVersePageTarget,
   HentaiVerseSection,
@@ -37,9 +41,15 @@ const currentTarget = ref<HentaiVersePageTarget>({ ...HENTAIVERSE_SECTIONS[0]!.t
 const characterSummary = ref({ name: '', persona: '' })
 let requestId = 0
 
-const currentMeta = computed(() => HENTAIVERSE_SECTIONS.find((item) => item.key === activeSection.value)!)
-const characterSections = computed(() => HENTAIVERSE_SECTIONS.filter((item) => item.group === 'character'))
-const battleSections = computed(() => HENTAIVERSE_SECTIONS.filter((item) => item.group === 'battle'))
+const currentMeta = computed(
+  () => HENTAIVERSE_SECTIONS.find((item) => item.key === activeSection.value)!,
+)
+const characterSections = computed(() =>
+  HENTAIVERSE_SECTIONS.filter((item) => item.group === 'character'),
+)
+const battleSections = computed(() =>
+  HENTAIVERSE_SECTIONS.filter((item) => item.group === 'battle'),
+)
 
 watch(
   () => hentaiVerseState.battle?.completed,
@@ -49,9 +59,8 @@ watch(
 )
 
 function updateCharacterSummary(nextPage: HentaiVersePage) {
-  const characterName = nextPage.characterName !== 'HentaiVerse'
-    ? nextPage.characterName
-    : nextPage.personaName
+  const characterName =
+    nextPage.characterName !== 'HentaiVerse' ? nextPage.characterName : nextPage.personaName
   if (characterName) {
     characterSummary.value = {
       name: characterName,
@@ -70,10 +79,13 @@ async function loadSection(
   targetOverride?: Partial<HentaiVersePageTarget>,
 ) {
   const meta = HENTAIVERSE_SECTIONS.find((item) => item.key === section)
-  if (!meta || loading.value && section === activeSection.value) return
+  if (!meta || (loading.value && section === activeSection.value)) return
   const changedSection = section !== page.value?.section
   activeSection.value = section
-  currentTarget.value = { ...meta.target, ...(targetOverride || {}) }
+  currentTarget.value = {
+    ...meta.target,
+    ...(!changedSection && !targetOverride ? currentTarget.value : targetOverride || {}),
+  }
   if (changedSection) page.value = undefined
   const currentRequest = ++requestId
   loading.value = true
@@ -91,10 +103,12 @@ async function loadSection(
       showHentaiVerseBattleSnapshot(result.battle)
       return
     }
-    if (!result.page?.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
+    if (!result.page?.authenticated)
+      throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
     setPage(result.page)
   } catch (loadError) {
-    if (currentRequest === requestId) error.value = loadError instanceof Error ? loadError.message : '页面加载失败'
+    if (currentRequest === requestId)
+      error.value = loadError instanceof Error ? loadError.message : '页面加载失败'
   } finally {
     if (currentRequest === requestId) loading.value = false
   }
@@ -111,7 +125,8 @@ async function runDomainAction(
       showHentaiVerseBattleSnapshot(result.battle)
       ElMessage.success('已进入 HentaiVerse 战斗')
     } else if (result.page) {
-      if (!result.page.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
+      if (!result.page.authenticated)
+        throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
       setPage(result.page)
       ElMessage.success(successMessage)
     }
@@ -122,22 +137,33 @@ async function runDomainAction(
   }
 }
 
-async function submitForm(
-  section: HentaiVerseFormSection,
-  data: Record<string, string | number | boolean>,
-) {
+async function submitForm(section: HentaiVerseFormSection, data: HentaiVerseFormData) {
   if (section === 'persona' && data.persona_create) {
     try {
-      await ElMessageBox.confirm('人格创建后无法删除，确定继续吗？', '创建人格', { type: 'warning' })
+      await ElMessageBox.confirm('人格创建后无法删除，确定继续吗？', '创建人格', {
+        type: 'warning',
+      })
     } catch {
       return
     }
   }
-  if (['arena', 'ringOfBlood', 'grindfest'].includes(section) && data.initid) {
+  if (
+    (['arena', 'ringOfBlood', 'grindfest'].includes(section) && data.initid) ||
+    section === 'itemWorld'
+  ) {
     try {
-      const sectionLabel = HENTAIVERSE_SECTIONS.find((item) => item.key === section)?.label || '战斗'
+      const sectionLabel =
+        HENTAIVERSE_SECTIONS.find((item) => item.key === section)?.label || '战斗'
+      const challenge = page.value?.challenges?.find((item) => item.id === data.initid)
+      const entryId = Array.isArray(data['eqids[]']) ? data['eqids[]'][0] : ''
+      const entryInfo = entryId ? page.value?.itemWorld?.entryInfo[entryId] : undefined
+      const details = challenge
+        ? `${challenge.name}，${challenge.rounds} 轮，入场费用 ${challenge.entryCost || '无'}。`
+        : entryInfo
+          ? `${entryInfo.rounds} 轮，消耗 ${entryInfo.cost} 世界种子。`
+          : ''
       await ElMessageBox.confirm(
-        `即将进入${sectionLabel}，进入后需要完成或退出当前战斗。确定继续吗？`,
+        `${details}即将进入${sectionLabel}，进入后需要完成或退出当前战斗。确定继续吗？`,
         '确认开始战斗',
         {
           type: 'warning',
@@ -156,7 +182,8 @@ async function submitForm(
       showHentaiVerseBattleSnapshot(result.battle)
       ElMessage.success('已进入 HentaiVerse 战斗')
     } else if (result.page) {
-      if (!result.page.authenticated) throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
+      if (!result.page.authenticated)
+        throw new Error('HentaiVerse 登录态已失效，请重新维护认证 Cookie')
       setPage(result.page)
       ElMessage.success('HentaiVerse 设置已更新')
     }
@@ -190,22 +217,44 @@ function equipItem(slotId: string, equipmentId: string, postToken: string) {
 }
 
 function unequipItem(slotId: string, postToken: string) {
-  void runDomainAction(
-    () => busi.unequipItem(slotId, postToken, currentTarget.value),
-    '装备已卸下',
-  )
+  void runDomainAction(() => busi.unequipItem(slotId, postToken, currentTarget.value), '装备已卸下')
 }
 
 function selectAbilityTree(id: string) {
   void loadSection('abilities', { tree: id })
 }
 
-function updateAbility(action: HentaiVerseAbilityActionName | 'reset_all', value: string) {
-  void runDomainAction(() => busi.updateAbility(action, value, currentTarget.value), '能力配置已更新')
+async function updateAbility(action: HentaiVerseAbilityActionName | 'reset_all', value: string) {
+  if (['reset_all', 'reset_ability', 'unlock_slot'].includes(action)) {
+    const ability = page.value?.abilities?.abilities.find((item) => item.id === value)
+    const slot = page.value?.abilities?.slots.find((item) => item.id === value)
+    const cost =
+      action === 'reset_all'
+        ? page.value?.abilities?.resetCost
+        : action === 'reset_ability'
+          ? ability?.resetCost
+          : slot?.unlockCost
+    const description =
+      action === 'unlock_slot'
+        ? `解锁${slot?.group || '能力'}槽位，需要 ${cost ?? '未知数量的'} 精通点。`
+        : `重置${action === 'reset_all' ? '全部能力与精通点分配' : ability?.name || '此能力'}，${cost === 0 ? '本次免费' : `需要 ${cost ?? '未知数量的'} 灵魂碎片`}。`
+    try {
+      await ElMessageBox.confirm(`${description}确定继续吗？`, '确认能力操作', { type: 'warning' })
+    } catch {
+      return
+    }
+  }
+  void runDomainAction(
+    () => busi.updateAbility(action, value, currentTarget.value),
+    '能力配置已更新',
+  )
 }
 
 function equipAbility(slotId: string, abilityId: string) {
-  void runDomainAction(() => busi.equipAbility(slotId, abilityId, currentTarget.value), '能力槽已更新')
+  void runDomainAction(
+    () => busi.equipAbility(slotId, abilityId, currentTarget.value),
+    '能力槽已更新',
+  )
 }
 
 function startTraining(id: string) {
@@ -244,12 +293,19 @@ onMounted(() => {
         <h1>HentaiVerse 角色养成与战斗</h1>
         <p class="hv-module-description">培养角色、配置装备与能力，并参加竞技场等战斗内容。</p>
         <p v-if="characterSummary.name" class="hv-character-summary">
-          当前角色：{{ characterSummary.name }}<template v-if="characterSummary.persona"> · {{ characterSummary.persona }}</template>
+          当前角色：{{ characterSummary.name
+          }}<template v-if="characterSummary.persona"> · {{ characterSummary.persona }}</template>
         </p>
       </div>
       <div class="hv-header-actions">
         <el-button :icon="Lightning" @click="resumeBattle">恢复战斗</el-button>
-        <el-button :icon="Refresh" circle title="刷新当前页面" :loading="loading" @click="loadSection()" />
+        <el-button
+          :icon="Refresh"
+          circle
+          title="刷新当前页面"
+          :loading="loading"
+          @click="loadSection()"
+        />
       </div>
     </header>
 
@@ -292,7 +348,12 @@ onMounted(() => {
           aria-label="HentaiVerse 页面"
           @change="loadSection"
         >
-          <el-option v-for="item in HENTAIVERSE_SECTIONS" :key="item.key" :label="item.label" :value="item.key" />
+          <el-option
+            v-for="item in HENTAIVERSE_SECTIONS"
+            :key="item.key"
+            :label="item.label"
+            :value="item.key"
+          />
         </el-select>
 
         <div v-if="loading && !page" class="hv-loading">
@@ -304,10 +365,19 @@ onMounted(() => {
           title="当前正在进行 HentaiVerse 战斗"
           sub-title="源站会在战斗期间锁定角色维护页面。请完成或退出当前战斗后，再重新加载装备和角色配置。"
         >
-          <template #extra><el-button type="primary" @click="resumeBattle">继续战斗</el-button></template>
+          <template #extra
+            ><el-button type="primary" @click="resumeBattle">继续战斗</el-button></template
+          >
         </el-result>
-        <el-result v-else-if="error" icon="error" title="HentaiVerse 页面加载失败" :sub-title="error">
-          <template #extra><el-button type="primary" @click="loadSection()">重新加载</el-button></template>
+        <el-result
+          v-else-if="error"
+          icon="error"
+          title="HentaiVerse 页面加载失败"
+          :sub-title="error"
+        >
+          <template #extra
+            ><el-button type="primary" @click="loadSection()">重新加载</el-button></template
+          >
         </el-result>
         <template v-else-if="page">
           <div class="hv-content-heading">
@@ -371,8 +441,33 @@ onMounted(() => {
             @assign="assignInventoryItem"
           />
 
+          <ChallengePanel
+            v-else-if="page.challenges"
+            :challenges="page.challenges"
+            :post-token="page.challengePostToken || ''"
+            :tokens="page.metrics.find((metric) => metric.label === '鲜血代币')?.value"
+            :loading="loading"
+            @start="submitForm(activeSection as HentaiVerseFormSection, $event)"
+          />
+
+          <ItemWorldPanel
+            v-else-if="page.itemWorld"
+            :data="page.itemWorld"
+            :loading="loading"
+            @category="loadSection('itemWorld', { filter: $event })"
+            @start="submitForm('itemWorld', $event)"
+          />
+
+          <StatGroupsPanel
+            v-if="['character', 'equipment'].includes(activeSection)"
+            :groups="page.statGroups"
+          />
+
           <HentaiVerseFormPanel
-            v-for="form in page.forms.filter((item) => activeSection !== 'character' || !['character', 'persona'].includes(item.section))"
+            v-for="form in page.forms.filter(
+              (item) =>
+                activeSection !== 'character' || !['character', 'persona'].includes(item.section),
+            )"
             :key="form.id"
             :form="form"
             :loading="loading"
@@ -380,12 +475,16 @@ onMounted(() => {
           />
 
           <el-empty
-            v-if="activeSection !== 'character'
-              && !page.forms.length
-              && !page.equipment
-              && !page.abilities
-              && !page.training
-              && !page.inventory"
+            v-if="
+              activeSection !== 'character' &&
+              !page.forms.length &&
+              !page.equipment &&
+              !page.abilities &&
+              !page.training &&
+              !page.inventory &&
+              !page.challenges &&
+              !page.itemWorld
+            "
             description="当前页面没有可用操作"
           />
         </template>
