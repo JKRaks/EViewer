@@ -48,7 +48,7 @@ function selectAbility(ability: HentaiVerseAbility) {
       <header>
         <div>
           <span>能力槽</span>
-          <p>{{ selectedAbility ? `选择槽位装备 ${selectedAbility.name}` : '先选择一个已解锁能力，再选择目标槽位' }}</p>
+          <p :title="selectedAbility ? `选择槽位装备 ${selectedAbility.name}` : '先选择一个已解锁能力，再选择目标槽位'">{{ selectedAbility ? `选择槽位装备 ${selectedAbility.name}` : '先选择一个已解锁能力，再选择目标槽位' }}</p>
         </div>
       </header>
       <div class="slot-grid">
@@ -83,7 +83,20 @@ function selectAbility(ability: HentaiVerseAbility) {
           <span class="ability-level">{{ ability.level ?? '等级未知' }}<template v-if="ability.maxLevel"> / {{ ability.maxLevel }}</template></span>
         </div>
         <div class="ability-meta">
-          <span v-if="ability.cost">{{ ability.cost }}</span>
+          <div class="ability-selection">
+            <button
+              v-if="isAcquired(ability)"
+              type="button"
+              class="ability-select"
+              :aria-pressed="selectedAbilityId === ability.id"
+              :aria-label="`选择装配 ${ability.name}`"
+              :disabled="loading"
+              @click.stop="selectAbility(ability)"
+            >
+              {{ selectedAbilityId === ability.id ? '已选中' : '选择装配' }}
+            </button>
+            <span v-if="ability.cost">{{ ability.cost }}</span>
+          </div>
           <el-button
             v-if="ability.action"
             size="small"
@@ -155,8 +168,11 @@ function selectAbility(ability: HentaiVerseAbility) {
 
 .ability-slots header p {
   margin: 4px 0 12px;
+  overflow: hidden;
   color: var(--el-text-color-secondary);
   font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .slot-grid {
@@ -202,22 +218,32 @@ function selectAbility(ability: HentaiVerseAbility) {
 }
 
 .ability-list {
-  border-top: 1px solid var(--el-border-color-lighter);
+  display: grid;
+  gap: 8px;
 }
 
 .ability-list article {
-  padding: 15px 2px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding: 15px 10px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 6px;
+  transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
 }
 
 .ability-list article.selectable {
+  border-color: var(--el-color-primary-light-5);
+  background: var(--el-fill-color-light);
   cursor: pointer;
 }
 
+.ability-list article.selectable:hover,
+.ability-list article.selectable:focus-within {
+  border-color: var(--el-color-primary);
+}
+
 .ability-list article.selected {
-  padding-right: 10px;
-  padding-left: 10px;
+  border-color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
+  box-shadow: inset 0 0 0 1px var(--el-color-primary);
 }
 
 .ability-main,
@@ -256,6 +282,34 @@ function selectAbility(ability: HentaiVerseAbility) {
   margin-top: 8px;
   color: var(--el-text-color-secondary);
   font-size: 12px;
+}
+
+.ability-selection {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.ability-select {
+  min-width: 5em;
+  padding: 4px;
+  border: 0;
+  border-radius: 3px;
+  color: var(--el-color-primary);
+  background: transparent;
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ability-select:focus-visible {
+  outline: 2px solid var(--el-color-primary);
+  outline-offset: 2px;
+}
+
+.ability-select:disabled {
+  cursor: wait;
 }
 
 .ability-footer {
