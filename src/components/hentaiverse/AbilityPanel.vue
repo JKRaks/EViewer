@@ -4,6 +4,7 @@ import type {
   HentaiVerseAbility,
   HentaiVerseAbilityActionName,
   HentaiVerseAbilityPage,
+  HentaiVerseAbilitySlot,
 } from '@/core/hentaiverse/model/hentaiVerse'
 
 const props = defineProps<{ data: HentaiVerseAbilityPage; loading?: boolean }>()
@@ -37,6 +38,10 @@ function getEquipLabel(ability: HentaiVerseAbility) {
     .map((slot) => slot.label.replace(/^槽位\s*/, ''))
   return slots.length ? `已装配在 ${slots.join('、')} 位` : '选择装配'
 }
+
+function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
+  return !slot.locked && Boolean(slot.abilityId || slot.abilityName)
+}
 </script>
 
 <template>
@@ -65,14 +70,17 @@ function getEquipLabel(ability: HentaiVerseAbility) {
           v-for="slot in data.slots"
           :key="slot.id"
           type="button"
-          :class="{ locked: slot.locked }"
+          :class="{ locked: slot.locked, equipped: isSlotEquipped(slot) }"
           :disabled="loading || (!slot.locked && !selectedAbilityId)"
           @click="slot.locked && slot.action
             ? emit('action', slot.action, slot.id)
             : emit('equip', slot.id, selectedAbilityId)"
         >
-          <span>{{ slot.label }}</span>
-          <strong>{{ slot.locked ? '点击解锁' : slot.abilityName || '空槽位' }}</strong>
+          <span class="slot-heading">
+            <span class="slot-label" :title="slot.label">{{ slot.label }}</span>
+            <span class="slot-state">{{ slot.locked ? '未解锁' : isSlotEquipped(slot) ? '✓ 已装配' : '空闲' }}</span>
+          </span>
+          <strong :title="slot.abilityName">{{ slot.locked ? '点击解锁' : slot.abilityName || (isSlotEquipped(slot) ? '已装配能力' : '空槽位') }}</strong>
         </button>
       </div>
     </div>
@@ -191,13 +199,22 @@ function getEquipLabel(ability: HentaiVerseAbility) {
 }
 
 .slot-grid button {
+  appearance: none;
   min-width: 0;
   min-height: 62px;
   padding: 8px 10px;
   border: 1px solid var(--el-border-color);
   border-radius: 6px;
   text-align: left;
+  color: var(--el-text-color-primary);
   background: var(--el-bg-color);
+  opacity: 1;
+}
+
+.slot-grid button.equipped {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+  box-shadow: inset 3px 0 0 var(--el-color-primary);
 }
 
 .slot-grid button:not(:disabled) {
@@ -217,6 +234,40 @@ function getEquipLabel(ability: HentaiVerseAbility) {
 .slot-grid span {
   color: var(--el-text-color-secondary);
   font-size: 11px;
+}
+
+.slot-grid .slot-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px;
+}
+
+.slot-grid .slot-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.slot-grid .slot-state {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: 3px;
+  background: var(--el-fill-color);
+  font-size: 10px;
+  line-height: 18px;
+  white-space: nowrap;
+}
+
+.slot-grid button.equipped .slot-state {
+  color: var(--el-color-white);
+  background: var(--el-color-primary);
+}
+
+.slot-grid button.equipped strong {
+  color: var(--el-color-primary);
+  font-weight: 700;
 }
 
 .slot-grid strong {
