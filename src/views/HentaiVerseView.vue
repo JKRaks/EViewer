@@ -71,6 +71,8 @@ function updateCharacterSummary(nextPage: HentaiVersePage) {
 
 function setPage(nextPage: HentaiVersePage) {
   page.value = nextPage
+  if (nextPage.equipment)
+    currentTarget.value.equip_slot = nextPage.equipment.selectedSlot || undefined
   updateCharacterSummary(nextPage)
 }
 
@@ -206,7 +208,7 @@ function selectEquipmentSlot(id: string) {
 }
 
 function showEquipmentOverview() {
-  void loadSection('equipment')
+  void loadSection('equipment', {})
 }
 
 function equipItem(slotId: string, equipmentId: string, postToken: string) {

@@ -31,7 +31,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Intelligence: '智力',
     Wisdom: '智慧',
     Level: '等级',
-    Credits: 'Credits',
+    Credits: '信用点',
     Experience: '经验',
     Persona: '人格',
     Rename: '重命名',
@@ -96,6 +96,12 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Unequip: '卸下',
     'Equipment Set': '装备套装',
     'Cotton Armor': '棉布护甲',
+    'Cotton Robe': '棉布长袍',
+    'Cotton Pants': '棉布长裤',
+    'Gossamer Cap': '薄纱兜帽',
+    'Leather Helmet': '皮甲头盔',
+    'Leather Gauntlets': '皮甲护手',
+    'Chain Helmet': '锁子甲头盔',
     'Gossamer Armor': '薄纱护甲',
     'Ironsilk Armor': '铁丝绸护甲',
     'Phase Armor': '相位护甲',
@@ -465,6 +471,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Coalesced Mana': '凝聚魔力',
     'Ether Tap': '以太汲取',
     'Spirit Stance': '灵力姿态',
+    Fleeing: '逃离中',
     Victory: '胜利',
     Defeated: '已击败',
     Round: '回合',
@@ -541,7 +548,7 @@ const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
   'Equipment must be soulbound before you can enter its Item World.':
     '装备必须先完成灵魂绑定才能进入其装备界。',
   'Welcome to the Grindfest. A Grindfest consists of up to 1000 rounds of battle. Starting a Grindfest will consume 1 point of Stamina. There is a small credit reward at the end, if you make it all the way through.':
-    '混战祭最多包含 1000 轮战斗，开始时消耗 1 点体力；坚持到最后可获得额外 Credits 奖励。',
+    '混战祭最多包含 1000 轮战斗，开始时消耗 1 点体力；坚持到最后可获得额外信用点奖励。',
   'There are no challenges available at your level. Check back later!':
     '当前等级没有可参加的挑战，请提升等级后再来。',
   'Increases your maximum HP. This adds 10% to your total HP per tier.':
@@ -646,6 +653,8 @@ const TERM_PATTERN = new RegExp(`\\b(?:${TRANSLATABLE_TERMS})\\b`, 'gi')
 
 const BATTLE_LOG_TRANSLATIONS: Record<string, string> = {
   Scanning: '正在扫描',
+  Daimon: '恶魔',
+  'Power Level': '强度等级',
   HP: '生命',
   MP: '魔力',
   SP: '灵力',
@@ -712,6 +721,10 @@ export function translateHentaiVerseText(value: string) {
 export function translateHentaiVerseDescription(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
+  const slowed = source.match(
+    /^The target is slowed by ([\d.]+)%, making it attack less frequently\.$/i,
+  )
+  if (slowed) return `目标行动速度降低 ${slowed[1]}%，减少攻击频率。`
   if (/^no bonus$/i.test(source)) return '无额外加成'
   const titleBonus = source.match(/^([+-][\d.]+%) damage$/i)
   if (titleBonus) return `伤害 ${titleBonus[1]}`
@@ -909,7 +922,7 @@ export function translateHentaiVerseBattleLog(value: string) {
   if (!source) return ''
   // Completion panes can contain several sentences; translate each event separately.
   return source
-    .split(/(?<=[.!])\s+(?=(?:You\b|The effect\b|Starting\b))/)
+    .split(/(?<=[.!])\s+(?=(?:You\b|The effect\b|Starting\b))/i)
     .map(translateBattleEvent)
     .join(' ')
 }
@@ -993,17 +1006,22 @@ function translateBattleEvent(source: string): string {
     return `${translateBattleTerms(recovery[1]!)}为你恢复了 ${recovery[2]} 点${translateBattleTerms(recovery[3]!)}。`
   const healing = source.match(/^(.+?) heals you for ([\d,.]+) points?\.$/i)
   if (healing) return `${translateBattleTerms(healing[1]!)}为你恢复了 ${healing[2]} 点生命值。`
+  const healed = source.match(/^You are healed for ([\d,.]+) Health Points?\.$/i)
+  if (healed) return `你恢复了 ${healed[1]} 点生命值。`
   const restoration = source.match(/^(.+?) restores ([\d,.]+) points? of (.+?)\.$/i)
   if (restoration)
     return `${translateBattleTerms(restoration[1]!)}恢复了 ${restoration[2]} 点${translateBattleTerms(restoration[3]!)}。`
   const regained = source.match(/^You (?:regain|recover) ([\d,.]+) points? of (.+?)\.$/i)
   if (regained) return `你恢复了 ${regained[1]} 点${translateBattleTerms(regained[2]!)}。`
   if (/^You have been defeated[.!]?$/i.test(source)) return '你已被击败。'
+  if (/^You have escaped from the battle[.!]?$/i.test(source)) return '你已逃离战斗。'
+  if (/^you have run away[.!]?$/i.test(source)) return '你已成功逃离！'
+  if (/^you escape from the arena[.!]?$/i.test(source)) return '你已退出竞技场。'
   const defeated = source.match(/^(.+?) has been defeated\.$/i)
   if (defeated) return `${defeated[1]} 已被击败。`
   const received = source.match(/^You gain ([\d,.]+) (EXP|experience points?|Credits?)[.!]?$/i)
   if (received)
-    return `你获得了 ${received[1]} ${/^credits?$/i.test(received[2]!) ? 'Credits' : '经验'}。`
+    return `你获得了 ${received[1]} ${/^credits?$/i.test(received[2]!) ? '信用点' : '经验'}。`
   const proficiency = source.match(/^You gain ([\d,.]+) points? of (.+?) proficiency[.!]?$/i)
   if (proficiency) {
     const names: Record<string, string> = {
