@@ -31,11 +31,11 @@ jobs:
       RELEASE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
       RELEASE_PR: ${{ github.event.pull_request.number || inputs.pr }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
         with:
           ref: ${{ env.RELEASE_COMMIT }}
           persist-credentials: false
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '24'
           cache: npm

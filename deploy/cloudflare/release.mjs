@@ -93,7 +93,7 @@ function runWrangler(args, cwd) {
 
 function cloudflareApi(accountId, fetcher) {
   const token = process.env.CLOUDFLARE_API_TOKEN
-  if (!token) throw new Error('请在 CI Secrets 中配置 CLOUDFLARE_API_TOKEN')
+  if (!token) throw new Error('请在安全环境变量或 Actions Secrets 中配置 CLOUDFLARE_API_TOKEN')
   return async (endpoint, method = 'GET') => {
     const response = await fetcher(
       `https://api.cloudflare.com/client/v4/accounts/${accountId}${endpoint}`,
@@ -297,7 +297,12 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
         dryRun: values['dry-run'],
       })
   } catch (error) {
-    console.error(error.message)
+    const message = String(error.message)
+    console.error(
+      process.env.GITHUB_ACTIONS
+        ? `::error::${message.replaceAll('%', '%25').replaceAll('\r', '%0D').replaceAll('\n', '%0A')}`
+        : message,
+    )
     process.exitCode = 1
   }
 }
