@@ -22,6 +22,7 @@ const activeSlotLabel = computed(
     (
       {
         '1': '主武器',
+        '2': '副武器',
         '9': '副武器',
         '13': '头部',
         '11': '身体',
@@ -34,10 +35,11 @@ const activeSlotLabel = computed(
 )
 
 watch(
-  () => props.data.selectedSlot,
-  () => {
-    candidateId.value = ''
+  () => props.data,
+  (data) => {
+    candidateId.value = data.candidates.find((candidate) => candidate.equipped)?.id || ''
   },
+  { immediate: true },
 )
 </script>
 

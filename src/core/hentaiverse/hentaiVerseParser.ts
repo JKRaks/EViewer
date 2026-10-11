@@ -374,18 +374,29 @@ function parseEquipment(
       const name = readEquipmentName(node)
       if (!id || !name) return
       const rowText = cleanText(node.textContent)
+      const nameNode = node.querySelector<HTMLElement>(
+        '[data-equip-name], .equip-name, td:first-child',
+      )
+      const sourceName = cleanText(nameNode?.textContent || node.textContent)
+      const checkbox = node.querySelector<HTMLInputElement>('input[name="eqids[]"]')
       candidates.set(id, {
         id,
         name,
-        description: cleanText(
-          node.getAttribute('title') || node.dataset.description || rowText.replace(name, ''),
+        description: translateHentaiVerseDescription(
+          cleanText(
+            node.getAttribute('title') ||
+              node.dataset.description ||
+              rowText.replace(sourceName, '').trim(),
+          ),
         ),
         locked:
-          Boolean(node.querySelector<HTMLInputElement>('input[name="eqids[]"]')?.disabled) ||
+          Boolean(checkbox?.disabled) ||
           node.dataset.locked === '1' ||
           /(?:^|\s)(?:locked|il)(?:\s|$)/i.test(node.className),
         equipped:
-          node.dataset.equipped === '1' || /equipped|current/i.test(`${node.className} ${rowText}`),
+          Boolean(checkbox?.checked) ||
+          node.dataset.equipped === '1' ||
+          /equipped|current/i.test(`${node.className} ${rowText}`),
       })
     })
 
@@ -1307,7 +1318,13 @@ function readNodeLabel(node?: HTMLElement | null) {
 }
 
 function readEquipmentId(node: HTMLElement) {
-  const source = getActionSource(node, true)
+  const source = [
+    getActionSource(node, true),
+    node.getAttribute('onmouseover'),
+    ...Array.from(node.querySelectorAll<HTMLElement>('[onmouseover]'), (child) =>
+      child.getAttribute('onmouseover'),
+    ),
+  ].join(' ')
   return (
     node.dataset.eid ||
     node.dataset.equipId ||
@@ -1331,6 +1348,7 @@ function readEquipmentSlotLabel(id: string, node: HTMLElement) {
   if (explicit) return translateHentaiVerseText(explicit)
   const labels: Record<string, string> = {
     '1': '主武器',
+    '2': '副武器',
     '9': '副武器',
     '13': '头部',
     '11': '身体',
