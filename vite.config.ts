@@ -58,7 +58,7 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,ico,png,webp,json}'],
-        globIgnores: ['**/tagTranslation.worker-*.js', '**/unofficialTagTranslations-*.js'],
+        globIgnores: ['_routes.json', '**/tagTranslation.worker-*.js', '**/unofficialTagTranslations-*.js'],
         runtimeCaching: [
           {
             urlPattern: /\/assets\/(?:tagTranslation\.worker|unofficialTagTranslations)-[^/]+\.js$/,

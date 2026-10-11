@@ -8,6 +8,7 @@ import {
   Menu as MenuIcon,
   TrendCharts,
 } from '@element-plus/icons-vue'
+import { getLayoutScrollTop, scrollLayoutTo } from '@/composables/layoutScroll'
 import HomeYesterdayPanel from '@/components/HomeYesterdayPanel.vue'
 import HomePopularPanel from '@/components/HomePopularPanel.vue'
 import ToplistOverviewPanel from '@/components/ToplistOverviewPanel.vue'
@@ -29,15 +30,12 @@ async function selectPanel(index: string) {
   if (isMobile.value) sidebarCollapsed.value = true
   if (index === activePanel.value) return
 
-  const mainElement = document.querySelector('.layout-main') as HTMLElement | null
-  if (mainElement) {
-    sessionStorage.setItem(`home-panel-scroll:${activePanel.value}`, String(mainElement.scrollTop))
-  }
+  sessionStorage.setItem(`home-panel-scroll:${activePanel.value}`, String(getLayoutScrollTop()))
 
   activePanel.value = index
   await nextTick()
   const targetPosition = Number(sessionStorage.getItem(`home-panel-scroll:${index}`) || '0')
-  requestAnimationFrame(() => mainElement?.scrollTo({ top: targetPosition, behavior: 'auto' }))
+  requestAnimationFrame(() => scrollLayoutTo(targetPosition))
 }
 
 function toggleSidebar() {

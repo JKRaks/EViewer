@@ -17,7 +17,7 @@ watch(() => props.data.items, (items) => {
       <div class="inventory-items">
         <header><h3>物品</h3><span>{{ data.items.length }} 种</span></header>
         <el-radio-group v-model="selectedItemId">
-          <el-radio v-for="item in data.items" :key="item.id" :value="item.id" :disabled="loading">
+          <el-radio v-for="item in data.items" :key="item.id" :value="item.id" :disabled="loading || !item.canAssign">
             <span>{{ item.name }}</span>
             <small v-if="item.description">{{ item.description }}</small>
             <strong>{{ item.quantity }}</strong>

@@ -1,0 +1,7 @@
+{
+  "$schema": "./deploy/eproxy/node_modules/wrangler/config-schema.json",
+  "name": "eviewer",
+  "pages_build_output_dir": "./dist",
+  "compatibility_date": "2025-10-19",
+  "services": [{ "binding": "EPROXY", "service": "eproxy" }]
+}
