@@ -267,6 +267,16 @@ function parseHentaiVersePageTarget(query) {
     if (!/^[a-z0-9]{1,32}$/.test(tree)) throw new Error('能力树格式不正确')
     target.searchParams.set('tree', tree)
   }
+  const filter = query.get('filter')
+  if (section === 'Battle' && subsection === 'iw' && filter) {
+    if (
+      !/^(weapon_1handed|weapon_2handed|weapon_staff|shield|armor_cloth|armor_light|armor_heavy)$/.test(
+        filter,
+      )
+    )
+      throw new Error('装备分类格式不正确')
+    target.searchParams.set('filter', filter)
+  }
   return target
 }
 
@@ -285,16 +295,26 @@ const HENTAIVERSE_FORM_ROUTES = {
 }
 
 function isAllowedHentaiVerseFormField(section, name, value) {
-  const scalar = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+  if (name === 'eqids[]') {
+    return (
+      ['equipment', 'itemWorld'].includes(section) &&
+      Array.isArray(value) &&
+      value.length === 1 &&
+      value.every((id) => typeof id === 'string' && /^\d{1,12}$/.test(id))
+    )
+  }
+  const scalar =
+    typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
   if (!scalar || String(value).length > 4096 || /[\0\r\n]/.test(String(value))) return false
   const fields = {
     character: /^(attr_apply|str_delta|dex_delta|agi_delta|end_delta|int_delta|wis_delta)$/,
     persona: /^(persona_set|persona_rename|persona_create)$/,
-    equipment: /^(postoken|equip_set|equip_slot|equip_id|action)$/,
+    equipment: /^(postoken|equip_set|equip_slot|action)$/,
     abilities: /^(unlock_ability|reset_ability|reset_all|unlock_slot|equip_slot|equip_ability)$/,
     training: /^(start_train|cancel_train)$/,
     inventory: /^(slot|item)$/,
-    settings: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    settings:
+      /^(?:[1-9]|1[0-6]|difflevel|title_override|font(?:local|face|size|wght|style|off)|eqs_(?:ability|item|skillbar)|vitalstyle|trophyupgrade|ac_[0-4]|as_[cs]_\d{1,3}|submit)$/,
     arena: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
     ringOfBlood: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
     grindfest: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
@@ -305,7 +325,10 @@ function isAllowedHentaiVerseFormField(section, name, value) {
 
 async function requestHentaiVerse(request, target, method, body, contentType) {
   const headers = new Headers({
-    Accept: method === 'POST' && contentType === 'application/json' ? 'application/json' : 'text/html,application/xhtml+xml,*/*;q=0.8',
+    Accept:
+      method === 'POST' && contentType === 'application/json'
+        ? 'application/json'
+        : 'text/html,application/xhtml+xml,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
     Referer: `${HENTAIVERSE_ORIGIN}/`,
     'User-Agent': request.headers.get('user-agent') || 'Mozilla/5.0',
@@ -313,7 +336,22 @@ async function requestHentaiVerse(request, target, method, body, contentType) {
   if (contentType) headers.set('Content-Type', contentType)
   const cookie = getAllowedAuthCookieHeader(request.headers.get('cookie') || '')
   if (cookie) headers.set('Cookie', cookie)
-  return fetch(target, { method, headers, body, redirect: 'manual' })
+  const response = await fetch(target, { method, headers, body, redirect: 'manual' })
+  if (
+    method === 'POST' &&
+    contentType?.startsWith('application/x-www-form-urlencoded') &&
+    [302, 303].includes(response.status) &&
+    response.headers.get('location')
+  ) {
+    const location = new URL(response.headers.get('location'), target)
+    if (location.origin === HENTAIVERSE_ORIGIN && location.pathname === '/') {
+      const next = parseHentaiVersePageTarget(location.searchParams)
+      await response.body?.cancel()
+      headers.delete('Content-Type')
+      return fetch(next, { method: 'GET', headers, redirect: 'manual' })
+    }
+  }
+  return response
 }
 
 async function sendHentaiVerseResponse(request, upstream) {
@@ -352,13 +390,33 @@ async function handleHentaiVerseRequest(request, requestUrl) {
       if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{6,128}$/.test(token) || !modes.has(mode)) {
         return jsonResponse(request, { error: 'HentaiVerse 战斗动作格式不正确' }, 400)
       }
-      if (!Number.isInteger(target) || target < 0 || target > 100 || !Number.isInteger(skill) || skill < 0 || skill > 1000000) {
+      if (
+        !Number.isInteger(target) ||
+        target < 0 ||
+        target > 100 ||
+        !Number.isInteger(skill) ||
+        skill < 0 ||
+        skill > 1000000
+      ) {
         return jsonResponse(request, { error: 'HentaiVerse 战斗目标格式不正确' }, 400)
       }
-      const payload = JSON.stringify({ type: 'battle', method: 'action', token, mode, target, skill })
+      const payload = JSON.stringify({
+        type: 'battle',
+        method: 'action',
+        token,
+        mode,
+        target,
+        skill,
+      })
       return sendHentaiVerseResponse(
         request,
-        await requestHentaiVerse(request, new URL('/json', HENTAIVERSE_ORIGIN), 'POST', payload, 'application/json'),
+        await requestHentaiVerse(
+          request,
+          new URL('/json', HENTAIVERSE_ORIGIN),
+          'POST',
+          payload,
+          'application/json',
+        ),
       )
     }
     if (requestUrl.pathname === '/hentaiverse/form') {
@@ -369,16 +427,36 @@ async function handleHentaiVerseRequest(request, requestUrl) {
         return jsonResponse(request, { error: 'HentaiVerse 表单格式不正确' }, 400)
       }
       const entries = Object.entries(data)
-      if (!entries.length || entries.length > 400 || entries.some(([name, value]) => !isAllowedHentaiVerseFormField(section, name, value))) {
+      if (
+        !entries.length ||
+        entries.length > 400 ||
+        entries.some(([name, value]) => !isAllowedHentaiVerseFormField(section, name, value))
+      ) {
         return jsonResponse(request, { error: 'HentaiVerse 表单包含不允许的字段' }, 400)
       }
       const target = new URL('/', HENTAIVERSE_ORIGIN)
       target.searchParams.set('s', route.s)
       target.searchParams.set('ss', route.ss)
-      const form = new URLSearchParams(entries.map(([name, value]) => [name, String(value)]))
+      if (section === 'itemWorld' && body?.target?.filter) {
+        const pageTarget = parseHentaiVersePageTarget(
+          new URLSearchParams({ ...route, filter: body.target.filter }),
+        )
+        target.search = pageTarget.search
+      }
+      const form = new URLSearchParams(
+        entries.flatMap(([name, value]) =>
+          (Array.isArray(value) ? value : [value]).map((item) => [name, String(item)]),
+        ),
+      )
       return sendHentaiVerseResponse(
         request,
-        await requestHentaiVerse(request, target, 'POST', form, 'application/x-www-form-urlencoded; charset=UTF-8'),
+        await requestHentaiVerse(
+          request,
+          target,
+          'POST',
+          form,
+          'application/x-www-form-urlencoded; charset=UTF-8',
+        ),
       )
     }
     return jsonResponse(request, { error: 'Not found' }, 404)

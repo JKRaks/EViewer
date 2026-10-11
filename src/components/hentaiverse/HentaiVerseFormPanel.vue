@@ -1,6 +1,9 @@
 <script setup lang="ts">
 import { computed, reactive, watch } from 'vue'
-import type { HentaiVerseFormAction, HentaiVerseFormBlock } from '@/core/hentaiverse/model/hentaiVerse'
+import type {
+  HentaiVerseFormAction,
+  HentaiVerseFormBlock,
+} from '@/core/hentaiverse/model/hentaiVerse'
 
 const props = defineProps<{
   form: HentaiVerseFormBlock
@@ -8,7 +11,10 @@ const props = defineProps<{
 }>()
 
 const emit = defineEmits<{
-  submit: [section: HentaiVerseFormBlock['section'], data: Record<string, string | number | boolean>]
+  submit: [
+    section: HentaiVerseFormBlock['section'],
+    data: Record<string, string | number | boolean>,
+  ]
 }>()
 
 const values = reactive<Record<string, string | boolean>>({})
@@ -16,9 +22,12 @@ const controlGroups = computed(() => {
   const definitions = props.form.groups?.length
     ? props.form.groups
     : [{ key: 'default', title: '', description: '' }]
-  const controlsByGroup = new Map(definitions.map((group) => [group.key, [] as typeof props.form.controls]))
+  const controlsByGroup = new Map(
+    definitions.map((group) => [group.key, [] as typeof props.form.controls]),
+  )
   props.form.controls.forEach((control) => {
-    const key = control.group && controlsByGroup.has(control.group) ? control.group : definitions[0]!.key
+    const key =
+      control.group && controlsByGroup.has(control.group) ? control.group : definitions[0]!.key
     controlsByGroup.get(key)!.push(control)
   })
 
@@ -26,16 +35,23 @@ const controlGroups = computed(() => {
     const controls = controlsByGroup.get(group.key) || []
     if (!controls.length) return []
     const radioGroups = new Map<string, typeof controls>()
-    controls.filter((control) => control.type === 'radio').forEach((control) => {
-      const radioGroup = radioGroups.get(control.name) || []
-      radioGroup.push(control)
-      radioGroups.set(control.name, radioGroup)
-    })
-    return [{
-      ...group,
-      controls: controls.filter((control) => control.type !== 'radio'),
-      radioGroups: Array.from(radioGroups, ([name, radioControls]) => ({ name, controls: radioControls })),
-    }]
+    controls
+      .filter((control) => control.type === 'radio')
+      .forEach((control) => {
+        const radioGroup = radioGroups.get(control.name) || []
+        radioGroup.push(control)
+        radioGroups.set(control.name, radioGroup)
+      })
+    return [
+      {
+        ...group,
+        controls: controls.filter((control) => control.type !== 'radio'),
+        radioGroups: Array.from(radioGroups, ([name, radioControls]) => ({
+          name,
+          controls: radioControls,
+        })),
+      },
+    ]
   })
 })
 
@@ -57,12 +73,13 @@ watch(
 function submit(action?: HentaiVerseFormAction) {
   const data: Record<string, string | number | boolean> = { ...props.form.hidden }
   props.form.controls.forEach((control) => {
+    if (control.disabled) return
     const value = values[control.name]
     if (control.type === 'checkbox') {
       if (value) data[control.name] = control.value || '1'
       return
     }
-    if (value !== undefined && value !== '') data[control.name] = value
+    if (value !== undefined) data[control.name] = value
   })
   if (action?.name) data[action.name] = action.value
   emit('submit', props.form.section, data)
@@ -86,11 +103,14 @@ function submit(action?: HentaiVerseFormAction) {
 
       <div class="hv-form-grid">
         <template v-for="control in group.controls" :key="`${control.name}:${control.value}`">
-          <label v-if="control.type !== 'checkbox'" class="hv-field-label">{{ control.label }}</label>
+          <label v-if="control.type !== 'checkbox'" class="hv-field-label">{{
+            control.label
+          }}</label>
           <el-select
             v-if="control.type === 'select'"
             v-model="values[control.name]"
             :aria-label="control.label"
+            :disabled="loading || control.disabled"
           >
             <el-option
               v-for="option in control.options"
@@ -104,6 +124,7 @@ function submit(action?: HentaiVerseFormAction) {
             v-model="values[control.name] as string"
             type="textarea"
             :rows="3"
+            :disabled="loading || control.disabled"
           />
           <el-input-number
             v-else-if="control.type === 'number'"
@@ -112,11 +133,13 @@ function submit(action?: HentaiVerseFormAction) {
             :max="control.max"
             :step="control.step || 1"
             controls-position="right"
+            :disabled="loading || control.disabled"
           />
           <el-checkbox
             v-else-if="control.type === 'checkbox'"
             v-model="values[control.name] as boolean"
             class="hv-checkbox"
+            :disabled="loading || control.disabled"
           >
             {{ control.label }}
           </el-checkbox>
@@ -124,15 +147,24 @@ function submit(action?: HentaiVerseFormAction) {
             v-else
             v-model="values[control.name] as string"
             :type="control.type === 'password' ? 'password' : 'text'"
+            :disabled="loading || control.disabled"
             :aria-label="control.label"
           />
         </template>
 
         <template v-for="radioGroup in group.radioGroups" :key="radioGroup.name">
-          <label class="hv-field-label">{{ radioGroup.controls[0]?.groupLabel || radioGroup.controls[0]?.label }}</label>
+          <label class="hv-field-label">{{
+            radioGroup.controls[0]?.groupLabel || radioGroup.controls[0]?.label
+          }}</label>
           <el-radio-group v-model="values[radioGroup.name]" class="hv-radio-group">
-            <el-radio v-for="control in radioGroup.controls" :key="control.value" :value="control.value">
+            <el-radio
+              v-for="control in radioGroup.controls"
+              :key="control.value"
+              :value="control.value"
+              :disabled="loading || control.disabled"
+            >
               {{ control.label }}
+              <small v-if="control.help" class="control-help"> · {{ control.help }}</small>
             </el-radio>
           </el-radio-group>
         </template>
@@ -156,6 +188,10 @@ function submit(action?: HentaiVerseFormAction) {
 </template>
 
 <style scoped>
+.control-help {
+  color: var(--el-text-color-secondary);
+  font-size: 12px;
+}
 .hv-form-panel {
   padding: 18px 0;
   border-top: 1px solid var(--el-border-color-lighter);

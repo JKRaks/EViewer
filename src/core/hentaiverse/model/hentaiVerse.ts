@@ -29,6 +29,14 @@ export interface HentaiVersePageTarget {
   encounter?: string
   equip_slot?: string
   tree?: string
+  filter?: string
+}
+
+export type HentaiVerseFormData = Record<string, string | number | boolean | string[]>
+
+export interface HentaiVerseStatGroup {
+  title: string
+  metrics: HentaiVerseMetric[]
 }
 
 export interface HentaiVerseMetric {
@@ -67,6 +75,8 @@ export interface HentaiVerseFormControl {
   min?: number
   max?: number
   step?: number
+  disabled?: boolean
+  help?: string
 }
 
 export interface HentaiVerseFormAction {
@@ -124,6 +134,7 @@ export interface HentaiVerseEquipmentPage {
   candidates: HentaiVerseEquipmentCandidate[]
   selectedSlot: string
   postToken: string
+  canUnequip: boolean
 }
 
 export type HentaiVerseAbilityActionName =
@@ -148,6 +159,10 @@ export interface HentaiVerseAbility {
   action?: HentaiVerseAbilityActionName
   actionLabel?: string
   disabled: boolean
+  group: string
+  currentEffect: string
+  nextEffect: string
+  resetCost?: number
 }
 
 export interface HentaiVerseAbilitySlot {
@@ -157,6 +172,8 @@ export interface HentaiVerseAbilitySlot {
   abilityName: string
   locked: boolean
   action?: HentaiVerseAbilityActionName
+  group: string
+  unlockCost?: number
 }
 
 export interface HentaiVerseAbilityPage {
@@ -166,6 +183,8 @@ export interface HentaiVerseAbilityPage {
   selectedTree: string
   abilityPoints: string
   canResetAll: boolean
+  masteryPoints: string
+  resetCost?: number
 }
 
 export interface HentaiVerseTrainingOption {
@@ -176,6 +195,7 @@ export interface HentaiVerseTrainingOption {
   cost: string
   duration: string
   canStart: boolean
+  unavailableReason: string
 }
 
 export interface HentaiVerseTrainingPage {
@@ -196,6 +216,7 @@ export interface HentaiVerseInventoryItem {
   quantity: string
   selected: boolean
   canAssign: boolean
+  category: string
 }
 
 export interface HentaiVerseInventorySlot {
@@ -203,6 +224,7 @@ export interface HentaiVerseInventorySlot {
   label: string
   itemId: string
   itemName: string
+  category: string
 }
 
 export interface HentaiVerseInventoryPage {
@@ -218,14 +240,53 @@ export interface HentaiVersePage {
   authenticated: boolean
   usableExperience: number
   metrics: HentaiVerseMetric[]
+  statGroups: HentaiVerseStatGroup[]
+  personaCapacity?: { used: number; total: number }
   attributes: HentaiVerseAttribute[]
   personas: HentaiVersePersona[]
   equipment?: HentaiVerseEquipmentPage
   abilities?: HentaiVerseAbilityPage
   training?: HentaiVerseTrainingPage
   inventory?: HentaiVerseInventoryPage
+  challenges?: HentaiVerseChallenge[]
+  challengePostToken?: string
+  itemWorld?: HentaiVerseItemWorldPage
   forms: HentaiVerseFormBlock[]
   notices: string[]
+}
+
+export interface HentaiVerseChallenge {
+  id: string
+  name: string
+  highestClear: string
+  minLevel: string
+  rounds: string
+  experienceModifier: string
+  entryCost: string
+  clearBonus: string
+  unavailableReason: string
+  available: boolean
+}
+
+export interface HentaiVerseItemWorldPage {
+  categories: HentaiVerseOption[]
+  selectedCategory: string
+  candidates: HentaiVerseEquipmentCandidate[]
+  postToken: string
+  worldSeeds: string
+  rules: string[]
+  emptyReason: string
+  entryInfo: Record<
+    string,
+    {
+      level: string
+      rounds: string
+      monsterLevel: string
+      difficulty: string
+      cost: string
+      available: boolean
+    }
+  >
 }
 
 export interface HentaiVerseEncounter {

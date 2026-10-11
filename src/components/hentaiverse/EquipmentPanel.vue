@@ -81,7 +81,7 @@ watch(
             >返回装备总览</el-button
           >
           <el-button
-            v-if="activeSlot?.equipmentId"
+            v-if="data.canUnequip"
             type="danger"
             plain
             :disabled="loading || !data.postToken"
