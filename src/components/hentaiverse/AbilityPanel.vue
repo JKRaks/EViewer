@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import type {
+  HentaiVerseAbility,
   HentaiVerseAbilityActionName,
   HentaiVerseAbilityPage,
 } from '@/core/hentaiverse/model/hentaiVerse'
@@ -19,9 +20,13 @@ watch(() => props.data.selectedTree, () => {
   selectedAbilityId.value = ''
 })
 
-function selectAbility(id: string, level: number) {
-  if (level <= 0 || props.loading) return
-  selectedAbilityId.value = selectedAbilityId.value === id ? '' : id
+function isAcquired(ability: HentaiVerseAbility) {
+  return (ability.level ?? 0) > 0 || (ability.level === null && ability.action === 'reset_ability')
+}
+
+function selectAbility(ability: HentaiVerseAbility) {
+  if (!isAcquired(ability) || props.loading) return
+  selectedAbilityId.value = selectedAbilityId.value === ability.id ? '' : ability.id
 }
 </script>
 
@@ -67,15 +72,15 @@ function selectAbility(id: string, level: number) {
       <article
         v-for="ability in data.abilities"
         :key="ability.id"
-        :class="{ selected: selectedAbilityId === ability.id, selectable: ability.level > 0 }"
-        @click="selectAbility(ability.id, ability.level)"
+        :class="{ selected: selectedAbilityId === ability.id, selectable: isAcquired(ability) }"
+        @click="selectAbility(ability)"
       >
         <div class="ability-main">
           <div>
             <h3>{{ ability.name }}</h3>
             <p v-if="ability.description">{{ ability.description }}</p>
           </div>
-          <span class="ability-level">{{ ability.level }}<template v-if="ability.maxLevel"> / {{ ability.maxLevel }}</template></span>
+          <span class="ability-level">{{ ability.level ?? '等级未知' }}<template v-if="ability.maxLevel"> / {{ ability.maxLevel }}</template></span>
         </div>
         <div class="ability-meta">
           <span v-if="ability.cost">{{ ability.cost }}</span>

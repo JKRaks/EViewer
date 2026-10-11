@@ -37,6 +37,16 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Create New Persona': '创建新人格',
   },
   equipment: {
+    Crude: '粗糙',
+    Fair: '尚可',
+    Average: '普通',
+    Superior: '优秀',
+    Exquisite: '精致',
+    Magnificent: '华丽',
+    Legendary: '传说',
+    Peerless: '绝世',
+    'Plate Helmet': '板甲头盔',
+    'of the Thunder-child': '雷霆之子',
     'Main Hand': '主武器',
     Mainhand: '主武器',
     Weapon: '武器',
@@ -138,8 +148,44 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Health Draught': '生命药剂',
     'Mana Draught': '魔力药剂',
     'Spirit Draught': '灵力药剂',
+    'Health Potion': '生命药水',
+    'Mana Potion': '魔力药水',
+    'Spirit Potion': '灵力药水',
+    'Health Elixir': '生命灵药',
+    'Mana Elixir': '魔力灵药',
+    'Spirit Elixir': '灵力灵药',
+    'Last Elixir': '终极灵药',
+    'Energy Drink': '能量饮料',
+    'Scroll of Swiftness': '迅捷卷轴',
+    'Scroll of Protection': '防护卷轴',
+    'Scroll of Absorption': '吸收卷轴',
+    'Scroll of Shadows': '暗影卷轴',
+    'Scroll of Life': '生命卷轴',
+    'Infusion of Flames': '火焰附魔药',
+    'Infusion of Frost': '冰霜附魔药',
+    'Infusion of Lightning': '雷电附魔药',
+    'Infusion of Storms': '风暴附魔药',
+    'Infusion of Divinity': '神圣附魔药',
+    'Infusion of Darkness': '黑暗附魔药',
+    'Flower Vase': '花瓶',
+    'Bubble-Gum': '泡泡糖',
     'Soul Fragment': '灵魂碎片',
     'Monster Chow': '怪物饲料',
+    'Monster Cuisine': '怪物佳肴',
+    'Chaos Token': '混沌令牌',
+    'Crystal of Swiftness': '迅捷水晶',
+    'Crystal of Fortitude': '坚韧水晶',
+    'Crystal of Cunning': '机敏水晶',
+    'Crystal of Frost': '冰霜水晶',
+    'Crystal of Tempest': '风暴水晶',
+    'Crystal of Devotion': '虔诚水晶',
+    'Caffeinated Candy': '咖啡因糖果',
+    'Health Gem': '生命宝石',
+    'Mana Gem': '魔力宝石',
+    'Spirit Gem': '灵力宝石',
+    'Mystic Gem': '神秘宝石',
+    'Scroll of the Avatar': '化身卷轴',
+    'Scroll of the Gods': '诸神卷轴',
   },
   settings: {
     Difficulty: '难度',
@@ -187,16 +233,86 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
   battle: {
     Health: '生命值',
     Magic: '魔力值',
-    Spirit: '灵力姿态',
+    Mana: '魔力',
+    Spirit: '灵力',
     Attack: '攻击',
     Defend: '防御',
     Focus: '专注',
     Flee: '逃跑',
     Scan: '扫描',
     Cure: '治疗',
+    Regen: '再生',
+    'Full-Cure': '完全治疗',
+    Haste: '加速',
+    Protection: '防护',
+    'Shadow Veil': '暗影帷幕',
+    Absorb: '吸收',
+    'Spark of Life': '生命火花',
+    'Spirit Shield': '灵力护盾',
+    Heartseeker: '穿心',
+    'Arcane Focus': '奥术专注',
+    Silence: '沉默',
+    Weaken: '虚弱',
+    Imperil: '破防',
+    Slow: '迟缓',
+    Sleep: '睡眠',
+    Blind: '致盲',
+    Confuse: '混乱',
+    Drain: '吸取',
+    'Fiery Blast': '火焰冲击',
+    Inferno: '地狱火',
+    'Flames of Loki': '洛基之焰',
+    Freeze: '冰冻',
+    Blizzard: '暴风雪',
+    Fimbulvetr: '芬布尔之冬',
+    Shockblast: '雷电冲击',
+    'Chained Lightning': '连锁闪电',
+    'Wrath of Thor': '托尔之怒',
+    Gale: '狂风',
+    Downburst: '下击暴流',
+    'Storms of Njord': '尼约德之风暴',
+    Smite: '惩击',
+    Banish: '放逐',
+    Expunge: '净除',
+    Corruption: '腐蚀',
+    Disintegrate: '瓦解',
+    Ragnarok: '诸神黄昏',
+    'Great Cleave': '大劈斩',
+    'Rending Blow': '撕裂打击',
+    'Merciful Blow': '仁慈终结',
+    'Shield Bash': '盾击',
+    'Vital Strike': '要害打击',
+    'Frenzied Blows': '狂乱打击',
+    'Iris Strike': '虹彩打击',
+    Backstab: '背刺',
+    'Overwhelming Strikes': '压制打击',
+    'Coalesced Mana': '凝聚魔力',
+    'Ether Tap': '以太汲取',
+    'Spirit Stance': '灵力姿态',
     Victory: '胜利',
     Defeated: '已击败',
     Round: '回合',
+  },
+  arena: {
+    'First Blood': '初次见血',
+    'Learning Curves': '学习曲线',
+    'The Road Less Traveled': '少有人走的路',
+    'Stepping Stones': '垫脚石',
+    'A New Beginning': '新的开始',
+    Graduation: '毕业',
+    'The Test of Faith': '信念的考验',
+    'The Long Road': '漫漫长路',
+    Dreamfall: '梦陨',
+    Exile: '流放',
+    'Sealed Power': '封印之力',
+    'End of Days': '末日',
+    'Eternal Darkness': '永恒黑暗',
+    'A Dance with Dragons': '群龙之舞',
+    'User Class': '玩家等级',
+    'Required Level': '所需等级',
+    Rounds: '轮数',
+    Clear: '通关',
+    Reward: '奖励',
   },
   common: {
     Apply: '应用',
@@ -218,6 +334,11 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
 }
 
 const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
+  'A ball of fire is hurled at the target.': '向目标投掷一团火球。',
+  'Cold damage.': '对目标造成冰冷伤害。',
+  'Inflicts Drain on one target, causing damage over time.': '对一个目标施加吸取效果，持续造成伤害。',
+  'Restores a moderate amount of Health on the target.': '为目标恢复适量生命值。',
+  'Places a shield effect on the target, absorbing 25% of the damage from all attacks.': '为目标施加护盾，吸收所有攻击造成的 25% 伤害。',
   'When you get too powerful to be challenged by the mobs on the normal difficulty, you can increase the Challenge Level here. Playing on a higher Challenge Level will increase the EXP you get from each mob, but the mobs have increased HP and hit harder. Additional difficulty levels unlock as you level up.':
     '可在此调整挑战难度。难度越高，怪物的生命和伤害越高，同时提供更多经验；更多难度会随角色等级解锁。',
   'Here you can choose which of your available titles that will be displayed below your level and on the forums.':
@@ -254,6 +375,47 @@ const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
   'Improves the overall potency of common health restoratives.': '提高常规生命恢复物品的整体效果。',
   'Improves the overall potency of common mana restoratives.': '提高常规魔力恢复物品的整体效果。',
   'Improves the overall potency of common spirit restoratives.': '提高常规灵力恢复物品的整体效果。',
+}
+
+// Names and descriptions from the source's itemc.js. These popups are loaded
+// separately from the page HTML, so DOM-only parsing cannot read their text.
+const ITEM_PRESENTATIONS: Record<string, [string, string]> = {
+  '10005': ['Health Gem', '恢复大量生命。'],
+  '10006': ['Mana Gem', '恢复适量魔力。'],
+  '10007': ['Spirit Gem', '恢复少量灵力。'],
+  '10008': ['Mystic Gem', '获得引导效果。'],
+  '11191': ['Health Draught', '提供持续的生命恢复效果。'],
+  '11195': ['Health Potion', '立即恢复大量生命。'],
+  '11199': ['Health Elixir', '完全恢复生命，并提供持续的生命恢复效果。'],
+  '11291': ['Mana Draught', '提供持续的魔力恢复效果。'],
+  '11295': ['Mana Potion', '立即恢复适量魔力。'],
+  '11299': ['Mana Elixir', '完全恢复魔力，并提供持续的魔力恢复效果。'],
+  '11391': ['Spirit Draught', '提供持续的灵力恢复效果。'],
+  '11395': ['Spirit Potion', '立即恢复适量灵力。'],
+  '11399': ['Spirit Elixir', '完全恢复灵力，并提供持续的灵力恢复效果。'],
+  '11401': ['Energy Drink', '恢复 10 点体力，上限为 99。战斗中使用还会提升 10% 过载值与灵力，持续 10 回合。'],
+  '11402': ['Caffeinated Candy', '恢复 5 点体力，上限为 99。战斗中使用还会提升 10% 过载值与灵力，持续 5 回合。'],
+  '11501': ['Last Elixir', '完全恢复生命、魔力与灵力，并提供持续的恢复效果。'],
+  '12101': ['Infusion of Flames', '提高 25% 火焰抗性与火焰法术伤害。'],
+  '12201': ['Infusion of Frost', '提高 25% 冰冷抗性与冰冷法术伤害。'],
+  '12301': ['Infusion of Lightning', '提高 25% 雷电抗性与雷电法术伤害。'],
+  '12401': ['Infusion of Storms', '提高 25% 风抗性与风系法术伤害。'],
+  '12501': ['Infusion of Divinity', '提高 25% 神圣抗性与神圣法术伤害。'],
+  '12601': ['Infusion of Darkness', '提高 25% 黑暗抗性与黑暗法术伤害。'],
+  '13101': ['Scroll of Swiftness', '获得加速效果。'],
+  '13111': ['Scroll of Protection', '获得防护效果。'],
+  '13199': ['Scroll of the Avatar', '获得加速与防护效果，持续时间为通常的两倍。'],
+  '13201': ['Scroll of Absorption', '获得吸收效果。'],
+  '13211': ['Scroll of Shadows', '获得暗影帷幕效果。'],
+  '13221': ['Scroll of Life', '获得生命火花效果。'],
+  '13299': ['Scroll of the Gods', '获得吸收、暗影帷幕与生命火花效果，持续时间为通常的两倍。'],
+  '19111': ['Flower Vase', '花瓶里有三朵花，第三朵是绿色的。'],
+  '19131': ['Bubble-Gum', '是时候大显身手、嚼泡泡糖了……这里正好有些糖。'],
+}
+
+export function getHentaiVerseItemPresentation(id: string) {
+  const item = ITEM_PRESENTATIONS[id]
+  return item ? { name: translateHentaiVerseText(item[0]), description: item[1] } : undefined
 }
 
 export const HENTAIVERSE_SETTING_GROUPS = [
@@ -319,13 +481,24 @@ const BATTLE_LOG_TRANSLATIONS: Record<string, string> = {
   Focusing: '专注',
   Defending: '防御',
 }
+const BATTLE_TERMS = { ...TERM_TRANSLATIONS, ...BATTLE_LOG_TRANSLATIONS }
 const BATTLE_LOG_PATTERN = new RegExp(
-  `\\b(?:${Object.keys(BATTLE_LOG_TRANSLATIONS)
+  `\\b(?:${Object.keys(BATTLE_TERMS)
     .sort((left, right) => right.length - left.length)
     .map((term) => term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
     .join('|')})\\b`,
   'gi',
 )
+const LOWERCASE_BATTLE_LOG_TRANSLATIONS = Object.fromEntries(
+  Object.entries(BATTLE_TERMS).map(([term, translation]) => [term.toLowerCase(), translation]),
+)
+
+function translateBattleTerms(value: string) {
+  return value.replace(
+    BATTLE_LOG_PATTERN,
+    (term) => LOWERCASE_BATTLE_LOG_TRANSLATIONS[term.toLowerCase()] ?? term,
+  )
+}
 
 export function getAttributeLabel(key: string) {
   return ATTRIBUTE_LABELS[key] ?? key.toUpperCase()
@@ -345,6 +518,14 @@ export function translateHentaiVerseText(value: string) {
 export function translateHentaiVerseDescription(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
+  const restorative = source.match(/^Restores? ([\d,.]+%?) (?:of (?:your )?)?(base |maximum )?(health|mana|magic|spirit)(?: (?:points?))?(?: over (\d+) turns?)?\.?$/i)
+  if (restorative) {
+    const resource = { health: '生命', mana: '魔力', magic: '魔力', spirit: '灵力' }[restorative[3]!.toLowerCase()]
+    const basis = restorative[2]?.trim().toLowerCase() === 'base' ? '基础' : restorative[2] ? '最大' : ''
+    return `${restorative[4] ? `在 ${restorative[4]} 回合内` : ''}恢复 ${restorative[1]} ${basis}${resource}。`
+  }
+  const grants = source.match(/^(?:Grants?|Gives? you) (?:the )?(.+?) (?:effect|buff)(?: for (\d+) turns?)?\.?$/i)
+  if (grants) return `获得“${translateHentaiVerseText(grants[1]!)}”效果${grants[2] ? `，持续 ${grants[2]} 回合` : ''}。`
   const trainingEffect = source.match(/^\+([\d,.]+%?)\s+(.+)$/i)
   if (trainingEffect) {
     const effects: Record<string, string> = {
@@ -421,12 +602,26 @@ export function getHentaiVerseSettingControl(name: string, value: string, source
 export function translateHentaiVerseBattleLog(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
+  // Completion panes can contain several sentences; translate each event separately.
+  return source.split(/(?<=[.!])\s+(?=(?:You\b|The effect\b|Starting\b))/).map(translateBattleEvent).join(' ')
+}
+
+function translateBattleEvent(source: string): string {
+  const initializing = source.match(/^Initializing arena challenge #(\d+) \(Round (\d+)\s*\/\s*(\d+)\)\s*\.\.\.$/i)
+  if (initializing) return `正在开始竞技场挑战 #${initializing[1]}（第 ${initializing[2]} / ${initializing[3]} 轮）……`
+  const spawned = source.match(/^Spawned Monster ([A-Z]): MID=(\d+) \((.+)\) LV=(\d+) HP=([\d,]+)$/i)
+  if (spawned) return `怪物 ${spawned[1]}：${spawned[3]}，等级 ${spawned[4]}，生命 ${spawned[5]}。`
+  const dropped = source.match(/^(.+?) dropped (.+?)[.!]?$/i)
+  if (dropped) return `${dropped[1]} 掉落了 ${translateBattleTerms(dropped[2]!)}。`
+  const clearBonus = source.match(/^Battle Clear Bonus!\s*(.+)$/i)
+  if (clearBonus) return `战斗通关奖励：${translateBattleTerms(clearBonus[1]!)}。`
+  if (/^Arena challenge cleared[.!]?$/i.test(source)) return '竞技场挑战已通关！'
 
   const receivedDamage = source.match(
     /^(.+?) (?:(\d+)x-crit|crit|hits|glances) you, causing ([\d,.]+) points? of (.+?) damage\.$/i,
   )
   if (receivedDamage) {
-    const damageType = BATTLE_LOG_TRANSLATIONS[receivedDamage[4] || ''] || receivedDamage[4]
+    const damageType = translateBattleTerms(receivedDamage[4] || '')
     const action = receivedDamage[2]
       ? `以 ${receivedDamage[2]} 倍暴击命中`
       : /\bcrit\b/i.test(source)
@@ -441,7 +636,7 @@ export function translateHentaiVerseBattleLog(value: string) {
     /^You (?:(\d+)x-crit|crit|hit|glance) (.+?), causing ([\d,.]+) points? of (.+?) damage\.$/i,
   )
   if (dealtDamage) {
-    const damageType = BATTLE_LOG_TRANSLATIONS[dealtDamage[4] || ''] || dealtDamage[4]
+    const damageType = translateBattleTerms(dealtDamage[4] || '')
     const action = dealtDamage[1]
       ? `以 ${dealtDamage[1]} 倍暴击命中`
       : /\bcrit\b/i.test(source)
@@ -460,26 +655,61 @@ export function translateHentaiVerseBattleLog(value: string) {
 
   const gainedEffect = source.match(/^You gain the effect (.+?)\.$/i)
   if (gainedEffect) {
-    const effect = BATTLE_LOG_TRANSLATIONS[gainedEffect[1] || ''] || gainedEffect[1]
+    const effect = translateBattleTerms(gainedEffect[1] || '')
     return `你获得了“${effect}”效果。`
   }
 
   const lostEffect = source.match(/^You lose the effect (.+?)\.$/i)
   if (lostEffect) {
-    const effect = BATTLE_LOG_TRANSLATIONS[lostEffect[1] || ''] || lostEffect[1]
+    const effect = translateBattleTerms(lostEffect[1] || '')
     return `你的“${effect}”效果结束了。`
   }
 
   const expiredEffect = source.match(/^The effect (.+?) has worn off\.$/i)
   if (expiredEffect) {
-    const effect = BATTLE_LOG_TRANSLATIONS[expiredEffect[1] || ''] || expiredEffect[1]
+    const effect = translateBattleTerms(expiredEffect[1] || '')
     return `你的“${effect}”效果结束了。`
   }
 
-  return source.replace(
-    BATTLE_LOG_PATTERN,
-    (term) => BATTLE_LOG_TRANSLATIONS[term] ?? BATTLE_LOG_TRANSLATIONS[toTitleCase(term)] ?? term,
-  )
+  const cast = source.match(/^You cast (.+?)\.$/i)
+  if (cast) return `你施放了“${translateBattleTerms(cast[1]!)}”。`
+  const used = source.match(/^You use (?:a |an )?(.+?)\.$/i)
+  if (used) return `你使用了“${translateBattleTerms(used[1]!)}”。`
+  const recovery = source.match(/^(.+?) (?:heals|restores) you for ([\d,.]+) points? of (.+?)\.$/i)
+  if (recovery) return `${translateBattleTerms(recovery[1]!)}为你恢复了 ${recovery[2]} 点${translateBattleTerms(recovery[3]!)}。`
+  const healing = source.match(/^(.+?) heals you for ([\d,.]+) points?\.$/i)
+  if (healing) return `${translateBattleTerms(healing[1]!)}为你恢复了 ${healing[2]} 点生命值。`
+  const restoration = source.match(/^(.+?) restores ([\d,.]+) points? of (.+?)\.$/i)
+  if (restoration) return `${translateBattleTerms(restoration[1]!)}恢复了 ${restoration[2]} 点${translateBattleTerms(restoration[3]!)}。`
+  const regained = source.match(/^You (?:regain|recover) ([\d,.]+) points? of (.+?)\.$/i)
+  if (regained) return `你恢复了 ${regained[1]} 点${translateBattleTerms(regained[2]!)}。`
+  if (/^You have been defeated[.!]?$/i.test(source)) return '你已被击败。'
+  const defeated = source.match(/^(.+?) has been defeated\.$/i)
+  if (defeated) return `${defeated[1]} 已被击败。`
+  const received = source.match(/^You gain ([\d,.]+) (EXP|experience points?|Credits?)[.!]?$/i)
+  if (received) return `你获得了 ${received[1]} ${/^credits?$/i.test(received[2]!) ? 'Credits' : '经验'}。`
+  const proficiency = source.match(/^You gain ([\d,.]+) points? of (.+?) proficiency[.!]?$/i)
+  if (proficiency) {
+    const names: Record<string, string> = {
+      'supportive magic': '辅助法术', 'deprecating magic': '减益法术',
+      'elemental magic': '元素法术', 'divine magic': '神圣法术',
+      'forbidden magic': '禁断法术', 'one-handed weapon': '单手武器',
+      'two-handed weapon': '双手武器', 'dual-wielding': '双持', staff: '法杖',
+      'cloth armor': '布甲', 'light armor': '轻甲', 'heavy armor': '重甲',
+    }
+    return `你的${names[proficiency[2]!.toLowerCase()] || translateBattleTerms(proficiency[2]!)}熟练度提高了 ${proficiency[1]} 点。`
+  }
+  if (/^With the light of a new dawn, your experience in all things increases\.$/i.test(source)) return '新一天的曙光使你的各项熟练度有所提升。'
+  const obtained = source.match(/^You (?:gain|obtained|obtain) (?:a |an )?(.+?)\.$/i)
+  if (obtained) return `你获得了 ${translateBattleTerms(obtained[1]!)}。`
+  const nextRound = source.match(/^(?:You have advanced to|You advance to|Starting) (?:the )?next round[.!]?$/i)
+  if (nextRound) return '进入下一轮战斗。'
+  if (/^You are victorious[.!]?$/i.test(source)) return '你赢得了胜利！'
+  const parry = source.match(/^You (parry|block|resist) (?:the )?attack from (.+?)\.$/i)
+  if (parry) return `你${{ parry: '招架', block: '格挡', resist: '抵抗' }[parry[1]!.toLowerCase()]}了 ${parry[2]} 的攻击。`
+  const targetParry = source.match(/^(.+?) (parries|blocks|resists) your attack\.$/i)
+  if (targetParry) return `${targetParry[1]} ${{ parries: '招架', blocks: '格挡', resists: '抵抗' }[targetParry[2]!.toLowerCase()]}了你的攻击。`
+  return translateBattleTerms(source)
 }
 
 export function decodeHentaiVerseGlyphs(root: ParentNode) {
@@ -493,17 +723,11 @@ export function decodeHentaiVerseGlyphs(root: ParentNode) {
         .find(Boolean)
       const family = glyphClass?.[1]
       const glyph = glyphClass?.[2] || ''
-      const punctuation =
-        family === '2'
-          ? { a: '.', e: '%', f: '+' }[glyph.toLowerCase()]
-          : family === '4' && glyph.toLowerCase() === 'b'
-            ? ','
-            : undefined
-      const replacement = fallback || (glyph === '9' ? ' ' : punctuation || glyph)
+      const punctuation = ['2', '4'].includes(family || '')
+        ? { a: '.', b: ',', c: '!', e: '%', f: '+', g: '-', i: '/', m: ':' }[glyph.toLowerCase()]
+        : undefined
+      const space = ['3', '5'].includes(family || '') && glyph === '9'
+      const replacement = fallback || (space ? ' ' : punctuation || glyph)
       if (replacement) node.textContent = replacement
     })
-}
-
-function toTitleCase(value: string) {
-  return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase()
 }

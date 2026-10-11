@@ -129,7 +129,8 @@ export class HentaiVerseBusi {
       skill,
     })
     const updated = parseBattleResponse(payload, current)
-    if (updated.completed) return updated
+    // The source also uses its completion pane between arena rounds. Confirm
+    // the full page before treating the entire challenge as finished.
     let html: string
     try {
       html = await this.requestText('/hentaiverse/page')

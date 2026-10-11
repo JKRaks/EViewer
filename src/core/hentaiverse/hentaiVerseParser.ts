@@ -32,6 +32,7 @@ import { getHentaiVerseSection } from './hentaiVerseProtocol'
 import {
   decodeHentaiVerseGlyphs,
   getAttributeLabel,
+  getHentaiVerseItemPresentation,
   getHentaiVerseSettingControl,
   HENTAIVERSE_SETTING_GROUPS,
   translateHentaiVerseBattleLog,
@@ -56,7 +57,7 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
     section === 'equipment' ? parseEquipment(document, scriptText, target) : undefined
   const abilities =
     section === 'abilities' ? parseAbilities(document, scriptText, target) : undefined
-  const training = section === 'training' ? parseTraining(document) : undefined
+  const training = section === 'training' ? parseTraining(document, scriptText) : undefined
   const inventory = section === 'inventory' ? parseInventory(document) : undefined
 
   return {
@@ -128,12 +129,25 @@ export function parseBattleResponse(
   ]
   paneNames.forEach((name) => {
     const value = payload[name]
-    if (typeof value !== 'string') return
+    if (typeof value !== 'string' && !(name === 'textlog' && Array.isArray(value))) return
     const wrapper = document.createElement(
       name.startsWith('table_') || name === 'textlog' ? 'table' : 'div',
     )
     wrapper.id = name
-    wrapper.innerHTML = value
+    if (typeof value === 'string') {
+      wrapper.innerHTML = value
+    } else if (Array.isArray(value)) {
+      // Native battle responses send chronological { t: HTML, c?: class }
+      // entries, while full-page logs have the newest table row first.
+      value.slice().reverse().forEach((entry) => {
+        if (!entry || typeof entry !== 'object' || typeof entry.t !== 'string') return
+        const row = document.createElement('tr')
+        const cell = document.createElement('td')
+        cell.innerHTML = entry.t
+        row.appendChild(cell)
+        wrapper.appendChild(row)
+      })
+    }
     document.body.appendChild(wrapper)
   })
   decodeHentaiVerseGlyphs(document)
@@ -146,7 +160,7 @@ export function parseBattleResponse(
     ...previous,
     ...parsed,
     vitals: parsed.vitals.length ? parsed.vitals : previous.vitals,
-    effects: parsed.effects.length ? parsed.effects : previous.effects,
+    effects: typeof payload.pane_effects === 'string' ? parsed.effects : previous.effects,
     monsters: parsed.completed
       ? parsed.monsters
       : parsed.monsters.length
@@ -323,25 +337,35 @@ function parseAbilities(
   target: HentaiVersePageTarget,
 ): HentaiVerseAbilityPage {
   const trees = new Map<string, HentaiVerseAbilityTree>()
+  const treeLabels: Record<string, string> = {
+    general: '通用', onehanded: '单手', twohanded: '双手', dualwield: '双持',
+    niten: '二天一流', staff: '法杖', cloth: '布甲', light: '轻甲', heavy: '重甲',
+    deprecating1: '减益法术 I', deprecating2: '减益法术 II',
+    supportive1: '辅助法术 I', supportive2: '辅助法术 II',
+    elemental: '元素法术', forbidden: '禁断法术', divine: '神圣法术',
+  }
   document
     .querySelectorAll<HTMLElement>(
       '#ability_treelist > div, #ability_treelist a, [data-ability-tree], a[href*="tree="]',
     )
     .forEach((node, index) => {
-      const source = getActionSource(node)
+      const source = getActionSource(node, true)
+      const imageTree = node.querySelector<HTMLImageElement>('img')?.src.match(/\/ab\/t([ad])([^/.]+)\.png/i)
       const id =
         node.dataset.abilityTree ||
         node.dataset.tree ||
         readNamedValue(source, 'tree') ||
+        imageTree?.[2] ||
         matchValue(`${node.id} ${source}`, /(?:ability_)?tree[_-]?([a-z0-9]+)/i) ||
         String(index)
-      const label = readNodeLabel(node)
+      const label = readNodeLabel(node) || treeLabels[id]
       if (!label) return
       trees.set(id, {
         id,
         label,
         active:
           id === target.tree ||
+          imageTree?.[1] === 'a' ||
           node.matches('.active, .selected, [aria-current="true"]') ||
           /f[24][lr]a/.test(node.className),
       })
@@ -365,19 +389,29 @@ function parseAbilities(
     if (!id || !name) return
     const levelText = cleanText(
       row.dataset.level ||
+        row.querySelector<HTMLElement>('[data-level], .ability-level')?.dataset.level ||
         row.querySelector<HTMLElement>('[data-level], .ability-level')?.textContent,
     )
-    const levelMatch = levelText.match(/(\d+)\s*\/\s*(\d+)/)
+    const statusText = cleanText(parser.parseFromString(presentation.status, 'text/html').body.textContent)
+    const levelMatch = `${levelText} ${statusText}`.match(/(\d+)\s*(?:\/|of)\s*(\d+)/i)
     const maxLevel = Number(
       row.dataset.maxLevel ||
         levelMatch?.[2] ||
         row.querySelector(':scope > div:nth-child(3)')?.children.length ||
         0,
     )
-    const statusLevel = matchValue(presentation.status, /(?:Level|Tier)\s+(\d+)/i)
-    const level = /not acquired/i.test(presentation.status)
+    // The current tooltip describes the tier's required character level, not
+    // the acquired rank. The source encodes that rank with filled bar images.
+    const statusLevel = /requires/i.test(statusText)
+      ? ''
+      : matchValue(statusText, /(?:Level|Tier|Rank)\s*[:=]?\s*(\d+)/i)
+    const explicitLevel = levelText.match(/^\d+(?:\s*\/\s*\d+)?$/)?.[0]
+    const graphicLevel = countActiveAbilityLevels(row)
+    const level = /not acquired/i.test(statusText)
       ? 0
-      : Number(row.dataset.level || levelMatch?.[1] || statusLevel || countActiveAbilityLevels(row))
+      : explicitLevel || levelMatch?.[1] || statusLevel
+        ? Number.parseInt(explicitLevel || levelMatch?.[1] || statusLevel, 10)
+        : graphicLevel
     const actionNode = row.querySelector<HTMLElement>(
       '[onclick*="unlock_ability"], [onclick*="reset_ability"], [data-action]',
     )
@@ -456,10 +490,13 @@ function parseAbilities(
   }
 }
 
-function parseTraining(document: Document): HentaiVerseTrainingPage {
+function parseTraining(document: Document, scriptText: string): HentaiVerseTrainingPage {
   const progressPane = document.querySelector<HTMLElement>('#train_progress')
   const progress = cleanText(document.querySelector('#train_progcnt')?.textContent)
   const progressText = cleanText(progressPane?.textContent)
+  const totalSeconds = Number(matchValue(scriptText, /\btotal_time\s*=\s*(\d+(?:\.\d+)?)/))
+  const endTime = Number(matchValue(scriptText, /\bend_time\s*=\s*(\d+(?:\.\d+)?)/))
+  const serverNow = Number(matchValue(scriptText, /\bstart_time\s*=\s*(\d+(?:\.\d+)?)/))
   const options: HentaiVerseTrainingOption[] = []
   document.querySelectorAll<HTMLElement>('#train_table tr').forEach((row) => {
     const cells = Array.from(row.querySelectorAll('td'), (cell) => cleanText(cell.textContent))
@@ -483,9 +520,13 @@ function parseTraining(document: Document): HentaiVerseTrainingPage {
     })
   })
   return {
-    activeName: cleanText(progressPane?.querySelector(':scope > div:nth-child(3)')?.textContent),
-    progress,
+    activeName: translateHentaiVerseText(cleanText(progressPane?.querySelector('strong')?.textContent)),
+    progress: progress && !progress.includes('%') ? `${progress}%` : progress,
     remaining: matchValue(progressText, /(?:Remaining|Time Left)\s*:?\s*(.+)$/i),
+    ...(totalSeconds > 0 && endTime > 0 && serverNow > 0 && {
+      endsAt: Date.now() + Math.max(0, endTime - serverNow) * 1000,
+      durationSeconds: totalSeconds,
+    }),
     canCancel: Boolean(
       document.querySelector('[name="cancel_train"], [onclick*="cancel_training"]'),
     ),
@@ -502,18 +543,21 @@ function parseInventory(document: Document): HentaiVerseInventoryPage {
       const id =
         row.dataset.item ||
         readNamedValue(source, 'item') ||
+        matchValue(row.querySelector<HTMLElement>('[id^="item_"]')?.id || '', /^item_(\d+)$/i) ||
         matchValue(`${row.id} ${source}`, /(?:item|set_item)[_(\s'"-]*(\d+)/i)
       const cells = Array.from(row.querySelectorAll('td'), (cell) => cleanText(cell.textContent))
-      const name = readNodeLabel(
+      const presentation = getHentaiVerseItemPresentation(id)
+      const name = presentation?.name || readNodeLabel(
         row.querySelector<HTMLElement>('[data-item-name], td:first-child') || row,
       )
       if (!id || !name) return
       items.set(id, {
         id,
         name,
-        description: cleanText(
+        description: translateHentaiVerseDescription(cleanText(
           row.getAttribute('title') || row.dataset.description || cells.slice(1, -1).join(' '),
-        ),
+        )) || presentation?.description || '',
+        canAssign: /set_item\s*\(/i.test(source),
         quantity: cells.at(-1) || row.dataset.quantity || '',
         selected: row.matches('.active, .selected, [aria-current="true"]'),
       })
@@ -724,7 +768,7 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
       ? 'HentaiVerse 战斗'
       : translateHentaiVerseText(sourceTitle || 'HentaiVerse 战斗'),
     vitals: parseBattleVitals(document),
-    effects: readTextRows(document.querySelector('#pane_effects')),
+    effects: parseBattleEffects(document),
     monsters: parseMonsters(document),
     actions: parseBattleActions(document),
     log: parseBattleLog(document).slice(-40),
@@ -733,8 +777,21 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
   }
 }
 
+function parseBattleEffects(document: Document) {
+  const pane = document.querySelector('#pane_effects')
+  if (!pane) return []
+  const names = Array.from(pane.querySelectorAll<HTMLElement>('[onmouseover*="set_infopane_effect"]'), (node) =>
+    translateHentaiVerseText(matchValue(node.getAttribute('onmouseover') || '', /set_infopane_effect\s*\(\s*['"]([^'"]+)/i)),
+  ).filter(Boolean)
+  return Array.from(new Set([...names, ...readTextRows(pane).map(translateHentaiVerseText)]))
+}
+
 function readBattleCompletion(pane?: HTMLElement | null) {
   if (!pane) return ''
+  const lines = Array.from(pane.querySelectorAll<HTMLElement>('#btcp > div'), (node) =>
+    cleanText(node.textContent),
+  ).filter(Boolean)
+  if (lines.length) return lines.map(translateHentaiVerseBattleLog).join(' ')
   const text =
     cleanText(pane.textContent) ||
     cleanText(
@@ -895,12 +952,14 @@ function getBattleActionPresentation(node: HTMLElement, mode: HentaiVerseBattleM
         node.textContent,
     ) ||
     (skill ? `${mode === 'items' ? '物品' : '技能'} ${skill}` : sourceName || mode)
+  const item = mode === 'items' ? getHentaiVerseItemPresentation(String(skill)) : undefined
   return {
-    label: translateHentaiVerseText(sourceLabel),
+    label: item?.name || (mode === 'spirit' && !skill ? '灵力姿态' : translateHentaiVerseText(sourceLabel)),
     description:
+      item?.description ||
       BATTLE_ACTION_DESCRIPTIONS[sourceLabel.toLowerCase()] ||
       BATTLE_ACTION_DESCRIPTIONS[mode] ||
-      cleanText(scripted?.[2]) ||
+      translateHentaiVerseDescription(cleanText(scripted?.[2])) ||
       `执行${translateHentaiVerseText(sourceLabel)}操作。`,
   }
 }
@@ -1102,9 +1161,9 @@ function readInventorySlotLabel(id: string) {
 
 function readAbilityPresentation(row: HTMLElement) {
   const hover =
-    row.querySelector<HTMLElement>('[onmouseover*="overability"]')?.getAttribute('onmouseover') ||
+    (row.matches('[onmouseover*="overability"]') ? row : row.querySelector<HTMLElement>('[onmouseover*="overability"]'))?.getAttribute('onmouseover') ||
     ''
-  const quoted = "'((?:\\\\.|[^'])*)'"
+  const quoted = `('(?:\\\\.|[^'])*'|"(?:\\\\.|[^"])*")`
   const match = hover.match(
     new RegExp(
       `overability\\(\\s*[^,]+,\\s*${quoted}\\s*,\\s*${quoted}\\s*,\\s*${quoted}\\s*,\\s*${quoted}`,
@@ -1112,7 +1171,7 @@ function readAbilityPresentation(row: HTMLElement) {
     ),
   )
   if (!match) return { name: '', description: '', status: '', requirement: '' }
-  const readValue = (value = '') => value.replace(/\\'/g, "'").replace(/\\\\/g, '\\')
+  const readValue = (value = '') => value.slice(1, -1).replace(/\\(['"\\])/g, '$1')
   const requirementHtml = readValue(match[4]).split(/<div/i)[0] || ''
   const requirementText = cleanText(
     parser.parseFromString(`<body>${requirementHtml}</body>`, 'text/html').body.textContent,
@@ -1145,10 +1204,21 @@ function readAbilityAction(
 }
 
 function countActiveAbilityLevels(row: HTMLElement) {
-  return Array.from(row.querySelectorAll<HTMLElement>(':scope > div:nth-child(3) > div')).filter(
-    (node) =>
-      !node.matches('.disabled, .locked, [aria-disabled="true"]') && node.style.opacity !== '0.3',
-  ).length
+  const tiers = Array.from(row.querySelectorAll<HTMLElement>(':scope > div:nth-child(3) > div'))
+  const sourceBars = tiers.map((node) =>
+    node.style.backgroundImage.match(/\/ab\/\d+(rf|x)\.png/i)?.[1]?.toLowerCase(),
+  )
+  if (sourceBars.length && sourceBars.every(Boolean)) {
+    return sourceBars.filter((state) => state === 'rf').length
+  }
+  // Count only recognizable acquired/empty markers. Unknown markup must not
+  // turn every tier into an acquired level, or silently display zero.
+  const acquired = (node: HTMLElement) => node.matches('.active, .acquired, .unlocked, .filled, [data-acquired="true"], [aria-checked="true"]')
+  const empty = (node: HTMLElement) => node.matches('.disabled, .locked, .empty, [data-acquired="false"], [aria-disabled="true"]') || node.style.opacity === '0.3'
+  if (tiers.length && tiers.every((node) => acquired(node) || empty(node))) {
+    return tiers.filter((node) => acquired(node) && !empty(node)).length
+  }
+  return null
 }
 
 function cleanText(value?: string | null) {
