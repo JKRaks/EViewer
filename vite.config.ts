@@ -1,4 +1,6 @@
 import { fileURLToPath, URL } from 'node:url'
+import { execFile } from 'node:child_process'
+import { promisify } from 'node:util'
 
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
@@ -20,6 +22,27 @@ export default defineConfig({
     format: 'es',
   },
   plugins: [
+    {
+      name: 'deployment-revision',
+      apply: 'build',
+      async generateBundle() {
+        let revision = 'unknown'
+        try {
+          const result = await promisify(execFile)('git', ['rev-parse', 'HEAD'], {
+            cwd: fileURLToPath(new URL('.', import.meta.url)),
+            encoding: 'utf8',
+          })
+          revision = result.stdout.trim()
+        } catch {
+          // ZIP checkouts can still build; publishing requires a Git revision.
+        }
+        this.emitFile({
+          type: 'asset',
+          fileName: 'deployment.json',
+          source: JSON.stringify({ revision }),
+        })
+      },
+    },
     vue(),
     vueJsx(),
     AutoImport({
@@ -58,7 +81,12 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,ico,png,webp,json}'],
-        globIgnores: ['_routes.json', '**/tagTranslation.worker-*.js', '**/unofficialTagTranslations-*.js'],
+        globIgnores: [
+          '_routes.json',
+          'deployment.json',
+          '**/tagTranslation.worker-*.js',
+          '**/unofficialTagTranslations-*.js',
+        ],
         runtimeCaching: [
           {
             urlPattern: /\/assets\/(?:tagTranslation\.worker|unofficialTagTranslations)-[^/]+\.js$/,
