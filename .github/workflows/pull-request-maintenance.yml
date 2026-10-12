@@ -49,6 +49,7 @@ jobs:
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/pre') ||
       (github.event_name == 'pull_request_target' &&
+       github.event.action == 'closed' &&
        github.event.pull_request.merged == true &&
        github.event.pull_request.base.ref == 'pre')
     runs-on: ubuntu-latest
@@ -126,6 +127,7 @@ jobs:
   cleanup:
     if: >-
       github.event_name == 'pull_request_target' &&
+      github.event.action == 'closed' &&
       github.event.pull_request.merged == true &&
       github.event.pull_request.head.repo.full_name == github.repository &&
       github.event.pull_request.head.ref != 'pre' &&
@@ -141,19 +143,48 @@ jobs:
             const pr = context.payload.pull_request
             const branch = pr?.head?.ref
             // Validate again before mutating a ref. Never check out PR code.
-            if (!pr?.merged || !branch || ['pre', 'main'].includes(branch) ||
+            if (context.payload.action !== 'closed' || !pr?.merged || !branch ||
+                ['pre', 'main'].includes(branch) ||
                 branch === context.payload.repository.default_branch ||
                 pr.head.repo?.full_name !== context.payload.repository.full_name) {
               core.info('无需删除来源分支')
               return
             }
+            const ref = { ...context.repo, ref: `heads/${branch}` }
+            let source
             try {
-              await github.rest.git.deleteRef({ ...context.repo, ref: `heads/${branch}` })
+              source = (await github.rest.git.getRef(ref)).data
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(`来源分支已不存在：${branch}`)
+                return
+              }
+              throw error
+            }
+            if (source.object.sha !== pr.head.sha) {
+              core.notice(`来源分支已有新提交，保留：${branch}`)
+              return
+            }
+            try {
+              await github.rest.git.deleteRef(ref)
               core.notice(`已删除合并后的来源分支：${branch}`)
             } catch (error) {
               if (error.status === 404) {
                 core.info(`来源分支已不存在：${branch}`)
                 return
+              }
+              if (error.status === 422) {
+                // Missing refs may return 422, but protection/validation errors
+                // do too. Only ignore it after confirming the ref is absent.
+                try {
+                  await github.rest.git.getRef(ref)
+                } catch (lookupError) {
+                  if (lookupError.status === 404) {
+                    core.info(`来源分支已不存在：${branch}`)
+                    return
+                  }
+                  throw lookupError
+                }
               }
               throw error
             }
