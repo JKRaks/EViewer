@@ -4,12 +4,47 @@ on:
   push:
     branches: [pre]
   pull_request_target:
-    types: [closed]
+    types: [opened, reopened, synchronize, edited, closed]
 
 permissions:
   contents: read
 
 jobs:
+  main-source:
+    name: Main PR source guard
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.action != 'closed' &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Only accept this repository's pre branch
+        uses: actions/github-script@v8
+        with:
+          script: |
+            // Read current metadata: a queued event may refer to an old base.
+            // No PR contents are checked out or executed by this workflow.
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo, pull_number: context.payload.pull_request.number,
+            })
+            if (pr.state !== 'open' || pr.base.ref !== 'main') {
+              core.info('PR 已关闭或目标已不再是 main，无需处理')
+              return
+            }
+            if (pr.head.ref === 'pre' &&
+                pr.head.repo?.full_name === context.payload.repository.full_name) {
+              core.notice('来源检查通过：本仓库 pre → main')
+              return
+            }
+            await github.rest.pulls.update({
+              ...context.repo, pull_number: pr.number, state: 'closed',
+            })
+            core.setFailed(
+              `PR #${pr.number} 已关闭：main 只接受本仓库 pre 分支。请先将修改合入 pre，再通过 pre → main PR 发布。`,
+            )
+
   promote:
     if: >-
       (github.event_name == 'push' && github.ref == 'refs/heads/pre') ||
