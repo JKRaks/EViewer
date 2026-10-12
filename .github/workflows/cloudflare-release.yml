@@ -2,38 +2,60 @@ name: Cloudflare release
 
 on:
   push:
-    branches: [main]
+    branches: [pre, main]
   pull_request:
-    branches: [main]
-    types: [opened, synchronize, reopened, closed]
+    branches: [pre, main]
   workflow_dispatch:
-    inputs:
-      pr:
-        description: 预览关联的 PR 编号（生产留空）
-        required: false
-        type: string
 
 permissions:
   contents: read
 
 concurrency:
-  group: cloudflare-${{ github.event.pull_request.number || (github.ref_name != 'main' && inputs.pr) || github.ref }}
+  group: cloudflare-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: false
 
 jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            deploy/eproxy/package-lock.json
+      - run: npm ci
+      - run: npm ci --prefix deploy/eproxy
+      - run: npm run build
+      - name: Check proxy and app entry
+        run: |
+          npm run check --prefix deploy/eproxy
+          node --check worker-app.js
+      - name: Validate production and Preview asset bundles
+        run: |
+          node deploy/cloudflare/release.mjs --dry-run --branch main --commit "$GITHUB_SHA"
+          node deploy/cloudflare/release.mjs --dry-run --branch pre --commit "$GITHUB_SHA"
+      - uses: actions/upload-artifact@v4
+        if: github.event_name != 'pull_request'
+        with:
+          name: frontend-${{ github.sha }}
+          path: dist/
+          include-hidden-files: true
+          overwrite: true
+          retention-days: 3
+
   release:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    needs: validate
+    if: github.event_name != 'pull_request' && (github.ref_name == 'pre' || github.ref_name == 'main')
     runs-on: ubuntu-latest
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       NODE_USE_ENV_PROXY: '1'
-      RELEASE_BRANCH: ${{ github.head_ref || github.ref_name }}
-      RELEASE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
-      RELEASE_PR: ${{ github.event.pull_request.number || inputs.pr }}
     steps:
       - uses: actions/checkout@v6
         with:
-          ref: ${{ env.RELEASE_COMMIT }}
           persist-credentials: false
       - uses: actions/setup-node@v6
         with:
@@ -44,22 +66,11 @@ jobs:
             deploy/eproxy/package-lock.json
       - run: npm ci
       - run: npm ci --prefix deploy/eproxy
-      - name: Clean up closed PR
-        if: github.event_name == 'pull_request' && github.event.action == 'closed'
+      - uses: actions/download-artifact@v4
+        with:
+          name: frontend-${{ github.sha }}
+          path: dist/
+      - name: Publish fixed pre Preview or Production
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: node deploy/cloudflare/release.mjs --cleanup-pr "$RELEASE_PR" --branch "$RELEASE_BRANCH"
-      - name: Build frontend
-        if: github.event.action != 'closed'
-        run: npm run build
-      - name: Check Worker
-        if: github.event.action != 'closed'
-        run: npm run check --prefix deploy/eproxy
-      - name: Publish Worker, then Pages, and verify binding
-        if: github.event.action != 'closed'
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-        run: |
-          args=(--branch "$RELEASE_BRANCH" --commit "$RELEASE_COMMIT")
-          if [ -n "$RELEASE_PR" ]; then args+=(--pr "$RELEASE_PR"); fi
-          node deploy/cloudflare/release.mjs "${args[@]}"
+        run: node deploy/cloudflare/release.mjs --branch "$GITHUB_REF_NAME" --commit "$GITHUB_SHA"

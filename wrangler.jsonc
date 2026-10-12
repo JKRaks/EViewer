@@ -1,7 +1,48 @@
 {
   "$schema": "./deploy/eproxy/node_modules/wrangler/config-schema.json",
-  "name": "eviewer",
-  "pages_build_output_dir": "./dist",
+  "name": "eviewer-app",
+  "main": "./worker-app.js",
   "compatibility_date": "2025-10-19",
-  "services": [{ "binding": "EPROXY", "service": "eproxy" }]
+  "compatibility_flags": [
+    "enable_nodejs_process_v2",
+    "enable_nodejs_http_server_modules",
+    "enable_nodejs_http_modules",
+    "nodejs_compat_populate_process_env",
+  ],
+  "workers_dev": true,
+  "preview_urls": false,
+  "keep_vars": false,
+  // Trial on workers.dev first. Production domain cutover is a separate step.
+  "routes": [],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "not_found_handling": "single-page-application",
+    "run_worker_first": [
+      "/ehentai",
+      "/ehentai/*",
+      "/exhentai",
+      "/exhentai/*",
+      "/github",
+      "/github/*",
+      "/auth/*",
+      "/hentaiverse/*",
+      "/image-proxy",
+      "/health",
+    ],
+  },
+  "vars": { "ALLOWED_AUTH_EXPORT_ORIGINS": "", "EVIEWER_PROXY_ENVIRONMENT": "production" },
+  "version_metadata": { "binding": "EVIEWER_VERSION" },
+  "ratelimits": [
+    { "name": "proxy-df", "namespace_id": "2", "simple": { "limit": 10, "period": 10 } },
+  ],
+  "observability": { "enabled": true },
+  "previews": {
+    "vars": { "ALLOWED_AUTH_EXPORT_ORIGINS": "", "EVIEWER_PROXY_ENVIRONMENT": "preview" },
+    "version_metadata": { "binding": "EVIEWER_VERSION" },
+    "ratelimits": [
+      { "name": "proxy-df", "namespace_id": "3", "simple": { "limit": 10, "period": 10 } },
+    ],
+    "observability": { "enabled": true },
+  },
 }
