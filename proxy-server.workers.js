@@ -35,6 +35,94 @@ const AUTH_COOKIE_NAMES = ['ipb_member_id', 'ipb_pass_hash']
 const AUTH_COOKIE_PATHS = ['/ehentai', '/hentaiverse']
 const LOCAL_DEVELOPMENT_ORIGIN = /^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/
 const HENTAIVERSE_ORIGIN = 'https://hentaiverse.org'
+const REQUEST_LOGS = new WeakMap()
+const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 }
+
+function sanitizeLogText(value, request) {
+  let text = String(value || '')
+  // Exceptions can embed URLs or credentials. Keep their diagnostic text,
+  // without copying query values, authorization headers or authentication cookies.
+  const cookie = request.headers.get('cookie') || ''
+  for (const part of cookie.split(';')) {
+    const separator = part.indexOf('=')
+    const secret = separator >= 0 ? part.slice(separator + 1).trim() : ''
+    if (secret) text = text.replaceAll(secret, '[redacted]')
+  }
+  const authorization = request.headers.get('authorization')
+  if (authorization) text = text.replaceAll(authorization, '[redacted]')
+  return text
+    .replace(/https?:\/\/[^\s"'<>]+/g, (value) => {
+      try {
+        const url = new URL(value)
+        return `${url.origin}${url.pathname}`
+      } catch {
+        return '[url]'
+      }
+    })
+    .replace(
+      /((?:ipb_pass_hash|ipb_member_id|token|authorization)\s*[=:]\s*)[^\s,;&]+/gi,
+      '$1[redacted]',
+    )
+    .slice(0, 4096)
+}
+
+function recordRequestError(request, event, error) {
+  const context = REQUEST_LOGS.get(request)
+  if (!context) return
+  context.failure = event
+  context.error = {
+    name: error?.name || 'Error',
+    message: sanitizeLogText(error?.message || error, request),
+    ...(error?.stack ? { stack: sanitizeLogText(error.stack, request) } : {}),
+  }
+}
+
+function writeRequestLog(request, level, event, details = {}) {
+  const context = REQUEST_LOGS.get(request)
+  if (!context || LOG_LEVELS[level] < LOG_LEVELS[context.logLevel]) return
+  console[level]({
+    level,
+    event,
+    message: event,
+    requestId: context.requestId,
+    method: request.method,
+    path: context.path,
+    environment: context.environment,
+    revision: context.revision,
+    ...details,
+  })
+}
+
+async function fetchUpstream(request, target, options) {
+  const url = new URL(typeof target === 'string' || target instanceof URL ? target : target.url)
+  const startedAt = performance.now()
+  const context = REQUEST_LOGS.get(request)
+  if (context) context.upstreamRequests++
+  try {
+    const response = await fetch(target, options)
+    const upstream = {
+      host: url.hostname,
+      path: url.pathname,
+      method: options?.method || target.method || 'GET',
+      status: response.status,
+      durationMs: Math.round(performance.now() - startedAt),
+    }
+    if (context) context.upstream = upstream
+    const level = response.status >= 500 ? 'error' : response.status >= 400 ? 'warn' : 'debug'
+    writeRequestLog(request, level, 'upstream.response', { upstream })
+    return response
+  } catch (error) {
+    if (context)
+      context.upstream = {
+        host: url.hostname,
+        path: url.pathname,
+        method: options?.method || target.method || 'GET',
+        durationMs: Math.round(performance.now() - startedAt),
+      }
+    recordRequestError(request, 'upstream.fetch_failed', error)
+    throw error
+  }
+}
 const HENTAIVERSE_PAGE_ROUTES = new Set([
   'Character:ch',
   'Character:eq',
@@ -134,6 +222,10 @@ function buildAuthCookie(name, value, requestUrl, path, clear = false) {
 }
 
 function jsonResponse(request, payload, status = 200, cookies = []) {
+  if (status >= 400) {
+    const context = REQUEST_LOGS.get(request)
+    if (context) context.reason = sanitizeLogText(payload.error || payload.message, request)
+  }
   const headers = new Headers({
     'Cache-Control': 'no-store',
     'Content-Type': 'application/json',
@@ -217,16 +309,31 @@ function handleAuthExport(request, requestUrl, allowedAuthExportOrigins) {
     requestUrl.origin,
     allowedAuthExportOrigins,
   )
-  if (!trustedOrigin || !/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type') || '')) {
-    return authExportJsonResponse(request, { success: false, message: '不允许提取认证信息，请配置可信的前端来源' }, 403, trustedOrigin)
+  if (
+    !trustedOrigin ||
+    !/^application\/json(?:\s*;|$)/i.test(request.headers.get('Content-Type') || '')
+  ) {
+    return authExportJsonResponse(
+      request,
+      { success: false, message: '不允许提取认证信息，请配置可信的前端来源' },
+      403,
+      trustedOrigin,
+    )
   }
   const cookie = getAllowedAuthCookieHeader(request.headers.get('Cookie') || '')
-  const values = new Map(cookie.split('; ').map((part) => {
-    const separator = part.indexOf('=')
-    return [part.slice(0, separator), part.slice(separator + 1)]
-  }))
+  const values = new Map(
+    cookie.split('; ').map((part) => {
+      const separator = part.indexOf('=')
+      return [part.slice(0, separator), part.slice(separator + 1)]
+    }),
+  )
   if (!AUTH_COOKIE_NAMES.every((name) => values.get(name))) {
-    return authExportJsonResponse(request, { success: false, message: '当前没有完整的认证 Cookie，请重新登录' }, 401, trustedOrigin)
+    return authExportJsonResponse(
+      request,
+      { success: false, message: '当前没有完整的认证 Cookie，请重新登录' },
+      401,
+      trustedOrigin,
+    )
   }
   return authExportJsonResponse(request, { success: true, cookie }, 200, trustedOrigin)
 }
@@ -348,7 +455,12 @@ async function requestHentaiVerse(request, target, method, body, contentType) {
   if (contentType) headers.set('Content-Type', contentType)
   const cookie = getAllowedAuthCookieHeader(request.headers.get('cookie') || '')
   if (cookie) headers.set('Cookie', cookie)
-  const response = await fetch(target, { method, headers, body, redirect: 'manual' })
+  const response = await fetchUpstream(request, target, {
+    method,
+    headers,
+    body,
+    redirect: 'manual',
+  })
   if (
     method === 'POST' &&
     contentType?.startsWith('application/x-www-form-urlencoded') &&
@@ -360,7 +472,7 @@ async function requestHentaiVerse(request, target, method, body, contentType) {
       const next = parseHentaiVersePageTarget(location.searchParams)
       await response.body?.cancel()
       headers.delete('Content-Type')
-      return fetch(next, { method: 'GET', headers, redirect: 'manual' })
+      return fetchUpstream(request, next, { method: 'GET', headers, redirect: 'manual' })
     }
   }
   return response
@@ -491,6 +603,7 @@ async function handleHentaiVerseRequest(request, requestUrl) {
     }
     return jsonResponse(request, { error: 'Not found' }, 404)
   } catch (error) {
+    recordRequestError(request, 'hentaiverse.request_failed', error)
     return jsonResponse(request, { error: error.message || 'HentaiVerse 请求失败' }, 502)
   }
 }
@@ -529,26 +642,6 @@ function getRequesterOrigin(request) {
 function getServerHost(request) {
   const url = new URL(request.url)
   return url.hostname
-}
-
-/**
- * 记录请求信息
- */
-function logRequest(request, config = null) {
-  const url = new URL(request.url)
-  console.log('收到请求:', {
-    method: request.method,
-    url: request.url,
-    path: url.pathname,
-    query: url.search,
-    config: config ? { path: config.path, host: config.host } : null,
-    headers: {
-      host: request.headers.get('host'),
-      origin: request.headers.get('origin'),
-      referer: request.headers.get('referer'),
-      cookie: request.headers.get('cookie') ? '[present]' : undefined,
-    },
-  })
 }
 
 /**
@@ -662,7 +755,7 @@ async function handleImageProxy(request, requestUrl) {
     })
   }
 
-  const response = await fetch(targetUrl, {
+  const response = await fetchUpstream(request, targetUrl, {
     headers: {
       Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
       'Accept-Language': 'en-US,en;q=0.5',
@@ -750,7 +843,7 @@ async function handleImageLookup(request) {
       headers.delete('content-type')
       headers.delete('content-length')
     }
-    response = await fetch(targetUrl, {
+    response = await fetchUpstream(request, targetUrl, {
       method,
       headers,
       body: method === 'POST' ? body : undefined,
@@ -791,9 +884,6 @@ async function handleImageLookup(request) {
  * 处理代理请求
  */
 async function handleProxyRequest(request, config, pathname) {
-  console.log(`匹配到 ${config.path} 路径:`, pathname)
-  console.log('完整 URL:', request.url)
-
   const requesterOrigin = getRequesterOrigin(request)
   if (!isAllowedRequesterOrigin(requesterOrigin)) {
     return jsonResponse(request, { error: '不允许的请求来源' }, 403)
@@ -806,14 +896,6 @@ async function handleProxyRequest(request, config, pathname) {
   const targetUrl = new URL(realPath, `${config.schema}://${config.host}`)
   const url = new URL(request.url)
   targetUrl.search = url.search
-
-  console.log('代理请求详情:', {
-    原始URL: request.url,
-    原始路径: pathname,
-    目标URL: targetUrl.toString(),
-    目标路径: realPath,
-    Cookie: request.headers.get('cookie') ? '[present]' : undefined,
-  })
 
   // 构建代理请求头
   const proxyHeaders = new Headers(request.headers)
@@ -839,14 +921,7 @@ async function handleProxyRequest(request, config, pathname) {
     redirect: 'manual', // 手动处理重定向
   })
 
-  const response = await fetch(proxyRequest)
-
-  console.log('代理响应:', {
-    状态码: response.status,
-    Location: response.headers.get('location'),
-    ContentType: response.headers.get('content-type'),
-    SetCookie: response.headers.has('set-cookie') ? '[present]' : undefined,
-  })
+  const response = await fetchUpstream(request, proxyRequest)
 
   // 创建响应
   const responseHeaders = new Headers(response.headers)
@@ -854,8 +929,6 @@ async function handleProxyRequest(request, config, pathname) {
   // 获取当前服务器信息
   const serverHost = getServerHost(request)
   const serverUrl = new URL(request.url).origin
-
-  console.log('服务器信息:', { serverHost, serverUrl })
 
   // 修改 Set-Cookie 头
   if (responseHeaders.has('set-cookie')) {
@@ -870,7 +943,6 @@ async function handleProxyRequest(request, config, pathname) {
     const location = responseHeaders.get('location')
     const modifiedLocation = modifyLocation(location, config, serverUrl)
     responseHeaders.set('location', modifiedLocation)
-    console.log('修改重定向:', location, '->', modifiedLocation)
   }
 
   // 设置 CORS 头：回传请求方来源，解决跨域访问
@@ -899,9 +971,10 @@ async function handleProxyRequest(request, config, pathname) {
  */
 function handleCorsPreFlight(request, requestUrl, allowedAuthExportOrigins) {
   const requesterOrigin = getRequesterOrigin(request)
-  const allowed = requestUrl.pathname === '/ehentai/auth/export'
-    ? isTrustedAuthExportOrigin(requesterOrigin, requestUrl.origin, allowedAuthExportOrigins)
-    : isAllowedRequesterOrigin(requesterOrigin)
+  const allowed =
+    requestUrl.pathname === '/ehentai/auth/export'
+      ? isTrustedAuthExportOrigin(requesterOrigin, requestUrl.origin, allowedAuthExportOrigins)
+      : isAllowedRequesterOrigin(requesterOrigin)
   if (!requesterOrigin || !allowed) {
     return new Response('Forbidden', { status: 403 })
   }
@@ -928,7 +1001,6 @@ function handleCorsPreFlight(request, requestUrl, allowedAuthExportOrigins) {
  * 处理 404
  */
 function handle404(pathname) {
-  console.log('404: 未找到路由', pathname)
   return new Response(
     JSON.stringify({
       error: 'Not found',
@@ -952,8 +1024,6 @@ async function handleRequest(request, env = {}) {
 
   // 查找匹配的配置
   const config = findOriginConfig(pathname)
-
-  logRequest(request, config)
 
   // 健康检查路由
   if (pathname === '/health') {
@@ -986,7 +1056,7 @@ async function handleRequest(request, env = {}) {
     try {
       return await handleImageProxy(request, url)
     } catch (error) {
-      console.error('图片代理请求失败:', error)
+      recordRequestError(request, 'image.proxy_failed', error)
       return new Response(JSON.stringify({ error: '图片代理请求失败', message: error.message }), {
         status: 502,
         headers: { 'Content-Type': 'application/json' },
@@ -998,7 +1068,7 @@ async function handleRequest(request, env = {}) {
     try {
       return await handleImageLookup(request)
     } catch (error) {
-      console.error('图片搜索代理请求失败:', error)
+      recordRequestError(request, 'image.lookup_failed', error)
       return jsonResponse(request, { error: error.message || '图片搜索代理请求失败' }, 502)
     }
   }
@@ -1008,11 +1078,7 @@ async function handleRequest(request, env = {}) {
     try {
       return await handleProxyRequest(request, config, pathname)
     } catch (error) {
-      console.error('\n========== 代理错误 ==========')
-      console.error('错误:', {
-        message: error.message,
-        stack: error.stack,
-      })
+      recordRequestError(request, 'proxy.request_failed', error)
 
       return new Response(JSON.stringify({ error: '代理请求失败', message: error.message }), {
         status: 500,
@@ -1030,14 +1096,54 @@ async function handleRequest(request, env = {}) {
  */
 export default {
   async fetch(request, env) {
-    const expectedRevision = request.headers.get('X-EViewer-Proxy-Revision')
-    if (
-      expectedRevision &&
-      env?.EVIEWER_PROXY_REVISION &&
-      expectedRevision !== env.EVIEWER_PROXY_REVISION
-    ) {
-      return jsonResponse(request, { error: '代理服务版本未同步，请等待部署完成后刷新页面' }, 503)
+    const url = new URL(request.url)
+    const startedAt = performance.now()
+    const context = {
+      requestId: crypto.randomUUID(),
+      path: url.pathname,
+      environment: env?.EVIEWER_PROXY_ENVIRONMENT || 'unknown',
+      revision: env?.EVIEWER_PROXY_REVISION || null,
+      logLevel: Object.hasOwn(LOG_LEVELS, env?.PROXY_LOG_LEVEL) ? env.PROXY_LOG_LEVEL : 'info',
+      upstreamRequests: 0,
     }
-    return handleRequest(request, env)
+    REQUEST_LOGS.set(request, context)
+    writeRequestLog(request, 'debug', 'request.started', {
+      queryKeys: [...url.searchParams.keys()],
+      hasAuthCookie: Boolean(getAllowedAuthCookieHeader(request.headers.get('cookie') || '')),
+    })
+    let response
+    try {
+      const expectedRevision = request.headers.get('X-EViewer-Proxy-Revision')
+      if (
+        expectedRevision &&
+        env?.EVIEWER_PROXY_REVISION &&
+        expectedRevision !== env.EVIEWER_PROXY_REVISION
+      ) {
+        response = jsonResponse(
+          request,
+          { error: '代理服务版本未同步，请等待部署完成后刷新页面' },
+          503,
+        )
+      } else {
+        response = await handleRequest(request, env)
+      }
+      return response
+    } catch (error) {
+      recordRequestError(request, 'request.exception', error)
+      throw error
+    } finally {
+      const status = response?.status || 500
+      const level = status >= 500 ? 'error' : status >= 400 ? 'warn' : 'info'
+      writeRequestLog(request, level, 'request.completed', {
+        status,
+        durationMs: Math.round(performance.now() - startedAt),
+        upstreamRequests: context.upstreamRequests,
+        ...(context.upstream ? { upstream: context.upstream } : {}),
+        ...(context.failure ? { failure: context.failure } : {}),
+        ...(context.reason ? { reason: context.reason } : {}),
+        ...(context.error ? { error: context.error } : {}),
+      })
+      REQUEST_LOGS.delete(request)
+    }
   },
 }
