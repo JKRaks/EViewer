@@ -16,15 +16,12 @@
       }
     },
     {
-      "type": "pwa-node",
+      "type": "pwa-chrome",
       "request": "launch",
-      "name": "Debug proxy server",
-      "program": "${workspaceFolder}/proxy-server.js",
-      "cwd": "${workspaceFolder}",
-      "runtimeArgs": ["--enable-source-maps"],
-      "skipFiles": ["<node_internals>/**"],
-      "sourceMaps": true,
-      "console": "integratedTerminal"
+      "name": "Debug EViewer (Worker)",
+      "url": "http://127.0.0.1:8787",
+      "webRoot": "${workspaceFolder}",
+      "sourceMaps": true
     }
   ]
 }

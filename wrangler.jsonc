@@ -1,5 +1,5 @@
 {
-  "$schema": "./deploy/eproxy/node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "eviewer-app",
   "account_id": "b41a8f0af3e75191c565f50c14b8967c",
   "main": "./worker-app.js",
@@ -13,7 +13,7 @@
   "workers_dev": true,
   "preview_urls": true,
   "keep_vars": false,
-  // Trial on workers.dev first. Production domain cutover is a separate step.
+  // Production custom domains are configured separately.
   "routes": [],
   "assets": {
     "directory": "./dist",
