@@ -32,7 +32,11 @@
       "/health",
     ],
   },
-  "vars": { "ALLOWED_AUTH_EXPORT_ORIGINS": "", "EVIEWER_PROXY_ENVIRONMENT": "production" },
+  "vars": {
+    "ALLOWED_AUTH_EXPORT_ORIGINS": "",
+    "EVIEWER_PROXY_ENVIRONMENT": "production",
+    "PROXY_LOG_LEVEL": "info",
+  },
   "version_metadata": { "binding": "EVIEWER_VERSION" },
   "ratelimits": [
     { "name": "proxy-df", "namespace_id": "2", "simple": { "limit": 10, "period": 10 } },
@@ -51,7 +55,11 @@
     "issues": { "enabled": true },
   },
   "previews": {
-    "vars": { "ALLOWED_AUTH_EXPORT_ORIGINS": "", "EVIEWER_PROXY_ENVIRONMENT": "preview" },
+    "vars": {
+      "ALLOWED_AUTH_EXPORT_ORIGINS": "",
+      "EVIEWER_PROXY_ENVIRONMENT": "preview",
+      "PROXY_LOG_LEVEL": "debug",
+    },
     "version_metadata": { "binding": "EVIEWER_VERSION" },
     "ratelimits": [
       { "name": "proxy-df", "namespace_id": "3", "simple": { "limit": 10, "period": 10 } },
