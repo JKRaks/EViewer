@@ -1,0 +1,146 @@
+name: Pull request maintenance
+
+on:
+  push:
+    branches: [pre]
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, closed]
+
+permissions:
+  contents: read
+
+jobs:
+  main-source:
+    name: Main PR source guard
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.action != 'closed' &&
+      github.event.pull_request.base.ref == 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Only accept this repository's pre branch
+        uses: actions/github-script@v8
+        with:
+          script: |
+            // Read current metadata: a queued event may refer to an old base.
+            // No PR contents are checked out or executed by this workflow.
+            const { data: pr } = await github.rest.pulls.get({
+              ...context.repo, pull_number: context.payload.pull_request.number,
+            })
+            if (pr.state !== 'open' || pr.base.ref !== 'main') {
+              core.info('PR 已关闭或目标已不再是 main，无需处理')
+              return
+            }
+            if (pr.head.ref === 'pre' &&
+                pr.head.repo?.full_name === context.payload.repository.full_name) {
+              core.notice('来源检查通过：本仓库 pre → main')
+              return
+            }
+            await github.rest.pulls.update({
+              ...context.repo, pull_number: pr.number, state: 'closed',
+            })
+            core.setFailed(
+              `PR #${pr.number} 已关闭：main 只接受本仓库 pre 分支。请先将修改合入 pre，再通过 pre → main PR 发布。`,
+            )
+
+  promote:
+    if: >-
+      (github.event_name == 'push' && github.ref == 'refs/heads/pre') ||
+      (github.event_name == 'pull_request_target' &&
+       github.event.pull_request.merged == true &&
+       github.event.pull_request.base.ref == 'pre')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    concurrency:
+      group: pre-main-pull-request-${{ github.repository }}
+      cancel-in-progress: false
+    steps:
+      - name: Ensure one open pre to main pull request
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const { owner, repo } = context.repo
+            const findOpen = async () => {
+              const { data } = await github.rest.pulls.list({
+                owner, repo, state: 'open', base: 'main', head: `${owner}:pre`,
+              })
+              return data.find(pr => pr.head.repo?.full_name === `${owner}/${repo}`)
+            }
+            const existing = await findOpen()
+            if (existing) {
+              core.notice(`已有 pre → main PR：${existing.html_url}`)
+              return
+            }
+            const { data: comparison } = await github.rest.repos.compareCommitsWithBasehead({
+              owner, repo, basehead: 'main...pre',
+            })
+            if (comparison.ahead_by === 0 || !comparison.files?.length) {
+              core.info('pre 没有需要合入 main 的修改')
+              return
+            }
+            try {
+              const { data: pr } = await github.rest.pulls.create({
+                owner, repo, base: 'main', head: 'pre',
+                title: '将 pre 更新合入 main',
+                body: [
+                  '此 PR 由 pre 分支更新自动创建，后续 pre 提交会自动加入此 PR。',
+                  '',
+                  '请确认预发流水线和功能验证通过后手动合并；合并到 main 将触发生产发布。',
+                  'pre 和 main 会保留，其他本仓库 PR 来源分支在合并后自动清理。',
+                ].join('\n'),
+              })
+              core.notice(`已创建 pre → main PR：${pr.html_url}`)
+            } catch (error) {
+              if (error.status === 422) {
+                const concurrent = await findOpen()
+                if (concurrent) {
+                  core.notice(`已有 pre → main PR：${concurrent.html_url}`)
+                  return
+                }
+              }
+              if (error.status === 403) {
+                throw new Error(
+                  '无法创建 PR。请在仓库 Settings → Actions → General → Workflow permissions 中允许 GitHub Actions 创建 Pull Request。原始错误：' + error.message,
+                )
+              }
+              throw error
+            }
+
+  cleanup:
+    if: >-
+      github.event_name == 'pull_request_target' &&
+      github.event.pull_request.merged == true &&
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.pull_request.head.ref != 'pre' &&
+      github.event.pull_request.head.ref != 'main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Delete merged source branch
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const pr = context.payload.pull_request
+            const branch = pr?.head?.ref
+            // Validate again before mutating a ref. Never check out PR code.
+            if (!pr?.merged || !branch || ['pre', 'main'].includes(branch) ||
+                branch === context.payload.repository.default_branch ||
+                pr.head.repo?.full_name !== context.payload.repository.full_name) {
+              core.info('无需删除来源分支')
+              return
+            }
+            try {
+              await github.rest.git.deleteRef({ ...context.repo, ref: `heads/${branch}` })
+              core.notice(`已删除合并后的来源分支：${branch}`)
+            } catch (error) {
+              if (error.status === 404) {
+                core.info(`来源分支已不存在：${branch}`)
+                return
+              }
+              throw error
+            }
