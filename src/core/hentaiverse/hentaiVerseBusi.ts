@@ -14,9 +14,35 @@ import {
   parseBattleResponse,
   parseHentaiVersePage,
 } from './hentaiVerseParser'
+import { parseEquipmentData } from './hentaiVerseEquipment'
 
 export class HentaiVerseBusi {
   private readonly proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
+  private readonly equipmentDataCache = new Map<
+    string,
+    ReturnType<HentaiVerseBusi['fetchEquipmentData']>
+  >()
+
+  /** Fetch each versioned source asset once; failed requests can be retried separately from the page. */
+  getEquipmentDetails(source: string) {
+    const cached = this.equipmentDataCache.get(source)
+    if (cached) return cached
+    const request = this.fetchEquipmentData(source)
+    this.equipmentDataCache.set(source, request)
+    if (this.equipmentDataCache.size > 8)
+      this.equipmentDataCache.delete(this.equipmentDataCache.keys().next().value!)
+    void request.catch(() => {
+      if (this.equipmentDataCache.get(source) === request) this.equipmentDataCache.delete(source)
+    })
+    return request
+  }
+
+  private async fetchEquipmentData(source: string) {
+    const script = await this.requestText('/hentaiverse/equipment-data', {
+      query: { path: source },
+    })
+    return parseEquipmentData(script)
+  }
 
   /**
    * Input: 受白名单约束的 HentaiVerse 页面参数。
@@ -241,8 +267,9 @@ export class HentaiVerseBusi {
     })
     const response = await fetch(url, {
       method: options.method || 'GET',
-      cache: path === '/hentaiverse/page' ? 'no-store' : 'default',
+      cache: 'no-store',
       credentials: 'include',
+      signal: path === '/hentaiverse/equipment-data' ? AbortSignal.timeout(30_000) : undefined,
       headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
       body: options.body ? JSON.stringify(options.body) : undefined,
     })

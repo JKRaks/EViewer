@@ -294,6 +294,18 @@ const HENTAIVERSE_FORM_ROUTES = {
   itemWorld: { s: 'Battle', ss: 'iw' },
 }
 
+function parseHentaiVerseEquipmentSource(path, cookieHeader) {
+  const match =
+    typeof path === 'string' &&
+    path.match(/^\/dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-([1-9]\d{0,19})\.js$/)
+  if (!match) throw new Error('不允许访问该装备数据资源')
+  const cookie = getAllowedAuthCookieHeader(cookieHeader)
+  const memberId = cookie.match(/(?:^|; )ipb_member_id=(\d+)(?:;|$)/)?.[1]
+  if (!memberId || memberId !== match[1] || !cookie.includes('ipb_pass_hash='))
+    throw new Error('装备数据与当前账号不匹配，请重新登录')
+  return new URL(path, HENTAIVERSE_ORIGIN)
+}
+
 function isAllowedHentaiVerseFormField(section, name, value) {
   if (name === 'eqids[]') {
     return (
@@ -376,6 +388,24 @@ async function handleHentaiVerseRequest(request, requestUrl) {
     return jsonResponse(request, { error: '不允许的请求来源' }, 403)
   }
   try {
+    if (request.method === 'GET' && requestUrl.pathname === '/hentaiverse/equipment-data') {
+      let target
+      try {
+        target = parseHentaiVerseEquipmentSource(
+          requestUrl.searchParams.get('path'),
+          request.headers.get('cookie') || '',
+        )
+      } catch (error) {
+        return jsonResponse(request, { error: error.message }, 400)
+      }
+      const response = await sendHentaiVerseResponse(
+        request,
+        await requestHentaiVerse(request, target, 'GET'),
+      )
+      response.headers.set('X-Content-Type-Options', 'nosniff')
+      response.headers.set('Content-Type', 'text/plain; charset=UTF-8')
+      return response
+    }
     if (request.method === 'GET' && requestUrl.pathname === '/hentaiverse/page') {
       const target = parseHentaiVersePageTarget(requestUrl.searchParams)
       return sendHentaiVerseResponse(request, await requestHentaiVerse(request, target, 'GET'))
@@ -945,6 +975,7 @@ async function handleRequest(request, env = {}) {
 
   if (
     pathname === '/hentaiverse/page' ||
+    pathname === '/hentaiverse/equipment-data' ||
     pathname === '/hentaiverse/form' ||
     pathname === '/hentaiverse/action'
   ) {

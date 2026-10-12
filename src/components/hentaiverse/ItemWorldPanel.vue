@@ -3,9 +3,21 @@ import { computed, ref, watch } from 'vue'
 import type {
   HentaiVerseItemWorldPage,
   HentaiVerseFormData,
+  HentaiVerseEquipmentDetail,
 } from '@/core/hentaiverse/model/hentaiVerse'
-const props = defineProps<{ data: HentaiVerseItemWorldPage; loading?: boolean }>()
-const emit = defineEmits<{ category: [id: string]; start: [data: HentaiVerseFormData] }>()
+import EquipmentDetail from './EquipmentDetail.vue'
+const props = defineProps<{
+  data: HentaiVerseItemWorldPage
+  loading?: boolean
+  details?: Record<string, HentaiVerseEquipmentDetail>
+  detailsLoading?: boolean
+  detailsError?: string
+}>()
+const emit = defineEmits<{
+  category: [id: string]
+  start: [data: HentaiVerseFormData]
+  retryDetails: []
+}>()
 const selected = ref('')
 const info = computed(() => props.data.entryInfo[selected.value])
 watch(
@@ -27,14 +39,21 @@ watch(
       />
     </el-tabs>
     <p>世界种子：{{ data.worldSeeds || '数量未知' }}</p>
+    <p v-if="detailsLoading" role="status">正在加载装备属性…</p>
+    <div v-else-if="detailsError" role="alert">
+      {{ detailsError }}
+      <el-button link type="primary" @click="emit('retryDetails')">重试加载属性</el-button>
+    </div>
     <el-radio-group v-if="data.candidates.length" v-model="selected" class="world-equipment">
-      <el-radio
+      <article
         v-for="item in data.candidates"
         :key="item.id"
-        :value="item.id"
-        :disabled="loading || item.locked"
-        >{{ item.name }}</el-radio
+        class="world-candidate"
+        :class="{ selected: selected === item.id }"
       >
+        <el-radio :value="item.id" :disabled="loading || item.locked">{{ item.name }}</el-radio>
+        <EquipmentDetail v-if="details?.[item.id]" :data="details[item.id]!" />
+      </article>
     </el-radio-group>
     <el-empty
       v-else
@@ -72,11 +91,25 @@ watch(
   min-width: 0;
 }
 .world-equipment {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  display: grid;
   gap: 10px;
-  max-width: 100%;
+  width: 100%;
+  min-width: 0;
+}
+.world-candidate {
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--el-border-color);
+  border-radius: 6px;
+}
+.world-candidate.selected {
+  border-color: var(--el-color-primary);
+  background: var(--el-color-primary-light-9);
+}
+.world-equipment :deep(.el-radio) {
+  height: auto;
+  min-height: 32px;
+  margin-right: 0;
 }
 .world-equipment :deep(.el-radio__label) {
   white-space: normal;
