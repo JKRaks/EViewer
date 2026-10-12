@@ -72,6 +72,91 @@ function runWrangler(args, cwd, outputFile) {
   })
 }
 
+async function cloudflareRequest(pathname, fetcher, body) {
+  const response = await fetcher(new URL(pathname, 'https://api.cloudflare.com/client/v4/'), {
+    method: body ? 'PATCH' : 'GET',
+    headers: {
+      Authorization: `Bearer ${process.env.CLOUDFLARE_API_TOKEN}`,
+      ...(body ? { 'Content-Type': 'application/merge-patch+json' } : {}),
+    },
+    ...(body ? { body: JSON.stringify(body) } : {}),
+    signal: AbortSignal.timeout(15_000),
+  })
+  const data = await response.json()
+  if (!response.ok || data.success !== true)
+    throw new Error(
+      `Cloudflare Preview API 失败（HTTP ${response.status}，错误码 ${(data.errors || []).map((error) => error.code).join(', ')}）`,
+    )
+  return data.result
+}
+
+async function resolvePreview(plan, event, fetcher) {
+  const workerPath = `accounts/${encodeURIComponent(plan.config.account_id)}/workers/workers/${encodeURIComponent(plan.workerName)}`
+  const worker = await cloudflareRequest(workerPath, fetcher)
+  if (worker.name !== plan.workerName) throw new Error('Cloudflare 返回的 Worker 与目标应用不一致')
+  // Existing Workers do not inherit this switch from `wrangler preview`.
+  // Merge-patch only Preview URLs, preserving production routes and subdomain.
+  if (worker.subdomain?.previews_enabled !== true)
+    await cloudflareRequest(workerPath, fetcher, { subdomain: { previews_enabled: true } })
+  const previewPath = `${workerPath}/previews/${encodeURIComponent(event.preview_id)}`
+  const preview = await cloudflareRequest(previewPath, fetcher)
+  const deployment = await cloudflareRequest(
+    `${previewPath}/deployments/${encodeURIComponent(event.deployment_id)}`,
+    fetcher,
+  )
+  if (
+    preview.id !== event.preview_id ||
+    preview.name !== 'pre' ||
+    deployment.id !== event.deployment_id
+  )
+    throw new Error('Cloudflare 返回的 Preview 或部署与发布结果不一致')
+  return { ...event, preview_urls: preview.urls, deployment_urls: deployment.urls }
+}
+
+async function verifyApp(target, fetcher) {
+  for (const pathname of ['/', '/hentaiverse', '/settings']) {
+    const response = await fetcher(new URL(pathname, target), {
+      headers: { Accept: 'text/html', 'Sec-Fetch-Mode': 'navigate' },
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10_000),
+    })
+    const html = await response.text()
+    if (!response.ok || !html.includes('id="app"'))
+      throw new Error(`预览页面 ${pathname} 未返回应用框架`)
+  }
+  const response = await fetcher(new URL('/hentaiverse/unknown', target), {
+    headers: { Accept: 'text/html', 'Sec-Fetch-Mode': 'navigate' },
+    signal: AbortSignal.timeout(10_000),
+  })
+  if (
+    response.status !== 404 ||
+    !response.headers.get('Content-Type')?.includes('application/json')
+  )
+    throw new Error('预览 API 路由未正确交给代理')
+}
+
+async function verifyPreviewAlias(urls, plan, fetcher) {
+  if (!urls?.length) throw new Error('Cloudflare 未返回固定 pre 地址')
+  for (const url of urls) {
+    for (const pathname of ['/health', '/deployment.json']) {
+      const response = await fetcher(new URL(pathname, url), {
+        cache: 'no-store',
+        signal: AbortSignal.timeout(10_000),
+      })
+      const data = await response.json()
+      if (
+        !response.ok ||
+        data.revision !== plan.commit ||
+        (pathname === '/health' &&
+          (data.environment !== 'preview' ||
+            data.hosting !== 'workers-static-assets' ||
+            data.assets !== true))
+      )
+        throw new Error('固定 pre 地址尚未指向目标提交')
+    }
+  }
+}
+
 export async function release(
   options,
   { run = runWrangler, fetcher = fetch, verifyCheckout = assertCleanCheckout, wait = delay } = {},
@@ -122,12 +207,15 @@ export async function release(
       .trim()
       .split('\n')
       .map((line) => JSON.parse(line))
-    const event = events.findLast(
+    let event = events.findLast(
       (item) => item.type === (plan.environment === 'preview' ? 'preview' : 'deploy'),
     )
     if (
-      event?.worker_name !== plan.workerName ||
-      (plan.environment === 'preview' && event.preview_name !== 'pre')
+      !event ||
+      (event.worker_name !== undefined && event.worker_name !== plan.workerName) ||
+      (plan.environment === 'production' && event.worker_name !== plan.workerName) ||
+      (plan.environment === 'preview' &&
+        (event.preview_name !== 'pre' || !event.preview_id || !event.deployment_id))
     )
       throw new Error(
         `Wrangler 发布结果未指向目标应用或固定 pre Preview：${JSON.stringify({
@@ -139,6 +227,7 @@ export async function release(
           preview_urls: event?.preview_urls,
         })}`,
       )
+    if (plan.environment === 'preview') event = await resolvePreview(plan, event, fetcher)
     const urls =
       plan.environment === 'preview'
         ? event.deployment_urls || []
@@ -151,6 +240,7 @@ export async function release(
       }
     })
     if (!target) throw new Error('发布结果未提供可验证的应用 URL')
+    let lastFailure = '前后端版本或资产绑定未就绪'
     for (let attempt = 0; attempt < 10; attempt++) {
       try {
         const response = await fetcher(new URL('/health', target), {
@@ -173,17 +263,25 @@ export async function release(
             if (attempt < 9) await wait(3_000)
             continue
           }
+          await verifyApp(target, fetcher)
+          if (plan.environment === 'preview')
+            await verifyPreviewAlias(event.preview_urls, plan, fetcher)
           console.log(`发布并验证完成：${target}`)
           if (plan.environment === 'preview')
             console.log(`固定 pre 地址：${(event.preview_urls || []).join(', ')}`)
+          if (process.env.GITHUB_ACTIONS && plan.environment === 'preview')
+            console.log(
+              `::notice::Preview 验证通过：${target}；固定地址：${(event.preview_urls || []).join(', ')}；revision=${plan.commit}`,
+            )
           return plan
         }
-      } catch {
+      } catch (error) {
+        lastFailure = error.message
         // Allow propagation without repeating the publish.
       }
       if (attempt < 9) await wait(3_000)
     }
-    throw new Error('未能确认静态资源与代理属于目标提交，请检查部署状态')
+    throw new Error(`未能确认静态资源与代理属于目标提交：${lastFailure}`)
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
