@@ -10,6 +10,7 @@
     "/auth/cookies",
     "/auth/logout",
     "/hentaiverse/page",
+    "/hentaiverse/equipment-data",
     "/hentaiverse/form",
     "/hentaiverse/action",
     "/image-proxy",

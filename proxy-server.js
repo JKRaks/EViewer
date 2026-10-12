@@ -216,7 +216,29 @@ const parseHentaiVersePageTarget = (query) => {
     if (!/^[a-z0-9]{1,32}$/.test(tree)) throw new Error('能力树格式不正确')
     target.searchParams.set('tree', tree)
   }
+  const filter = query.filter
+  if (section === 'Battle' && subsection === 'iw' && filter) {
+    if (
+      !/^(weapon_1handed|weapon_2handed|weapon_staff|shield|armor_cloth|armor_light|armor_heavy)$/.test(
+        filter,
+      )
+    )
+      throw new Error('装备分类格式不正确')
+    target.searchParams.set('filter', filter)
+  }
   return target
+}
+
+const parseHentaiVerseEquipmentSource = (path, cookieHeader) => {
+  const match =
+    typeof path === 'string' &&
+    path.match(/^\/dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-([1-9]\d{0,19})\.js$/)
+  if (!match) throw new Error('不允许访问该装备数据资源')
+  const cookie = getAllowedAuthCookieHeader(cookieHeader)
+  const memberId = cookie.match(/(?:^|; )ipb_member_id=(\d+)(?:;|$)/)?.[1]
+  if (!memberId || memberId !== match[1] || !cookie.includes('ipb_pass_hash='))
+    throw new Error('装备数据与当前账号不匹配，请重新登录')
+  return new URL(path, HENTAIVERSE_ORIGIN)
 }
 
 const HENTAIVERSE_FORM_ROUTES = {
@@ -234,16 +256,26 @@ const HENTAIVERSE_FORM_ROUTES = {
 }
 
 const isAllowedHentaiVerseFormField = (section, name, value) => {
-  const scalar = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+  if (name === 'eqids[]') {
+    return (
+      ['equipment', 'itemWorld'].includes(section) &&
+      Array.isArray(value) &&
+      value.length === 1 &&
+      value.every((id) => typeof id === 'string' && /^\d{1,12}$/.test(id))
+    )
+  }
+  const scalar =
+    typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
   if (!scalar || String(value).length > 4096 || /[\0\r\n]/.test(String(value))) return false
   const fields = {
     character: /^(attr_apply|str_delta|dex_delta|agi_delta|end_delta|int_delta|wis_delta)$/,
     persona: /^(persona_set|persona_rename|persona_create)$/,
-    equipment: /^(postoken|equip_set|equip_slot|equip_id|action)$/,
+    equipment: /^(postoken|equip_set|equip_slot|action)$/,
     abilities: /^(unlock_ability|reset_ability|reset_all|unlock_slot|equip_slot|equip_ability)$/,
     training: /^(start_train|cancel_train)$/,
     inventory: /^(slot|item)$/,
-    settings: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    settings:
+      /^(?:[1-9]|1[0-6]|difflevel|title_override|font(?:local|face|size|wght|style|off)|eqs_(?:ability|item|skillbar)|vitalstyle|trophyupgrade|ac_[0-4]|as_[cs]_\d{1,3}|submit)$/,
     arena: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
     ringOfBlood: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
     grindfest: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
@@ -255,7 +287,10 @@ const isAllowedHentaiVerseFormField = (section, name, value) => {
 const requestHentaiVerse = async (req, targetUrl, method, body, contentType) => {
   const cookie = getAllowedAuthCookieHeader(req.headers.cookie)
   const headers = {
-    Accept: method === 'POST' && contentType === 'application/json' ? 'application/json' : 'text/html,application/xhtml+xml,*/*;q=0.8',
+    Accept:
+      method === 'POST' && contentType === 'application/json'
+        ? 'application/json'
+        : 'text/html,application/xhtml+xml,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
     Referer: `${HENTAIVERSE_ORIGIN}/`,
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
@@ -269,14 +304,28 @@ const requestHentaiVerse = async (req, targetUrl, method, body, contentType) => 
     redirect: 'manual',
     signal: AbortSignal.timeout(30000),
   })
+  if (
+    method === 'POST' &&
+    contentType?.startsWith('application/x-www-form-urlencoded') &&
+    [302, 303].includes(response.status) &&
+    response.headers.get('location')
+  ) {
+    const location = new URL(response.headers.get('location'), targetUrl)
+    if (location.origin === HENTAIVERSE_ORIGIN && location.pathname === '/') {
+      const next = parseHentaiVersePageTarget(Object.fromEntries(location.searchParams))
+      await response.body?.cancel()
+      delete headers['Content-Type']
+      return fetch(next, { method: 'GET', headers, redirect: 'manual', signal: AbortSignal.timeout(30000) })
+    }
+  }
   return response
 }
 
-const sendHentaiVerseResponse = async (res, response) => {
+const sendHentaiVerseResponse = async (res, response, contentType) => {
   const content = Buffer.from(await response.arrayBuffer())
   res.status(response.status)
   res.set('Cache-Control', 'no-store')
-  res.set('Content-Type', response.headers.get('content-type') || 'text/html; charset=UTF-8')
+  res.set('Content-Type', contentType || response.headers.get('content-type') || 'text/html; charset=UTF-8')
   const location = response.headers.get('location')
   if (location) res.set('X-HentaiVerse-Location', location)
   return res.send(content)
@@ -292,8 +341,27 @@ app.get('/hentaiverse/page', async (req, res) => {
   }
 })
 
-app.post('/hentaiverse/form', async (req, res) => {
+app.get('/hentaiverse/equipment-data', async (req, res) => {
+  res.set('Cache-Control', 'no-store')
   if (!isAllowedOrigin(req.headers.origin)) return res.status(403).json({ error: '不允许的请求来源' })
+  let target
+  try {
+    target = parseHentaiVerseEquipmentSource(req.query.path, req.headers.cookie)
+  } catch (error) {
+    return res.status(400).json({ error: error.message })
+  }
+  try {
+    const response = await requestHentaiVerse(req, target, 'GET')
+    res.set('X-Content-Type-Options', 'nosniff')
+    return await sendHentaiVerseResponse(res, response, 'text/plain; charset=UTF-8')
+  } catch (error) {
+    return res.status(502).json({ error: error.message || '装备属性请求失败' })
+  }
+})
+
+app.post('/hentaiverse/form', async (req, res) => {
+  if (!isAllowedOrigin(req.headers.origin))
+    return res.status(403).json({ error: '不允许的请求来源' })
   const section = String(req.body?.section || '')
   const route = HENTAIVERSE_FORM_ROUTES[section]
   const data = req.body?.data
@@ -301,17 +369,36 @@ app.post('/hentaiverse/form', async (req, res) => {
     return res.status(400).json({ error: 'HentaiVerse 表单格式不正确' })
   }
   const entries = Object.entries(data)
-  if (!entries.length || entries.length > 400 || entries.some(([name, value]) => !isAllowedHentaiVerseFormField(section, name, value))) {
+  if (
+    !entries.length ||
+    entries.length > 400 ||
+    entries.some(([name, value]) => !isAllowedHentaiVerseFormField(section, name, value))
+  ) {
     return res.status(400).json({ error: 'HentaiVerse 表单包含不允许的字段' })
   }
-  const form = new URLSearchParams(entries.map(([name, value]) => [name, String(value)]))
+  const form = new URLSearchParams(
+    entries.flatMap(([name, value]) =>
+      (Array.isArray(value) ? value : [value]).map((item) => [name, String(item)]),
+    ),
+  )
   const target = new URL('/', HENTAIVERSE_ORIGIN)
   target.searchParams.set('s', route.s)
   target.searchParams.set('ss', route.ss)
+
   try {
+    if (section === 'itemWorld' && req.body?.target?.filter) {
+      const pageTarget = parseHentaiVersePageTarget({ ...route, filter: req.body.target.filter })
+      target.search = pageTarget.search
+    }
     return await sendHentaiVerseResponse(
       res,
-      await requestHentaiVerse(req, target, 'POST', form, 'application/x-www-form-urlencoded; charset=UTF-8'),
+      await requestHentaiVerse(
+        req,
+        target,
+        'POST',
+        form,
+        'application/x-www-form-urlencoded; charset=UTF-8',
+      ),
     )
   } catch (error) {
     return res.status(502).json({ error: error.message || 'HentaiVerse 表单请求失败' })

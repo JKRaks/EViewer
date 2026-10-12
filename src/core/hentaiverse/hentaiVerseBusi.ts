@@ -4,6 +4,7 @@ import type {
   HentaiVerseBattleMode,
   HentaiVerseBattleSnapshot,
   HentaiVerseFormSection,
+  HentaiVerseFormData,
   HentaiVersePage,
   HentaiVersePageTarget,
 } from './model/hentaiVerse'
@@ -13,9 +14,35 @@ import {
   parseBattleResponse,
   parseHentaiVersePage,
 } from './hentaiVerseParser'
+import { parseEquipmentData } from './hentaiVerseEquipment'
 
 export class HentaiVerseBusi {
   private readonly proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
+  private readonly equipmentDataCache = new Map<
+    string,
+    ReturnType<HentaiVerseBusi['fetchEquipmentData']>
+  >()
+
+  /** Fetch each versioned source asset once; failed requests can be retried separately from the page. */
+  getEquipmentDetails(source: string) {
+    const cached = this.equipmentDataCache.get(source)
+    if (cached) return cached
+    const request = this.fetchEquipmentData(source)
+    this.equipmentDataCache.set(source, request)
+    if (this.equipmentDataCache.size > 8)
+      this.equipmentDataCache.delete(this.equipmentDataCache.keys().next().value!)
+    void request.catch(() => {
+      if (this.equipmentDataCache.get(source) === request) this.equipmentDataCache.delete(source)
+    })
+    return request
+  }
+
+  private async fetchEquipmentData(source: string) {
+    const script = await this.requestText('/hentaiverse/equipment-data', {
+      query: { path: source },
+    })
+    return parseEquipmentData(script)
+  }
 
   /**
    * Input: 受白名单约束的 HentaiVerse 页面参数。
@@ -35,40 +62,81 @@ export class HentaiVerseBusi {
    */
   async submitForm(
     section: HentaiVerseFormSection,
-    data: Record<string, string | number | boolean>,
+    data: HentaiVerseFormData,
     target: HentaiVersePageTarget,
   ): Promise<{ page?: HentaiVersePage; battle?: HentaiVerseBattleSnapshot }> {
-    const html = await this.requestText('/hentaiverse/form', { method: 'POST', body: { section, data } })
+    const html = await this.requestText('/hentaiverse/form', {
+      method: 'POST',
+      body: { section, data, target },
+    })
     if (isHentaiVerseBattleHtml(html)) return { battle: parseBattlePage(html) }
     return { page: parseHentaiVersePage(html, target) }
   }
 
   /** Input: 装备套装编号。Output: 切换套装后的装备页。 */
   async selectEquipmentSet(setId: string, postToken: string, target: HentaiVersePageTarget) {
-    return this.submitForm('equipment', {
-      ...(postToken && { postoken: postToken }),
-      equip_set: setId,
-    }, target)
+    const result = await this.submitForm(
+      'equipment',
+      {
+        ...(postToken && { postoken: postToken }),
+        equip_set: setId,
+      },
+      target,
+    )
+    if (result.battle || !result.page?.authenticated) return result
+    const refreshed = await this.getPage({ s: 'Character', ss: 'eq' })
+    if (refreshed.page?.equipment?.sets.find((set) => set.active)?.id !== setId) {
+      throw new Error('源站未确认装备套装切换，请刷新后重试')
+    }
+    return refreshed
   }
 
   /** Input: 部位、装备编号及页面令牌。Output: 完成装备后的当前部位页面。 */
-  async equipItem(slotId: string, equipmentId: string, postToken: string, target: HentaiVersePageTarget) {
-    return this.submitForm('equipment', {
-      postoken: postToken,
-      equip_slot: slotId,
-      equip_id: equipmentId,
-      action: 'equip',
-    }, { ...target, equip_slot: slotId })
+  async equipItem(
+    slotId: string,
+    equipmentId: string,
+    postToken: string,
+    target: HentaiVersePageTarget,
+  ) {
+    const result = await this.submitForm(
+      'equipment',
+      {
+        postoken: postToken,
+        equip_slot: slotId,
+        'eqids[]': [equipmentId],
+        action: 'equip',
+      },
+      { ...target, equip_slot: slotId },
+    )
+    return this.confirmEquipment(result, slotId, equipmentId)
   }
 
   /** Input: 部位及页面令牌。Output: 卸下装备后的当前部位页面。 */
   async unequipItem(slotId: string, postToken: string, target: HentaiVersePageTarget) {
-    return this.submitForm('equipment', {
-      postoken: postToken,
-      equip_slot: slotId,
-      equip_id: '0',
-      action: 'unequip',
-    }, { ...target, equip_slot: slotId })
+    const result = await this.submitForm(
+      'equipment',
+      {
+        postoken: postToken,
+        equip_slot: slotId,
+        action: 'unequip',
+      },
+      { ...target, equip_slot: slotId },
+    )
+    return this.confirmEquipment(result, slotId, '')
+  }
+
+  private async confirmEquipment(
+    result: Awaited<ReturnType<HentaiVerseBusi['submitForm']>>,
+    slotId: string,
+    equipmentId: string,
+  ) {
+    if (result.battle || !result.page?.authenticated) return result
+    const refreshed = await this.getPage({ s: 'Character', ss: 'eq' })
+    if (refreshed.battle || !refreshed.page?.authenticated) return refreshed
+    const slot = refreshed.page.equipment?.slots.find((item) => item.id === slotId)
+    if (!slot || slot.equipmentId !== equipmentId)
+      throw new Error('源站未确认装备更新，请刷新后重试')
+    return refreshed
   }
 
   /** Input: 能力操作名和能力或槽位编号。Output: 更新后的能力页。 */
@@ -82,7 +150,11 @@ export class HentaiVerseBusi {
 
   /** Input: 能力槽位和已解锁能力编号。Output: 更新后的能力页。 */
   async equipAbility(slotId: string, abilityId: string, target: HentaiVersePageTarget) {
-    const result = await this.submitForm('abilities', { equip_slot: slotId, equip_ability: abilityId }, target)
+    const result = await this.submitForm(
+      'abilities',
+      { equip_slot: slotId, equip_ability: abilityId },
+      target,
+    )
     if (result.battle || !result.page?.authenticated) return result
 
     // A successful HTTP response can still leave a rejected assignment unchanged.
@@ -90,7 +162,12 @@ export class HentaiVerseBusi {
     const refreshed = await this.getPage(target)
     if (refreshed.battle || !refreshed.page?.authenticated) return refreshed
     const slot = refreshed.page.abilities?.slots.find((item) => item.id === slotId)
-    if (!slot || slot.abilityId !== abilityId) {
+    if (
+      !slot ||
+      (abilityId === '0'
+        ? Boolean(slot.abilityId || slot.abilityName)
+        : slot.abilityId !== abilityId)
+    ) {
       throw new Error('源站未确认能力装配，请检查能力是否已解锁、槽位类型是否匹配，并刷新后重试')
     }
     return refreshed
@@ -108,7 +185,12 @@ export class HentaiVerseBusi {
 
   /** Input: 战斗物品槽位和物品编号。Output: 更新后的物品页。 */
   async assignInventoryItem(slotId: string, itemId: string, target: HentaiVersePageTarget) {
-    return this.submitForm('inventory', { slot: slotId, item: itemId }, target)
+    const result = await this.submitForm('inventory', { slot: slotId, item: itemId }, target)
+    if (result.battle || !result.page?.authenticated) return result
+    const slot = result.page.inventory?.slots.find((item) => item.id === slotId)
+    if (!slot || slot.itemId !== (itemId === '0' ? '' : itemId))
+      throw new Error('源站未确认物品槽位更新，请检查物品类型并刷新后重试')
+    return result
   }
 
   /**
@@ -185,8 +267,9 @@ export class HentaiVerseBusi {
     })
     const response = await fetch(url, {
       method: options.method || 'GET',
-      cache: path === '/hentaiverse/page' ? 'no-store' : 'default',
+      cache: 'no-store',
       credentials: 'include',
+      signal: path === '/hentaiverse/equipment-data' ? AbortSignal.timeout(30_000) : undefined,
       headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
       body: options.body ? JSON.stringify(options.body) : undefined,
     })
@@ -203,7 +286,8 @@ export class HentaiVerseBusi {
       body: JSON.stringify(body),
     })
     const payload = (await response.json().catch(() => ({}))) as T & { error?: string }
-    if (!response.ok) throw new Error(payload.error || `HentaiVerse 请求失败 (${response.status})`)
+    if (!response.ok || payload.error)
+      throw new Error(payload.error || `HentaiVerse 请求失败 (${response.status})`)
     return payload
   }
 }
@@ -213,6 +297,8 @@ function readError(text: string, status: number) {
     const parsed = JSON.parse(text) as { error?: string }
     return parsed.error || `HentaiVerse 请求失败 (${status})`
   } catch {
-    return status === 302 || status === 303 ? 'HentaiVerse 登录态已失效' : `HentaiVerse 请求失败 (${status})`
+    return status === 302 || status === 303
+      ? 'HentaiVerse 登录态已失效'
+      : `HentaiVerse 请求失败 (${status})`
   }
 }

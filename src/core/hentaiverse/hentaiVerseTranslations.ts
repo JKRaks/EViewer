@@ -1,3 +1,5 @@
+import { HENTAIVERSE_ABILITIES } from './hentaiVerseAbilityTranslations'
+
 const ATTRIBUTE_LABELS: Record<string, string> = {
   str: '力量',
   dex: '灵巧',
@@ -29,7 +31,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Intelligence: '智力',
     Wisdom: '智慧',
     Level: '等级',
-    Credits: 'Credits',
+    Credits: '信用点',
     Experience: '经验',
     Persona: '人格',
     Rename: '重命名',
@@ -37,6 +39,73 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Create New Persona': '创建新人格',
   },
   equipment: {
+    'One-handed Weapon': '单手武器',
+    'Two-handed Weapon': '双手武器',
+    Shield: '盾牌',
+    'Level Unassigned': '未定级',
+    Tradeable: '可交易',
+    Untradeable: '不可交易',
+    Soulbound: '灵魂绑定',
+    Condition: '耐久',
+    Energy: '能量',
+    'N/A': '不适用',
+    None: '无',
+    'Attack Crit Damage': '物理暴击伤害',
+    'Magic Crit Damage': '魔法暴击伤害',
+    'Magic Damage': '魔法伤害',
+    'Counter-resist': '反抵抗',
+    'Damage Mitigation': '伤害减免',
+    'Spell Damage': '法术伤害加成',
+    'Slashing Damage': '斩击伤害',
+    'Piercing Damage': '穿刺伤害',
+    'Fire Damage': '火焰伤害',
+    'Cold Damage': '冰冷伤害',
+    'Elec Damage': '雷电伤害',
+    'Wind Damage': '风伤害',
+    'Holy Damage': '神圣伤害',
+    'Dark Damage': '黑暗伤害',
+    'Void Damage': '虚空伤害',
+    Proficiency: '熟练度',
+    'Bleeding Wound': '出血伤口',
+    'Penetrated Armor': '破甲',
+    'Ether Tap': '以太汲取',
+    'Life Steal': '生命吸取',
+    'Mana Drain': '魔力吸取',
+    'Spirit Drain': '灵力吸取',
+    Stunned: '眩晕',
+    'of Balance': '平衡',
+    'of Slaughter': '杀戮',
+    'of the Battlecaster': '战斗法师',
+    'of the Illithid': '灵吸怪',
+    'of the Banshee': '女妖',
+    'of the Vampire': '吸血鬼',
+    'of Focus': '专注',
+    'of Destruction': '毁灭',
+    'of Surtr': '苏尔特',
+    'of Niflheim': '尼福尔海姆',
+    'of Mjolnir': '妙尔尼尔',
+    'of Freyr': '弗雷',
+    'of Heimdall': '海姆达尔',
+    'of Fenrir': '芬里尔',
+    'of Protection': '防护',
+    'of Deflection': '偏斜',
+    'of the Barrier': '屏障',
+    'of the Nimble': '灵巧',
+    'of the Fleet': '迅捷',
+    'of Warding': '守护',
+    'of Negation': '否定',
+    'of the Fire-eater': '噬火者',
+    'of the Frost-born': '霜生者',
+    'of the Wind-waker': '唤风者',
+    'of the Thrice-blessed': '三重祝福',
+    'of the Spirit-ward': '灵力守卫',
+    'of the Ox': '蛮牛',
+    'of the Raccoon': '浣熊',
+    'of the Cheetah': '猎豹',
+    'of the Turtle': '巨龟',
+    'of the Fox': '狐狸',
+    'of the Owl': '猫头鹰',
+    'Road Less Traveled': '人迹罕至之路',
     Crude: '粗糙',
     Fair: '尚可',
     Average: '普通',
@@ -61,6 +130,12 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Unequip: '卸下',
     'Equipment Set': '装备套装',
     'Cotton Armor': '棉布护甲',
+    'Cotton Robe': '棉布长袍',
+    'Cotton Pants': '棉布长裤',
+    'Gossamer Cap': '薄纱兜帽',
+    'Leather Helmet': '皮甲头盔',
+    'Leather Gauntlets': '皮甲护手',
+    'Chain Helmet': '锁子甲头盔',
     'Gossamer Armor': '薄纱护甲',
     'Ironsilk Armor': '铁丝绸护甲',
     'Phase Armor': '相位护甲',
@@ -95,6 +170,9 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Force Shield': '力场盾',
   },
   abilities: {
+    ...Object.fromEntries(
+      Object.entries(HENTAIVERSE_ABILITIES).map(([name, value]) => [name, value[0]]),
+    ),
     Ability: '能力',
     'Ability Points': '能力点',
     'Ability Slots': '能力槽',
@@ -102,17 +180,155 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Reset All': '全部重置',
     'Forbidden Skills': '禁断技能',
     'Supportive Proficiencies': '辅助熟练度',
-    'HP Tank': '生命强化',
-    'MP Tank': '魔力强化',
-    'SP Tank': '灵力强化',
-    'Better Health Pots': '强化生命药剂',
-    'Better Mana Pots': '强化魔力药剂',
-    'Better Spirit Pots': '强化灵力药剂',
     'Not Acquired': '尚未获得',
     Requires: '需要',
     'Mastery Point': '精通点',
     'Major Ability Slot': '主要能力槽',
     'Supportive Ability Slot': '辅助能力槽',
+    'Protection Augment Ability Slot': '防护增强能力槽',
+    'Drain Augment Ability Slot': '吸取增强能力槽',
+    'Mastery Points': '精通点',
+    'Direct Player Stat Modification': '直接角色属性加成',
+    'Spells Modified': '强化法术',
+    'Effects Modified': '强化状态',
+    'Items Modified': '强化物品',
+    'Current Tier': '当前阶效果',
+    'Next Tier': '下一阶效果',
+    'Maximum Health': '最大生命',
+    'Maximum Magic': '最大魔力',
+    'Maximum Spirit': '最大灵力',
+    'Base Health': '基础生命',
+    'Base Magic': '基础魔力',
+    'Base Mana': '基础魔力',
+    'Base Spirit': '基础灵力',
+    'Base Mana Regen per tick': '每回合基础魔力恢复',
+    'Base Health Regen per tick': '每回合基础生命恢复',
+    'Base Spirit Regen per tick': '每回合基础灵力恢复',
+    'When Used': '使用效果',
+    Replenishment: '魔力补充',
+    Rejuvenation: '生命恢复',
+    Regeneration: '生命再生',
+    Refreshment: '灵力恢复',
+    'Unlock Cost': '解锁费用',
+    'Proficiency-based Stat Modification': '熟练度属性加成',
+    'Attack Damage Multiplier': '物理伤害倍率',
+    'Attack Crit Multiplier': '物理暴击倍率',
+    'Spell Crit Multiplier': '法术暴击倍率',
+    'Attack Speed': '攻击速度',
+    'Magic Cast Speed': '施法速度',
+    'Attack Accuracy': '物理命中',
+    'Magic Accuracy': '魔法命中',
+    'Block Chance': '格挡概率',
+    'Parry Chance': '招架概率',
+    'Magic Base Damage': '基础法术伤害',
+    'Attack Base Damage': '基础物理伤害',
+    'Action Speed Modification': '行动速度修正',
+    'Natural Evade Modifier': '自然闪避修正',
+    'Natural Resist Modifier': '自然抵抗修正',
+    'Crushing Mitigation': '打击减伤',
+    'Slashing Mitigation': '斩击减伤',
+    'Piercing Mitigation': '穿刺减伤',
+    'Physical Mitigation': '物理减伤',
+    'Magical Mitigation': '魔法减伤',
+    'Fire Mitigation': '火焰减伤',
+    'Cold Mitigation': '冰冷减伤',
+    'Elec Mitigation': '雷电减伤',
+    'Wind Mitigation': '风减伤',
+    'Holy Mitigation': '神圣减伤',
+    'Dark Mitigation': '黑暗减伤',
+    'Absorbing Ward': '吸收结界',
+    Asleep: '睡眠',
+    Blinded: '致盲',
+    Confused: '混乱',
+    Hastened: '加速',
+    Immobilized: '定身',
+    Imperiled: '侵蚀',
+    Silenced: '沉默',
+    Slowed: '迟缓',
+    Weakened: '虚弱',
+    'Vital Theft': '生命窃取',
+    'Flame Spikes': '火焰尖刺',
+    'Frost Spikes': '冰霜尖刺',
+    'Shock Spikes': '雷电尖刺',
+    'Storm Spikes': '风暴尖刺',
+    Shockblast: '雷击',
+    Gale: '疾风',
+    Inferno: '炼狱',
+    Blizzard: '暴风雪',
+    'Chained Lightning': '连锁闪电',
+    Downburst: '下击暴流',
+    'Flames of Loki': '洛基之焰',
+    Fimbulvetr: '芬布尔之冬',
+    'Wrath of Thor': '雷神之怒',
+    'Storms of Njord': '尼约德风暴',
+    Banishment: '放逐',
+    'Paradise Lost': '失乐园',
+    Ragnarok: '诸神黄昏',
+  },
+  statistics: {
+    'equipment proficiency': '装备熟练度',
+    'magic proficiency': '魔法熟练度',
+    'mainhand attack': '主手攻击',
+    'magic attack': '魔法攻击',
+    vitals: '基础资源与恢复',
+    avoidance: '回避',
+    compromise: '装备负担',
+    'damage mitigation': '伤害减免',
+    'spell damage bonus': '法术伤害加成',
+    'effective primary stats': '有效基础属性',
+    'effective proficiency': '有效熟练度',
+    'Crushing Damage': '打击伤害',
+    Accuracy: '命中',
+    'Crit Multiplier': '暴击倍率',
+    'Attack Speed Bonus': '攻击速度加成',
+    'Damage Bonus': '伤害加成',
+    'Mana Cost Modifier': '魔力消耗修正',
+    'Cast Speed Bonus': '施法速度加成',
+    'Mana Regen': '魔力恢复',
+    'Spirit Regen': '灵力恢复',
+    Evade: '闪避',
+    Block: '格挡',
+    Parry: '招架',
+    Resist: '抵抗',
+    Interference: '干涉',
+    Burden: '负重',
+    Physical: '物理',
+    Magical: '魔法',
+    Fire: '火焰',
+    Cold: '冰冷',
+    Elec: '雷电',
+    Wind: '风',
+    Holy: '神圣',
+    Dark: '黑暗',
+    Crushing: '打击',
+    Slashing: '斩击',
+    Piercing: '穿刺',
+    'One-handed': '单手',
+    'Two-handed': '双手',
+    'Dual-wielding': '双持',
+    Staff: '法杖',
+    Elemental: '元素',
+    Divine: '神圣',
+    Forbidden: '禁断',
+    Deprecating: '减益',
+    Supportive: '辅助',
+    'Cloth Armor': '布甲',
+    'Light Armor': '轻甲',
+    'Heavy Armor': '重甲',
+    Next: '距下一级',
+    Newbie: '新人',
+    Beginner: '初学者',
+    Novice: '新手',
+    Apprentice: '学徒',
+    Journeyman: '熟练者',
+    Default: '默认',
+    Token: '代币',
+    Crystal: '水晶',
+    'Monster Food': '怪物饲料',
+    'EXP bonus': '经验加成',
+    'Cold Resistance': '冰冷抗性',
+    'Wind Resistance': '风抗性',
+    'Holy Resistance': '神圣抗性',
   },
   training: {
     'Training Status': '训练状态',
@@ -289,6 +505,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Coalesced Mana': '凝聚魔力',
     'Ether Tap': '以太汲取',
     'Spirit Stance': '灵力姿态',
+    Fleeing: '逃离中',
     Victory: '胜利',
     Defeated: '已击败',
     Round: '回合',
@@ -336,9 +553,11 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
 const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
   'A ball of fire is hurled at the target.': '向目标投掷一团火球。',
   'Cold damage.': '对目标造成冰冷伤害。',
-  'Inflicts Drain on one target, causing damage over time.': '对一个目标施加吸取效果，持续造成伤害。',
+  'Inflicts Drain on one target, causing damage over time.':
+    '对一个目标施加吸取效果，持续造成伤害。',
   'Restores a moderate amount of Health on the target.': '为目标恢复适量生命值。',
-  'Places a shield effect on the target, absorbing 25% of the damage from all attacks.': '为目标施加护盾，吸收所有攻击造成的 25% 伤害。',
+  'Places a shield effect on the target, absorbing 25% of the damage from all attacks.':
+    '为目标施加护盾，吸收所有攻击造成的 25% 伤害。',
   'When you get too powerful to be challenged by the mobs on the normal difficulty, you can increase the Challenge Level here. Playing on a higher Challenge Level will increase the EXP you get from each mob, but the mobs have increased HP and hit harder. Additional difficulty levels unlock as you level up.':
     '可在此调整挑战难度。难度越高，怪物的生命和伤害越高，同时提供更多经验；更多难度会随角色等级解锁。',
   'Here you can choose which of your available titles that will be displayed below your level and on the forums.':
@@ -363,7 +582,7 @@ const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
   'Equipment must be soulbound before you can enter its Item World.':
     '装备必须先完成灵魂绑定才能进入其装备界。',
   'Welcome to the Grindfest. A Grindfest consists of up to 1000 rounds of battle. Starting a Grindfest will consume 1 point of Stamina. There is a small credit reward at the end, if you make it all the way through.':
-    '混战祭最多包含 1000 轮战斗，开始时消耗 1 点体力；坚持到最后可获得额外 Credits 奖励。',
+    '混战祭最多包含 1000 轮战斗，开始时消耗 1 点体力；坚持到最后可获得额外信用点奖励。',
   'There are no challenges available at your level. Check back later!':
     '当前等级没有可参加的挑战，请提升等级后再来。',
   'Increases your maximum HP. This adds 10% to your total HP per tier.':
@@ -393,8 +612,14 @@ const ITEM_PRESENTATIONS: Record<string, [string, string]> = {
   '11391': ['Spirit Draught', '提供持续的灵力恢复效果。'],
   '11395': ['Spirit Potion', '立即恢复适量灵力。'],
   '11399': ['Spirit Elixir', '完全恢复灵力，并提供持续的灵力恢复效果。'],
-  '11401': ['Energy Drink', '恢复 10 点体力，上限为 99。战斗中使用还会提升 10% 过载值与灵力，持续 10 回合。'],
-  '11402': ['Caffeinated Candy', '恢复 5 点体力，上限为 99。战斗中使用还会提升 10% 过载值与灵力，持续 5 回合。'],
+  '11401': [
+    'Energy Drink',
+    '恢复 10 点体力，上限为 99。战斗中使用还会提升 10% 过载值与灵力，持续 10 回合。',
+  ],
+  '11402': [
+    'Caffeinated Candy',
+    '恢复 5 点体力，上限为 99。战斗中使用还会提升 10% 过载值与灵力，持续 5 回合。',
+  ],
   '11501': ['Last Elixir', '完全恢复生命、魔力与灵力，并提供持续的恢复效果。'],
   '12101': ['Infusion of Flames', '提高 25% 火焰抗性与火焰法术伤害。'],
   '12201': ['Infusion of Frost', '提高 25% 冰冷抗性与冰冷法术伤害。'],
@@ -418,6 +643,11 @@ export function getHentaiVerseItemPresentation(id: string) {
   return item ? { name: translateHentaiVerseText(item[0]), description: item[1] } : undefined
 }
 
+export function getHentaiVerseAbilityPresentation(name: string) {
+  const ability = HENTAIVERSE_ABILITIES[name]
+  return ability ? { name: ability[0], description: ability[1] } : undefined
+}
+
 export const HENTAIVERSE_SETTING_GROUPS = [
   { key: 'challenge', title: '挑战与称号', description: '调整战斗难度以及角色对外显示的称号。' },
   { key: 'font', title: '字体显示', description: '自定义战斗页面使用的本机字体及其排版参数。' },
@@ -429,7 +659,12 @@ export const HENTAIVERSE_SETTING_GROUPS = [
   { key: 'vitals', title: '状态条样式', description: '选择战斗中的生命、魔力和灵力显示方式。' },
   { key: 'trophy', title: '奖杯升级', description: '控制神社献祭时低阶奖杯的自动升级策略。' },
   { key: 'quickbar', title: '战斗快捷栏', description: '设置战斗界面快捷栏中的技能顺序。' },
-  { key: 'autocast', title: '自动施法', description: '设置每场战斗开始时自动施放的技能。' },
+  {
+    key: 'autocast',
+    title: '自动施法',
+    description:
+      '配置自动维持的增益法术。魔力低于 10% 时自动解除，高于 25% 时恢复施放；每回合需要支付维护魔力。',
+  },
   {
     key: 'autoProcess',
     title: '装备自动处理',
@@ -452,6 +687,8 @@ const TERM_PATTERN = new RegExp(`\\b(?:${TRANSLATABLE_TERMS})\\b`, 'gi')
 
 const BATTLE_LOG_TRANSLATIONS: Record<string, string> = {
   Scanning: '正在扫描',
+  Daimon: '恶魔',
+  'Power Level': '强度等级',
   HP: '生命',
   MP: '魔力',
   SP: '灵力',
@@ -509,23 +746,138 @@ export function translateHentaiVerseText(value: string) {
   if (!source) return ''
   if (LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()])
     return LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()]!
-  return source.replace(
-    TERM_PATTERN,
-    (term) => LOWERCASE_TERM_TRANSLATIONS[term.toLowerCase()] ?? term,
-  )
+  return source
+    .replace(TERM_PATTERN, (term) => LOWERCASE_TERM_TRANSLATIONS[term.toLowerCase()] ?? term)
+    .replace(/\blv\.\s*(\d+)/gi, '等级 $1')
+    .replace(/([\d,]+)\s+c\b/gi, '$1 信用点')
 }
 
 export function translateHentaiVerseDescription(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
-  const restorative = source.match(/^Restores? ([\d,.]+%?) (?:of (?:your )?)?(base |maximum )?(health|mana|magic|spirit)(?: (?:points?))?(?: over (\d+) turns?)?\.?$/i)
+  const slowed = source.match(
+    /^The target is slowed by ([\d.]+)%, making it attack less frequently\.$/i,
+  )
+  if (slowed) return `目标行动速度降低 ${slowed[1]}%，减少攻击频率。`
+  if (/^no bonus$/i.test(source)) return '无额外加成'
+  const titleBonus = source.match(/^([+-][\d.]+%) damage$/i)
+  if (titleBonus) return `伤害 ${titleBonus[1]}`
+  const upkeep = source.match(/^Upkeep:\s*([\d.,]+)\s*MP\/round$/i)
+  if (upkeep) return `每回合维护消耗 ${upkeep[1]} 魔力`
+  const pageDescriptions: Record<string, string> = {
+    'Welcome to the Grindfest.': '欢迎来到混战祭。',
+    'A Grindfest consists of up to 1000 rounds of battle.': '混战祭最多包含 1000 轮战斗。',
+    'Starting a Grindfest will consume 1 point of Stamina.': '开始混战祭会消耗 1 点体力。',
+    'There are no challenges available at your level. Check back later!':
+      '当前等级没有可参加的挑战，升级后再来查看。',
+    'There are no available equipment of this type.Equipment must be soulbound before you can enter its Item World.':
+      '此分类没有可进入装备界的装备。装备必须先完成灵魂绑定。',
+    'There are no available equipment of this type. Equipment must be soulbound before you can enter its Item World.':
+      '此分类没有可进入装备界的装备。装备必须先完成灵魂绑定。',
+    'There are no available equipment of this type.': '此分类没有可用装备。',
+    'Equipment must be soulbound before you can enter its Item World.':
+      '装备必须先完成灵魂绑定，才能进入其装备界。',
+    'Clearing item worlds is the only way to unlock the full potential of your equipment.':
+      '通关装备界是解锁装备全部潜能的唯一方式。',
+    'Select an equipment to enter the world contained within. You can only enter the worlds of equipment that are soulbound to you.':
+      '选择一件已与你灵魂绑定的装备，进入其装备界。',
+    'If you manage to fight your way through, you will boost the latent potency of your equipment. This increases the total strength of the charms the equipment can handle, and allows you to upgrade it further.':
+      '通关后会提高装备潜能，增加可承载的护符总强度，并允许继续升级装备。',
+    'The number of rounds you will be fighting depends on the quality of your item. More powerful items will have more powerful monsters inside them, and the monsters get more powerful the deeper you go.':
+      '战斗轮数取决于装备品质。装备越强，内部怪物越强，越深入怪物也越强。',
+    'The difficulty setting does not affect the difficulty in Item Worlds.':
+      '战斗难度设置不会影响装备界的难度。',
+    'Spawning an item world requires a number of World Seeds, depending on its quality and number of item worlds cleared inside that particular equipment.':
+      '开启装备界需要世界种子，数量取决于装备品质及该装备已通关装备界的次数。',
+    'There is a small credit reward at the end, if you make it all the way through.':
+      '完整通关后可获得少量信用点奖励。',
+    'You can use this token to unlock monster slots in the Monster Lab, as well as to upgrade your monsters.':
+      '可用于在怪物实验室解锁怪物槽位或升级怪物。',
+    'These fragments can be used in the forge to permanently soulbind an equipment piece to you, which will make it level as you do.':
+      '可在军械库用于永久灵魂绑定装备，使装备随角色一同升级。',
+    'Non-discerning monsters like to munch on this chow.': '可用于喂养对食物要求不高的怪物。',
+    'High-level monsters would very much prefer this highly refined level of dining if you wish to parlay their favor.':
+      '高等级怪物偏爱的精制饲料，可用于维持它们的状态。',
+  }
+  if (pageDescriptions[source]) return pageDescriptions[source]!
+  const translatedParagraph = Object.entries(pageDescriptions).reduce(
+    (text, [original, translated]) => text.replace(original, translated),
+    source,
+  )
+  if (translatedParagraph !== source) return translateHentaiVerseText(translatedParagraph)
+  const worldSeeds = source.match(/^Available World Seeds:\s*([\d,]+)/i)
+  if (worldSeeds) return `世界种子余量：${worldSeeds[1]}`
+  const crystal = source.match(
+    /^You can fuse this crystal with a monster in the monster tab to increase its (.+)\.$/i,
+  )
+  if (crystal)
+    return `可在怪物实验室融合此水晶，提高怪物的${translateHentaiVerseText(crystal[1]!)}。`
+  const cooldown = source.match(/^cooldown:\s*(?:(\d+)h\s*)?(?:(\d+)m)?$/i)
+  if (cooldown)
+    return `冷却剩余：${cooldown[1] ? `${cooldown[1]} 小时 ` : ''}${cooldown[2] ? `${cooldown[2]} 分钟` : ''}`.trim()
+  const trainingResult = source.match(
+    /^You have gained another level in (.+?)\s*You have increased your (.+?) by ([\d.%]+)!$/i,
+  )
+  if (trainingResult)
+    return `${translateHentaiVerseText(trainingResult[1]!)}训练已完成，${translateHentaiVerseText(trainingResult[2]!)}提高 ${trainingResult[3]}。`
+  const bloodTokens = source.match(/^you have\s*([\d,]+)\s*tokens? of blood\.?$/i)
+  if (bloodTokens) return `持有 ${bloodTokens[1]} 枚鲜血代币。`
+  const effects = source
+    .replace(/Requires Level (\d+) and (\d+) Ability Points?/gi, '需要等级 $1，消耗 $2 点能力点')
+    .replace(
+      /For every ten points of (.+?) Proficiency, adds:/gi,
+      (_, name: string) =>
+        `每 10 点${translateHentaiVerseText(name.replace(/ Weapon$/i, ''))}熟练度增加：`,
+    )
+    .replace(/Changes max affected targets to (\d+)/gi, '最大目标数量变为 $1')
+    .replace(/Changes effect duration to (\d+) turns/gi, '持续时间变为 $1 回合')
+    .replace(/Changes cooldown to (\d+) turns/gi, '冷却变为 $1 回合')
+    .replace(/Changes cast time to ([\d.]+)/gi, '施法时间变为 $1')
+    .replace(/Changes base mana cost to ([\d.]+)/gi, '基础魔力消耗变为 $1')
+    .replace(/Changes base damage to ([\d.]+)/gi, '基础伤害变为 $1')
+    .replace(
+      /Instantly restores ([\d.]+%) of Base (Health|Magic|Spirit)/gi,
+      (_, amount: string, resource: string) =>
+        `立即恢复 ${amount} ${translateHentaiVerseText(`Base ${resource}`)}`,
+    )
+    .replace(
+      /Added special effect: (.+?) \(([\d.]+%) Followup\)/gi,
+      (_, name: string, chance: string) =>
+        `追加特殊效果：${translateHentaiVerseText(name)}（后续触发率 ${chance}）`,
+    )
+    .replace(
+      /Added effect: (.+?) \(([\d.]+%) Chance\)/gi,
+      (_, name: string, chance: string) =>
+        `追加效果：${translateHentaiVerseText(name)}（概率 ${chance}）`,
+    )
+    .replace(/Additional Effect:/gi, '追加效果：')
+    .replace(/Increases Absorption Chance to ([\d.]+%)/gi, '吸收概率提高至 $1')
+    .replace(
+      /Increases (Sleep|Confuse) Break Resistance to ([\d.]+%)/gi,
+      (_, effect: string, amount: string) =>
+        `${effect.toLowerCase() === 'sleep' ? '睡眠' : '混乱'}受伤解除抵抗提高至 ${amount}`,
+    )
+    .replace(/Increases Damage Decrease to ([\d.]+%)/gi, '伤害削弱提高至 $1')
+    .replace(/Reduces Damage Threshold to ([\d.]+%)/gi, '伤害触发阈值降低至 $1')
+    .replace(/Multiplies HP Drain by ([\d.]+)/gi, '生命吸取倍率变为 $1')
+    .replace(/([\d.]+%) Shadow Veil Trigger Chance/gi, '暗影帷幕触发概率 $1')
+  if (effects !== source) return translateHentaiVerseText(effects)
+  const restorative = source.match(
+    /^Restores? ([\d,.]+%?) (?:of (?:your )?)?(base |maximum )?(health|mana|magic|spirit)(?: (?:points?))?(?: over (\d+) turns?)?\.?$/i,
+  )
   if (restorative) {
-    const resource = { health: '生命', mana: '魔力', magic: '魔力', spirit: '灵力' }[restorative[3]!.toLowerCase()]
-    const basis = restorative[2]?.trim().toLowerCase() === 'base' ? '基础' : restorative[2] ? '最大' : ''
+    const resource = { health: '生命', mana: '魔力', magic: '魔力', spirit: '灵力' }[
+      restorative[3]!.toLowerCase()
+    ]
+    const basis =
+      restorative[2]?.trim().toLowerCase() === 'base' ? '基础' : restorative[2] ? '最大' : ''
     return `${restorative[4] ? `在 ${restorative[4]} 回合内` : ''}恢复 ${restorative[1]} ${basis}${resource}。`
   }
-  const grants = source.match(/^(?:Grants?|Gives? you) (?:the )?(.+?) (?:effect|buff)(?: for (\d+) turns?)?\.?$/i)
-  if (grants) return `获得“${translateHentaiVerseText(grants[1]!)}”效果${grants[2] ? `，持续 ${grants[2]} 回合` : ''}。`
+  const grants = source.match(
+    /^(?:Grants?|Gives? you) (?:the )?(.+?) (?:effect|buff)(?: for (\d+) turns?)?\.?$/i,
+  )
+  if (grants)
+    return `获得“${translateHentaiVerseText(grants[1]!)}”效果${grants[2] ? `，持续 ${grants[2]} 回合` : ''}。`
   const trainingEffect = source.match(/^\+([\d,.]+%?)\s+(.+)$/i)
   if (trainingEffect) {
     const effects: Record<string, string> = {
@@ -603,13 +955,21 @@ export function translateHentaiVerseBattleLog(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
   // Completion panes can contain several sentences; translate each event separately.
-  return source.split(/(?<=[.!])\s+(?=(?:You\b|The effect\b|Starting\b))/).map(translateBattleEvent).join(' ')
+  return source
+    .split(/(?<=[.!])\s+(?=(?:You\b|The effect\b|Starting\b))/i)
+    .map(translateBattleEvent)
+    .join(' ')
 }
 
 function translateBattleEvent(source: string): string {
-  const initializing = source.match(/^Initializing arena challenge #(\d+) \(Round (\d+)\s*\/\s*(\d+)\)\s*\.\.\.$/i)
-  if (initializing) return `正在开始竞技场挑战 #${initializing[1]}（第 ${initializing[2]} / ${initializing[3]} 轮）……`
-  const spawned = source.match(/^Spawned Monster ([A-Z]): MID=(\d+) \((.+)\) LV=(\d+) HP=([\d,]+)$/i)
+  const initializing = source.match(
+    /^Initializing arena challenge #(\d+) \(Round (\d+)\s*\/\s*(\d+)\)\s*\.\.\.$/i,
+  )
+  if (initializing)
+    return `正在开始竞技场挑战 #${initializing[1]}（第 ${initializing[2]} / ${initializing[3]} 轮）……`
+  const spawned = source.match(
+    /^Spawned Monster ([A-Z]): MID=(\d+) \((.+)\) LV=(\d+) HP=([\d,]+)$/i,
+  )
   if (spawned) return `怪物 ${spawned[1]}：${spawned[3]}，等级 ${spawned[4]}，生命 ${spawned[5]}。`
   const dropped = source.match(/^(.+?) dropped (.+?)[.!]?$/i)
   if (dropped) return `${dropped[1]} 掉落了 ${translateBattleTerms(dropped[2]!)}。`
@@ -676,39 +1036,59 @@ function translateBattleEvent(source: string): string {
   const used = source.match(/^You use (?:a |an )?(.+?)\.$/i)
   if (used) return `你使用了“${translateBattleTerms(used[1]!)}”。`
   const recovery = source.match(/^(.+?) (?:heals|restores) you for ([\d,.]+) points? of (.+?)\.$/i)
-  if (recovery) return `${translateBattleTerms(recovery[1]!)}为你恢复了 ${recovery[2]} 点${translateBattleTerms(recovery[3]!)}。`
+  if (recovery)
+    return `${translateBattleTerms(recovery[1]!)}为你恢复了 ${recovery[2]} 点${translateBattleTerms(recovery[3]!)}。`
   const healing = source.match(/^(.+?) heals you for ([\d,.]+) points?\.$/i)
   if (healing) return `${translateBattleTerms(healing[1]!)}为你恢复了 ${healing[2]} 点生命值。`
+  const healed = source.match(/^You are healed for ([\d,.]+) Health Points?\.$/i)
+  if (healed) return `你恢复了 ${healed[1]} 点生命值。`
   const restoration = source.match(/^(.+?) restores ([\d,.]+) points? of (.+?)\.$/i)
-  if (restoration) return `${translateBattleTerms(restoration[1]!)}恢复了 ${restoration[2]} 点${translateBattleTerms(restoration[3]!)}。`
+  if (restoration)
+    return `${translateBattleTerms(restoration[1]!)}恢复了 ${restoration[2]} 点${translateBattleTerms(restoration[3]!)}。`
   const regained = source.match(/^You (?:regain|recover) ([\d,.]+) points? of (.+?)\.$/i)
   if (regained) return `你恢复了 ${regained[1]} 点${translateBattleTerms(regained[2]!)}。`
   if (/^You have been defeated[.!]?$/i.test(source)) return '你已被击败。'
+  if (/^You have escaped from the battle[.!]?$/i.test(source)) return '你已逃离战斗。'
+  if (/^you have run away[.!]?$/i.test(source)) return '你已成功逃离！'
+  if (/^you escape from the arena[.!]?$/i.test(source)) return '你已退出竞技场。'
   const defeated = source.match(/^(.+?) has been defeated\.$/i)
   if (defeated) return `${defeated[1]} 已被击败。`
   const received = source.match(/^You gain ([\d,.]+) (EXP|experience points?|Credits?)[.!]?$/i)
-  if (received) return `你获得了 ${received[1]} ${/^credits?$/i.test(received[2]!) ? 'Credits' : '经验'}。`
+  if (received)
+    return `你获得了 ${received[1]} ${/^credits?$/i.test(received[2]!) ? '信用点' : '经验'}。`
   const proficiency = source.match(/^You gain ([\d,.]+) points? of (.+?) proficiency[.!]?$/i)
   if (proficiency) {
     const names: Record<string, string> = {
-      'supportive magic': '辅助法术', 'deprecating magic': '减益法术',
-      'elemental magic': '元素法术', 'divine magic': '神圣法术',
-      'forbidden magic': '禁断法术', 'one-handed weapon': '单手武器',
-      'two-handed weapon': '双手武器', 'dual-wielding': '双持', staff: '法杖',
-      'cloth armor': '布甲', 'light armor': '轻甲', 'heavy armor': '重甲',
+      'supportive magic': '辅助法术',
+      'deprecating magic': '减益法术',
+      'elemental magic': '元素法术',
+      'divine magic': '神圣法术',
+      'forbidden magic': '禁断法术',
+      'one-handed weapon': '单手武器',
+      'two-handed weapon': '双手武器',
+      'dual-wielding': '双持',
+      staff: '法杖',
+      'cloth armor': '布甲',
+      'light armor': '轻甲',
+      'heavy armor': '重甲',
     }
     return `你的${names[proficiency[2]!.toLowerCase()] || translateBattleTerms(proficiency[2]!)}熟练度提高了 ${proficiency[1]} 点。`
   }
-  if (/^With the light of a new dawn, your experience in all things increases\.$/i.test(source)) return '新一天的曙光使你的各项熟练度有所提升。'
+  if (/^With the light of a new dawn, your experience in all things increases\.$/i.test(source))
+    return '新一天的曙光使你的各项熟练度有所提升。'
   const obtained = source.match(/^You (?:gain|obtained|obtain) (?:a |an )?(.+?)\.$/i)
   if (obtained) return `你获得了 ${translateBattleTerms(obtained[1]!)}。`
-  const nextRound = source.match(/^(?:You have advanced to|You advance to|Starting) (?:the )?next round[.!]?$/i)
+  const nextRound = source.match(
+    /^(?:You have advanced to|You advance to|Starting) (?:the )?next round[.!]?$/i,
+  )
   if (nextRound) return '进入下一轮战斗。'
   if (/^You are victorious[.!]?$/i.test(source)) return '你赢得了胜利！'
   const parry = source.match(/^You (parry|block|resist) (?:the )?attack from (.+?)\.$/i)
-  if (parry) return `你${{ parry: '招架', block: '格挡', resist: '抵抗' }[parry[1]!.toLowerCase()]}了 ${parry[2]} 的攻击。`
+  if (parry)
+    return `你${{ parry: '招架', block: '格挡', resist: '抵抗' }[parry[1]!.toLowerCase()]}了 ${parry[2]} 的攻击。`
   const targetParry = source.match(/^(.+?) (parries|blocks|resists) your attack\.$/i)
-  if (targetParry) return `${targetParry[1]} ${{ parries: '招架', blocks: '格挡', resists: '抵抗' }[targetParry[2]!.toLowerCase()]}了你的攻击。`
+  if (targetParry)
+    return `${targetParry[1]} ${{ parries: '招架', blocks: '格挡', resists: '抵抗' }[targetParry[2]!.toLowerCase()]}了你的攻击。`
   return translateBattleTerms(source)
 }
 

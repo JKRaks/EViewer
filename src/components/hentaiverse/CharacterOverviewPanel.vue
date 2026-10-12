@@ -10,7 +10,9 @@ const emit = defineEmits<{
 
 const deltas = reactive<Record<string, number>>({})
 const rename = reactive({ value: '' })
-const activePersona = computed(() => props.page.personas.find((persona) => persona.active)?.id || '')
+const activePersona = computed(
+  () => props.page.personas.find((persona) => persona.active)?.id || '',
+)
 const experienceCost = computed(() =>
   props.page.attributes.reduce((total, attribute) => {
     const target = Math.max(0, attribute.value + (deltas[attribute.key] || 0))
@@ -30,7 +32,12 @@ watch(
 function applyAttributes() {
   emit('attributes', {
     attr_apply: 1,
-    ...Object.fromEntries(props.page.attributes.map((attribute) => [`${attribute.key}_delta`, deltas[attribute.key] || 0])),
+    ...Object.fromEntries(
+      props.page.attributes.map((attribute) => [
+        `${attribute.key}_delta`,
+        deltas[attribute.key] || 0,
+      ]),
+    ),
   })
 }
 
@@ -63,11 +70,12 @@ function getTotalExperienceCost(level: number) {
       <div class="section-heading">
         <div>
           <h2>基础属性</h2>
-          <p>分配可用经验后统一应用，负数表示回退尚未提交的调整。</p>
+          <p>分配可用经验后统一应用；减点会降低已分配的属性并返还经验。</p>
         </div>
         <div class="attribute-submit">
           <span :class="{ danger: insufficientExperience }">
-            预计{{ experienceCost >= 0 ? '消耗' : '返还' }} {{ Math.abs(experienceCost).toLocaleString('zh-CN') }} 经验
+            预计{{ experienceCost >= 0 ? '消耗' : '返还' }}
+            {{ Math.abs(experienceCost).toLocaleString('zh-CN') }} 经验
           </span>
           <el-button
             type="primary"
@@ -85,18 +93,26 @@ function getTotalExperienceCost(level: number) {
             <span>{{ attribute.label }}</span>
             <strong>{{ attribute.value + (deltas[attribute.key] || 0) }}</strong>
           </div>
-          <el-input-number v-model="deltas[attribute.key]" :min="-999" :max="999" controls-position="right" />
+          <el-input-number
+            v-model="deltas[attribute.key]"
+            :min="-attribute.value"
+            :max="999"
+            controls-position="right"
+          />
         </div>
       </div>
     </section>
 
-    <section class="character-section">
-      <div class="section-heading">
+    <details class="character-section persona-section">
+      <summary class="section-heading">
         <div>
           <h2>人格</h2>
           <p>当前人格：{{ page.personaName || '默认人格' }}</p>
+          <p v-if="page.personaCapacity">
+            人格槽：{{ page.personaCapacity.used }} / {{ page.personaCapacity.total }}
+          </p>
         </div>
-      </div>
+      </summary>
       <div class="persona-controls">
         <el-select
           v-if="page.personas.length"
@@ -104,11 +120,29 @@ function getTotalExperienceCost(level: number) {
           aria-label="切换人格"
           @change="switchPersona"
         >
-          <el-option v-for="persona in page.personas" :key="persona.id" :label="persona.name" :value="persona.id" />
+          <el-option
+            v-for="persona in page.personas"
+            :key="persona.id"
+            :label="persona.name"
+            :value="persona.id"
+          />
         </el-select>
-        <el-input v-model="rename.value" maxlength="64" placeholder="新的人格名称" @keyup.enter="renamePersona" />
-        <el-button :disabled="!rename.value.trim()" :loading="loading" @click="renamePersona">重命名</el-button>
-        <el-dropdown :disabled="loading" @command="(command: string) => emit('persona', { persona_create: command })">
+        <el-input
+          v-model="rename.value"
+          maxlength="64"
+          placeholder="新的人格名称"
+          @keyup.enter="renamePersona"
+        />
+        <el-button :disabled="!rename.value.trim()" :loading="loading" @click="renamePersona"
+          >重命名</el-button
+        >
+        <el-dropdown
+          :disabled="
+            loading ||
+            Boolean(page.personaCapacity && page.personaCapacity.used >= page.personaCapacity.total)
+          "
+          @command="(command: string) => emit('persona', { persona_create: command })"
+        >
           <el-button>创建人格</el-button>
           <template #dropdown>
             <el-dropdown-menu>
@@ -118,22 +152,28 @@ function getTotalExperienceCost(level: number) {
           </template>
         </el-dropdown>
       </div>
-      <el-alert title="新建的人格无法删除，请确认后再创建。" type="warning" :closable="false" show-icon />
-    </section>
+      <el-alert
+        title="新建的人格无法删除，请确认后再创建。"
+        type="warning"
+        :closable="false"
+        show-icon
+      />
+    </details>
   </div>
 </template>
 
 <style scoped>
 .metric-band {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-  gap: 1px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
   overflow: hidden;
-  border: 1px solid var(--el-border-color-lighter);
-  background: var(--el-border-color-lighter);
 }
 
 .metric-item {
+  flex: 1 1 130px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
   display: flex;
   flex-direction: column;
   gap: 5px;
@@ -207,7 +247,10 @@ function getTotalExperienceCost(level: number) {
   align-items: center;
   justify-content: space-between;
   gap: 14px;
-  padding: 10px 0;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--el-border-color-lighter);
+  border-radius: 10px;
 }
 
 .attribute-row > div {
@@ -224,6 +267,29 @@ function getTotalExperienceCost(level: number) {
   font-size: 20px;
 }
 
+.persona-section > summary {
+  cursor: pointer;
+}
+
+.persona-section > summary::after {
+  content: '展开';
+  flex-shrink: 0;
+  color: var(--el-color-primary);
+  font-size: 13px;
+}
+
+.persona-section[open] > summary::after {
+  content: '收起';
+}
+
+.persona-section:not([open]) > summary {
+  margin-bottom: 0;
+}
+
+.persona-section > summary h2 {
+  display: inline;
+}
+
 .persona-controls {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto auto;
@@ -234,6 +300,10 @@ function getTotalExperienceCost(level: number) {
 @media (max-width: 767px) {
   .attribute-grid {
     grid-template-columns: 1fr;
+  }
+
+  .persona-section > summary {
+    flex-direction: row;
   }
 
   .section-heading {

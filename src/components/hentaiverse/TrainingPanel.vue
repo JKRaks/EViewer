@@ -6,7 +6,9 @@ const props = defineProps<{ data: HentaiVerseTrainingPage; loading?: boolean }>(
 const emit = defineEmits<{ start: [id: string]; cancel: []; refresh: [] }>()
 const now = ref(Date.now())
 let clock: ReturnType<typeof setInterval> | undefined
-const updateClock = () => { now.value = Date.now() }
+const updateClock = () => {
+  now.value = Date.now()
+}
 onMounted(() => {
   clock = setInterval(updateClock, 1_000)
   document.addEventListener('visibilitychange', updateClock)
@@ -19,14 +21,19 @@ const active = computed(() => props.data.active)
 const progressPercent = computed(() => {
   if (!active.value) return undefined
   if (props.data.endsAt !== undefined && props.data.durationSeconds) {
-    return Math.max(0, Math.min(100, 100 - (props.data.endsAt - now.value) / (props.data.durationSeconds * 10)))
+    return Math.max(
+      0,
+      Math.min(100, 100 - (props.data.endsAt - now.value) / (props.data.durationSeconds * 10)),
+    )
   }
   const match = props.data.progress.match(/(\d+(?:\.\d+)?)\s*%/)
   return match ? Math.max(0, Math.min(100, Number(match[1]))) : undefined
 })
-const progressLabel = computed(() => progressPercent.value !== undefined
-  ? `${progressPercent.value.toFixed(2)}%`
-  : props.data.progress)
+const progressLabel = computed(() =>
+  progressPercent.value !== undefined
+    ? `${progressPercent.value.toFixed(2)}%`
+    : props.data.progress,
+)
 let completionRefreshed = false
 watch([active, () => props.data.activeName], () => {
   completionRefreshed = false
@@ -45,7 +52,7 @@ const remaining = computed(() => {
   const seconds = Math.max(0, Math.ceil((props.data.endsAt - now.value) / 1000))
   if (!seconds) return '训练时间已到'
   const hours = Math.floor(seconds / 3600)
-  const minutes = Math.floor(seconds % 3600 / 60)
+  const minutes = Math.floor((seconds % 3600) / 60)
   return `剩余 ${hours ? `${hours} 小时 ` : ''}${minutes} 分 ${seconds % 60} 秒`
 })
 </script>
@@ -59,10 +66,21 @@ const remaining = computed(() => {
         <p v-if="remaining">{{ remaining }}</p>
       </div>
       <strong>{{ progressLabel }}</strong>
-      <el-button v-if="data.canCancel" type="danger" plain :loading="loading" @click="emit('cancel')">取消训练</el-button>
+      <el-button
+        v-if="data.canCancel"
+        type="danger"
+        plain
+        :loading="loading"
+        @click="emit('cancel')"
+        >取消训练</el-button
+      >
     </div>
     <p v-else class="training-idle">当前没有进行中的训练</p>
-    <el-progress v-if="active && progressPercent !== undefined" :percentage="progressPercent" :show-text="false" />
+    <el-progress
+      v-if="active && progressPercent !== undefined"
+      :percentage="progressPercent"
+      :show-text="false"
+    />
 
     <div v-if="data.options.length" class="training-list">
       <article v-for="option in data.options" :key="option.id">
@@ -71,12 +89,26 @@ const remaining = computed(() => {
           <p v-if="option.description">{{ option.description }}</p>
         </div>
         <dl>
-          <template v-if="option.level"><dt>等级</dt><dd>{{ option.level }}</dd></template>
-          <template v-if="option.cost"><dt>费用</dt><dd>{{ option.cost }}</dd></template>
-          <template v-if="option.duration"><dt>耗时</dt><dd>{{ option.duration }}</dd></template>
+          <template v-if="option.level"
+            ><dt>等级</dt>
+            <dd>{{ option.level }}</dd></template
+          >
+          <template v-if="option.cost"
+            ><dt>费用</dt>
+            <dd>{{ option.cost }}</dd></template
+          >
+          <template v-if="option.duration"
+            ><dt>耗时</dt>
+            <dd>{{ option.duration }}</dd></template
+          >
         </dl>
-        <el-button type="primary" :disabled="!option.canStart" :loading="loading" @click="emit('start', option.id)">
-          开始训练
+        <el-button
+          type="primary"
+          :disabled="!option.canStart"
+          :loading="loading"
+          @click="emit('start', option.id)"
+        >
+          {{ option.canStart ? '开始训练' : option.unavailableReason || '暂不可训练' }}
         </el-button>
       </article>
     </div>

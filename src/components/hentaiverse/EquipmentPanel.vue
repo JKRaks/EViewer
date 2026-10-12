@@ -2,14 +2,23 @@
 import { computed, ref, watch } from 'vue'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import type { HentaiVerseEquipmentPage } from '@/core/hentaiverse/model/hentaiVerse'
+import type { HentaiVerseEquipmentDetail } from '@/core/hentaiverse/model/hentaiVerse'
+import EquipmentDetail from './EquipmentDetail.vue'
 
-const props = defineProps<{ data: HentaiVerseEquipmentPage; loading?: boolean }>()
+const props = defineProps<{
+  data: HentaiVerseEquipmentPage
+  loading?: boolean
+  details?: Record<string, HentaiVerseEquipmentDetail>
+  detailsLoading?: boolean
+  detailsError?: string
+}>()
 const emit = defineEmits<{
   set: [id: string, postToken: string]
   overview: []
   slot: [id: string]
   equip: [slotId: string, equipmentId: string, postToken: string]
   unequip: [slotId: string, postToken: string]
+  retryDetails: []
 }>()
 
 const candidateId = ref('')
@@ -22,6 +31,7 @@ const activeSlotLabel = computed(
     (
       {
         '1': '主武器',
+        '2': '副武器',
         '9': '副武器',
         '13': '头部',
         '11': '身体',
@@ -34,10 +44,11 @@ const activeSlotLabel = computed(
 )
 
 watch(
-  () => props.data.selectedSlot,
-  () => {
-    candidateId.value = ''
+  () => props.data,
+  (data) => {
+    candidateId.value = data.candidates.find((candidate) => candidate.equipped)?.id || ''
   },
+  { immediate: true },
 )
 </script>
 
@@ -56,18 +67,27 @@ watch(
       </button>
     </div>
 
+    <p v-if="detailsLoading" class="equipment-detail-status" role="status">正在加载装备属性…</p>
+    <div v-else-if="detailsError" class="equipment-detail-status" role="alert">
+      {{ detailsError }}
+      <el-button link type="primary" @click="emit('retryDetails')">重试加载属性</el-button>
+    </div>
+
     <div v-if="data.slots.length" class="equipment-slots">
-      <button
+      <article
         v-for="slot in data.slots"
         :key="slot.id"
-        type="button"
+        class="equipment-slot"
         :class="{ active: slot.active || slot.id === data.selectedSlot }"
-        :disabled="loading || slot.disabled"
-        @click="emit('slot', slot.id)"
       >
-        <span>{{ slot.label }}</span>
-        <strong>{{ slot.equipmentName || (slot.disabled ? '当前主武器不可用' : '未装备') }}</strong>
-      </button>
+        <button type="button" :disabled="loading || slot.disabled" @click="emit('slot', slot.id)">
+          <span>{{ slot.label }}</span>
+          <strong>{{
+            slot.equipmentName || (slot.disabled ? '当前主武器不可用' : '未装备')
+          }}</strong>
+        </button>
+        <EquipmentDetail v-if="details?.[slot.equipmentId]" :data="details[slot.equipmentId]!" />
+      </article>
     </div>
 
     <div v-if="data.selectedSlot" class="equipment-picker">
@@ -81,7 +101,7 @@ watch(
             >返回装备总览</el-button
           >
           <el-button
-            v-if="activeSlot?.equipmentId"
+            v-if="data.canUnequip"
             type="danger"
             plain
             :disabled="loading || !data.postToken"
@@ -93,16 +113,19 @@ watch(
       </header>
 
       <el-radio-group v-if="data.candidates.length" v-model="candidateId" class="equipment-list">
-        <el-radio
+        <article
           v-for="candidate in data.candidates"
           :key="candidate.id"
-          :value="candidate.id"
-          :disabled="candidate.locked || loading"
+          class="equipment-candidate"
+          :class="{ selected: candidateId === candidate.id }"
         >
-          <span class="candidate-name">{{ candidate.name }}</span>
-          <small v-if="candidate.description">{{ candidate.description }}</small>
-          <el-tag v-if="candidate.equipped" size="small" type="info">已装备</el-tag>
-        </el-radio>
+          <el-radio :value="candidate.id" :disabled="candidate.locked || loading">
+            <span class="candidate-name">{{ candidate.name }}</span>
+            <el-tag v-if="candidate.equipped" size="small" type="info">已装备</el-tag>
+          </el-radio>
+          <EquipmentDetail v-if="details?.[candidate.id]" :data="details[candidate.id]!" />
+          <small v-else-if="candidate.description">{{ candidate.description }}</small>
+        </article>
       </el-radio-group>
       <el-empty v-else description="该部位没有可用装备" :image-size="70" />
 
@@ -136,21 +159,23 @@ watch(
 }
 
 .equipment-sets button,
-.equipment-slots button {
+.equipment-slot,
+.equipment-candidate {
   border: 1px solid var(--el-border-color);
   border-radius: 6px;
   color: var(--el-text-color-regular);
   background: var(--el-bg-color);
-  cursor: pointer;
 }
 
 .equipment-sets button {
   min-height: 36px;
   padding: 0 14px;
+  cursor: pointer;
 }
 
 .equipment-sets button.active,
-.equipment-slots button.active {
+.equipment-slot.active,
+.equipment-candidate.selected {
   border-color: var(--el-color-primary);
   color: var(--el-color-primary);
   background: var(--el-color-primary-light-9);
@@ -162,9 +187,20 @@ watch(
   gap: 10px;
 }
 
-.equipment-slots button {
-  min-height: 78px;
+.equipment-slot {
+  min-width: 0;
   padding: 12px;
+}
+
+.equipment-slot button {
+  display: block;
+  width: 100%;
+  min-height: 78px;
+  padding: 0;
+  border: 0;
+  color: inherit;
+  background: transparent;
+  cursor: pointer;
   text-align: left;
 }
 
@@ -178,9 +214,7 @@ watch(
 .equipment-slots strong {
   display: block;
   margin-top: 7px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 .equipment-picker {
@@ -216,17 +250,28 @@ watch(
 
 .equipment-list {
   display: grid;
-  gap: 0;
-  border-top: 1px solid var(--el-border-color-lighter);
+  gap: 10px;
+  width: 100%;
+  min-width: 0;
+}
+
+.equipment-candidate {
+  min-width: 0;
+  padding: 12px;
+}
+
+.equipment-detail-status {
+  margin: 0;
+  color: var(--el-text-color-secondary);
+  font-size: 13px;
 }
 
 .equipment-list :deep(.el-radio) {
   width: 100%;
   height: auto;
-  min-height: 48px;
+  min-height: 32px;
   margin: 0;
-  padding: 8px 2px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  padding: 4px 0;
 }
 
 .equipment-list :deep(.el-radio__label) {
@@ -238,16 +283,16 @@ watch(
 }
 
 .candidate-name {
+  min-width: 0;
   flex: 0 1 auto;
   font-weight: 600;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .equipment-list small {
-  flex: 1;
-  overflow: hidden;
   color: var(--el-text-color-secondary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: anywhere;
 }
 
 @media (max-width: 767px) {

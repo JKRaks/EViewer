@@ -267,6 +267,16 @@ function parseHentaiVersePageTarget(query) {
     if (!/^[a-z0-9]{1,32}$/.test(tree)) throw new Error('能力树格式不正确')
     target.searchParams.set('tree', tree)
   }
+  const filter = query.get('filter')
+  if (section === 'Battle' && subsection === 'iw' && filter) {
+    if (
+      !/^(weapon_1handed|weapon_2handed|weapon_staff|shield|armor_cloth|armor_light|armor_heavy)$/.test(
+        filter,
+      )
+    )
+      throw new Error('装备分类格式不正确')
+    target.searchParams.set('filter', filter)
+  }
   return target
 }
 
@@ -284,17 +294,39 @@ const HENTAIVERSE_FORM_ROUTES = {
   itemWorld: { s: 'Battle', ss: 'iw' },
 }
 
+function parseHentaiVerseEquipmentSource(path, cookieHeader) {
+  const match =
+    typeof path === 'string' &&
+    path.match(/^\/dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-([1-9]\d{0,19})\.js$/)
+  if (!match) throw new Error('不允许访问该装备数据资源')
+  const cookie = getAllowedAuthCookieHeader(cookieHeader)
+  const memberId = cookie.match(/(?:^|; )ipb_member_id=(\d+)(?:;|$)/)?.[1]
+  if (!memberId || memberId !== match[1] || !cookie.includes('ipb_pass_hash='))
+    throw new Error('装备数据与当前账号不匹配，请重新登录')
+  return new URL(path, HENTAIVERSE_ORIGIN)
+}
+
 function isAllowedHentaiVerseFormField(section, name, value) {
-  const scalar = typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
+  if (name === 'eqids[]') {
+    return (
+      ['equipment', 'itemWorld'].includes(section) &&
+      Array.isArray(value) &&
+      value.length === 1 &&
+      value.every((id) => typeof id === 'string' && /^\d{1,12}$/.test(id))
+    )
+  }
+  const scalar =
+    typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
   if (!scalar || String(value).length > 4096 || /[\0\r\n]/.test(String(value))) return false
   const fields = {
     character: /^(attr_apply|str_delta|dex_delta|agi_delta|end_delta|int_delta|wis_delta)$/,
     persona: /^(persona_set|persona_rename|persona_create)$/,
-    equipment: /^(postoken|equip_set|equip_slot|equip_id|action)$/,
+    equipment: /^(postoken|equip_set|equip_slot|action)$/,
     abilities: /^(unlock_ability|reset_ability|reset_all|unlock_slot|equip_slot|equip_ability)$/,
     training: /^(start_train|cancel_train)$/,
     inventory: /^(slot|item)$/,
-    settings: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    settings:
+      /^(?:[1-9]|1[0-6]|difflevel|title_override|font(?:local|face|size|wght|style|off)|eqs_(?:ability|item|skillbar)|vitalstyle|trophyupgrade|ac_[0-4]|as_[cs]_\d{1,3}|submit)$/,
     arena: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
     ringOfBlood: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
     grindfest: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
@@ -305,7 +337,10 @@ function isAllowedHentaiVerseFormField(section, name, value) {
 
 async function requestHentaiVerse(request, target, method, body, contentType) {
   const headers = new Headers({
-    Accept: method === 'POST' && contentType === 'application/json' ? 'application/json' : 'text/html,application/xhtml+xml,*/*;q=0.8',
+    Accept:
+      method === 'POST' && contentType === 'application/json'
+        ? 'application/json'
+        : 'text/html,application/xhtml+xml,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
     Referer: `${HENTAIVERSE_ORIGIN}/`,
     'User-Agent': request.headers.get('user-agent') || 'Mozilla/5.0',
@@ -313,7 +348,22 @@ async function requestHentaiVerse(request, target, method, body, contentType) {
   if (contentType) headers.set('Content-Type', contentType)
   const cookie = getAllowedAuthCookieHeader(request.headers.get('cookie') || '')
   if (cookie) headers.set('Cookie', cookie)
-  return fetch(target, { method, headers, body, redirect: 'manual' })
+  const response = await fetch(target, { method, headers, body, redirect: 'manual' })
+  if (
+    method === 'POST' &&
+    contentType?.startsWith('application/x-www-form-urlencoded') &&
+    [302, 303].includes(response.status) &&
+    response.headers.get('location')
+  ) {
+    const location = new URL(response.headers.get('location'), target)
+    if (location.origin === HENTAIVERSE_ORIGIN && location.pathname === '/') {
+      const next = parseHentaiVersePageTarget(location.searchParams)
+      await response.body?.cancel()
+      headers.delete('Content-Type')
+      return fetch(next, { method: 'GET', headers, redirect: 'manual' })
+    }
+  }
+  return response
 }
 
 async function sendHentaiVerseResponse(request, upstream) {
@@ -338,6 +388,24 @@ async function handleHentaiVerseRequest(request, requestUrl) {
     return jsonResponse(request, { error: '不允许的请求来源' }, 403)
   }
   try {
+    if (request.method === 'GET' && requestUrl.pathname === '/hentaiverse/equipment-data') {
+      let target
+      try {
+        target = parseHentaiVerseEquipmentSource(
+          requestUrl.searchParams.get('path'),
+          request.headers.get('cookie') || '',
+        )
+      } catch (error) {
+        return jsonResponse(request, { error: error.message }, 400)
+      }
+      const response = await sendHentaiVerseResponse(
+        request,
+        await requestHentaiVerse(request, target, 'GET'),
+      )
+      response.headers.set('X-Content-Type-Options', 'nosniff')
+      response.headers.set('Content-Type', 'text/plain; charset=UTF-8')
+      return response
+    }
     if (request.method === 'GET' && requestUrl.pathname === '/hentaiverse/page') {
       const target = parseHentaiVersePageTarget(requestUrl.searchParams)
       return sendHentaiVerseResponse(request, await requestHentaiVerse(request, target, 'GET'))
@@ -352,13 +420,33 @@ async function handleHentaiVerseRequest(request, requestUrl) {
       if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{6,128}$/.test(token) || !modes.has(mode)) {
         return jsonResponse(request, { error: 'HentaiVerse 战斗动作格式不正确' }, 400)
       }
-      if (!Number.isInteger(target) || target < 0 || target > 100 || !Number.isInteger(skill) || skill < 0 || skill > 1000000) {
+      if (
+        !Number.isInteger(target) ||
+        target < 0 ||
+        target > 100 ||
+        !Number.isInteger(skill) ||
+        skill < 0 ||
+        skill > 1000000
+      ) {
         return jsonResponse(request, { error: 'HentaiVerse 战斗目标格式不正确' }, 400)
       }
-      const payload = JSON.stringify({ type: 'battle', method: 'action', token, mode, target, skill })
+      const payload = JSON.stringify({
+        type: 'battle',
+        method: 'action',
+        token,
+        mode,
+        target,
+        skill,
+      })
       return sendHentaiVerseResponse(
         request,
-        await requestHentaiVerse(request, new URL('/json', HENTAIVERSE_ORIGIN), 'POST', payload, 'application/json'),
+        await requestHentaiVerse(
+          request,
+          new URL('/json', HENTAIVERSE_ORIGIN),
+          'POST',
+          payload,
+          'application/json',
+        ),
       )
     }
     if (requestUrl.pathname === '/hentaiverse/form') {
@@ -369,16 +457,36 @@ async function handleHentaiVerseRequest(request, requestUrl) {
         return jsonResponse(request, { error: 'HentaiVerse 表单格式不正确' }, 400)
       }
       const entries = Object.entries(data)
-      if (!entries.length || entries.length > 400 || entries.some(([name, value]) => !isAllowedHentaiVerseFormField(section, name, value))) {
+      if (
+        !entries.length ||
+        entries.length > 400 ||
+        entries.some(([name, value]) => !isAllowedHentaiVerseFormField(section, name, value))
+      ) {
         return jsonResponse(request, { error: 'HentaiVerse 表单包含不允许的字段' }, 400)
       }
       const target = new URL('/', HENTAIVERSE_ORIGIN)
       target.searchParams.set('s', route.s)
       target.searchParams.set('ss', route.ss)
-      const form = new URLSearchParams(entries.map(([name, value]) => [name, String(value)]))
+      if (section === 'itemWorld' && body?.target?.filter) {
+        const pageTarget = parseHentaiVersePageTarget(
+          new URLSearchParams({ ...route, filter: body.target.filter }),
+        )
+        target.search = pageTarget.search
+      }
+      const form = new URLSearchParams(
+        entries.flatMap(([name, value]) =>
+          (Array.isArray(value) ? value : [value]).map((item) => [name, String(item)]),
+        ),
+      )
       return sendHentaiVerseResponse(
         request,
-        await requestHentaiVerse(request, target, 'POST', form, 'application/x-www-form-urlencoded; charset=UTF-8'),
+        await requestHentaiVerse(
+          request,
+          target,
+          'POST',
+          form,
+          'application/x-www-form-urlencoded; charset=UTF-8',
+        ),
       )
     }
     return jsonResponse(request, { error: 'Not found' }, 404)
@@ -512,7 +620,7 @@ function escapeRegExp(string) {
 /**
  * 处理健康检查
  */
-function handleHealthCheck() {
+function handleHealthCheck(env) {
   const routes = ORIGIN_MAP.map((config) => ({
     path: config.path,
     target: `${config.schema}://${config.host}`,
@@ -523,10 +631,12 @@ function handleHealthCheck() {
       status: 'ok',
       message: 'Proxy server is running',
       routes,
+      revision: env.EVIEWER_PROXY_REVISION || null,
+      environment: env.EVIEWER_PROXY_ENVIRONMENT || null,
     }),
     {
       status: 200,
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
     },
   )
 }
@@ -847,7 +957,7 @@ async function handleRequest(request, env = {}) {
 
   // 健康检查路由
   if (pathname === '/health') {
-    return handleHealthCheck()
+    return handleHealthCheck(env)
   }
 
   if (request.method === 'POST' && (pathname === '/auth/cookies' || pathname === '/auth/logout')) {
@@ -865,6 +975,7 @@ async function handleRequest(request, env = {}) {
 
   if (
     pathname === '/hentaiverse/page' ||
+    pathname === '/hentaiverse/equipment-data' ||
     pathname === '/hentaiverse/form' ||
     pathname === '/hentaiverse/action'
   ) {
@@ -919,6 +1030,14 @@ async function handleRequest(request, env = {}) {
  */
 export default {
   async fetch(request, env) {
+    const expectedRevision = request.headers.get('X-EViewer-Proxy-Revision')
+    if (
+      expectedRevision &&
+      env?.EVIEWER_PROXY_REVISION &&
+      expectedRevision !== env.EVIEWER_PROXY_REVISION
+    ) {
+      return jsonResponse(request, { error: '代理服务版本未同步，请等待部署完成后刷新页面' }, 503)
+    }
     return handleRequest(request, env)
   },
 }
