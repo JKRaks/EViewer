@@ -229,6 +229,18 @@ const parseHentaiVersePageTarget = (query) => {
   return target
 }
 
+const parseHentaiVerseEquipmentSource = (path, cookieHeader) => {
+  const match =
+    typeof path === 'string' &&
+    path.match(/^\/dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-([1-9]\d{0,19})\.js$/)
+  if (!match) throw new Error('不允许访问该装备数据资源')
+  const cookie = getAllowedAuthCookieHeader(cookieHeader)
+  const memberId = cookie.match(/(?:^|; )ipb_member_id=(\d+)(?:;|$)/)?.[1]
+  if (!memberId || memberId !== match[1] || !cookie.includes('ipb_pass_hash='))
+    throw new Error('装备数据与当前账号不匹配，请重新登录')
+  return new URL(path, HENTAIVERSE_ORIGIN)
+}
+
 const HENTAIVERSE_FORM_ROUTES = {
   character: { s: 'Character', ss: 'ch' },
   persona: { s: 'Character', ss: 'ch' },
@@ -309,11 +321,11 @@ const requestHentaiVerse = async (req, targetUrl, method, body, contentType) => 
   return response
 }
 
-const sendHentaiVerseResponse = async (res, response) => {
+const sendHentaiVerseResponse = async (res, response, contentType) => {
   const content = Buffer.from(await response.arrayBuffer())
   res.status(response.status)
   res.set('Cache-Control', 'no-store')
-  res.set('Content-Type', response.headers.get('content-type') || 'text/html; charset=UTF-8')
+  res.set('Content-Type', contentType || response.headers.get('content-type') || 'text/html; charset=UTF-8')
   const location = response.headers.get('location')
   if (location) res.set('X-HentaiVerse-Location', location)
   return res.send(content)
@@ -326,6 +338,24 @@ app.get('/hentaiverse/page', async (req, res) => {
     return await sendHentaiVerseResponse(res, await requestHentaiVerse(req, target, 'GET'))
   } catch (error) {
     return res.status(400).json({ error: error.message || 'HentaiVerse 页面请求失败' })
+  }
+})
+
+app.get('/hentaiverse/equipment-data', async (req, res) => {
+  res.set('Cache-Control', 'no-store')
+  if (!isAllowedOrigin(req.headers.origin)) return res.status(403).json({ error: '不允许的请求来源' })
+  let target
+  try {
+    target = parseHentaiVerseEquipmentSource(req.query.path, req.headers.cookie)
+  } catch (error) {
+    return res.status(400).json({ error: error.message })
+  }
+  try {
+    const response = await requestHentaiVerse(req, target, 'GET')
+    res.set('X-Content-Type-Options', 'nosniff')
+    return await sendHentaiVerseResponse(res, response, 'text/plain; charset=UTF-8')
+  } catch (error) {
+    return res.status(502).json({ error: error.message || '装备属性请求失败' })
   }
 })
 

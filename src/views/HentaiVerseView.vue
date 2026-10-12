@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Lightning, Refresh } from '@element-plus/icons-vue'
 import AbilityPanel from '@/components/hentaiverse/AbilityPanel.vue'
@@ -15,6 +15,7 @@ import { HentaiVerseBusi } from '@/core/hentaiverse/hentaiVerseBusi'
 import { HENTAIVERSE_SECTIONS } from '@/core/hentaiverse/hentaiVerseProtocol'
 import type {
   HentaiVerseAbilityActionName,
+  HentaiVerseEquipmentDetail,
   HentaiVerseFormSection,
   HentaiVerseFormData,
   HentaiVersePage,
@@ -39,7 +40,39 @@ const error = ref('')
 const battleBlocked = ref(false)
 const currentTarget = ref<HentaiVersePageTarget>({ ...HENTAIVERSE_SECTIONS[0]!.target })
 const characterSummary = ref({ name: '', persona: '' })
+const equipmentDetails = ref<Record<string, HentaiVerseEquipmentDetail>>({})
+const equipmentDetailsLoading = ref(false)
+const equipmentDetailsError = ref('')
 let requestId = 0
+let equipmentDetailsRequestId = 0
+
+watch(page, (nextPage) => void loadEquipmentDetails(nextPage))
+onBeforeUnmount(() => {
+  equipmentDetailsRequestId++
+})
+
+async function loadEquipmentDetails(nextPage = page.value) {
+  const currentRequest = ++equipmentDetailsRequestId
+  equipmentDetails.value = {}
+  equipmentDetailsError.value = ''
+  const sources = nextPage?.equipmentSources || []
+  equipmentDetailsLoading.value = sources.length > 0
+  if (!sources.length) return
+  await Promise.all(
+    sources.map(async (source) => {
+      try {
+        const details = await busi.getEquipmentDetails(source)
+        if (currentRequest === equipmentDetailsRequestId && page.value === nextPage)
+          Object.assign(equipmentDetails.value, details)
+      } catch {
+        if (currentRequest === equipmentDetailsRequestId && page.value === nextPage)
+          equipmentDetailsError.value = '装备属性暂时无法加载，请重试'
+      }
+    }),
+  )
+  if (currentRequest === equipmentDetailsRequestId && page.value === nextPage)
+    equipmentDetailsLoading.value = false
+}
 
 const currentMeta = computed(
   () => HENTAIVERSE_SECTIONS.find((item) => item.key === activeSection.value)!,
@@ -411,6 +444,10 @@ onMounted(() => {
             v-else-if="activeSection === 'equipment' && page.equipment"
             :data="page.equipment"
             :loading="loading"
+            :details="equipmentDetails"
+            :details-loading="equipmentDetailsLoading"
+            :details-error="equipmentDetailsError"
+            @retry-details="loadEquipmentDetails()"
             @set="selectEquipmentSet"
             @overview="showEquipmentOverview"
             @slot="selectEquipmentSlot"
@@ -456,6 +493,10 @@ onMounted(() => {
             v-else-if="page.itemWorld"
             :data="page.itemWorld"
             :loading="loading"
+            :details="equipmentDetails"
+            :details-loading="equipmentDetailsLoading"
+            :details-error="equipmentDetailsError"
+            @retry-details="loadEquipmentDetails()"
             @category="loadSection('itemWorld', { filter: $event })"
             @start="submitForm('itemWorld', $event)"
           />

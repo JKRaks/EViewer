@@ -32,6 +32,7 @@ import type {
   HentaiVerseItemWorldPage,
 } from './model/hentaiVerse'
 import { getHentaiVerseSection } from './hentaiVerseProtocol'
+import { readEquipmentSources } from './hentaiVerseEquipment'
 import {
   decodeHentaiVerseGlyphs,
   getAttributeLabel,
@@ -79,6 +80,9 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
     attributes: parseAttributes(scriptText),
     personas: parsePersonas(document, personaName),
     equipment,
+    equipmentSources: ['equipment', 'itemWorld'].includes(section)
+      ? readEquipmentSources(document)
+      : [],
     abilities,
     training,
     inventory,

@@ -10,6 +10,7 @@ export async function onRequest({ request, env, next }) {
       '/auth/cookies',
       '/auth/logout',
       '/hentaiverse/page',
+      '/hentaiverse/equipment-data',
       '/hentaiverse/form',
       '/hentaiverse/action',
       '/image-proxy',

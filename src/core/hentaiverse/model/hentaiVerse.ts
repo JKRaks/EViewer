@@ -128,6 +128,18 @@ export interface HentaiVerseEquipmentCandidate {
   equipped: boolean
 }
 
+export interface HentaiVerseEquipmentDetail {
+  id: string
+  name: string
+  summary: string
+  status: string[]
+  effects: string[]
+  groups: {
+    title: string
+    metrics: (HentaiVerseMetric & { base?: string })[]
+  }[]
+}
+
 export interface HentaiVerseEquipmentPage {
   sets: HentaiVerseEquipmentSet[]
   slots: HentaiVerseEquipmentSlot[]
@@ -245,6 +257,7 @@ export interface HentaiVersePage {
   attributes: HentaiVerseAttribute[]
   personas: HentaiVersePersona[]
   equipment?: HentaiVerseEquipmentPage
+  equipmentSources?: string[]
   abilities?: HentaiVerseAbilityPage
   training?: HentaiVerseTrainingPage
   inventory?: HentaiVerseInventoryPage
