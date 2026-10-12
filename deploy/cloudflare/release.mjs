@@ -129,7 +129,16 @@ export async function release(
       event?.worker_name !== plan.workerName ||
       (plan.environment === 'preview' && event.preview_name !== 'pre')
     )
-      throw new Error('Wrangler 发布结果未指向目标应用或固定 pre Preview')
+      throw new Error(
+        `Wrangler 发布结果未指向目标应用或固定 pre Preview：${JSON.stringify({
+          type: event?.type,
+          worker_name: event?.worker_name,
+          preview_name: event?.preview_name,
+          preview_slug: event?.preview_slug,
+          deployment_urls: event?.deployment_urls,
+          preview_urls: event?.preview_urls,
+        })}`,
+      )
     const urls =
       plan.environment === 'preview'
         ? event.deployment_urls || []
