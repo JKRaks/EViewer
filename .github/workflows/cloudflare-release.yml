@@ -23,16 +23,11 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            deploy/eproxy/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm ci --prefix deploy/eproxy
       - run: npm run build
       - name: Check proxy and app entry
-        run: |
-          npm run check --prefix deploy/eproxy
-          node --check worker-app.js
+        run: npm run check:worker
       - name: Validate production and Preview asset bundles
         run: |
           node deploy/cloudflare/release.mjs --dry-run --branch main --commit "$GITHUB_SHA"
@@ -61,11 +56,8 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: |
-            package-lock.json
-            deploy/eproxy/package-lock.json
+          cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm ci --prefix deploy/eproxy
       - uses: actions/download-artifact@v4
         with:
           name: frontend-${{ github.sha }}

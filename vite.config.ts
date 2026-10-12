@@ -82,7 +82,6 @@ export default defineConfig({
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,ico,png,webp,json}'],
         globIgnores: [
-          '_routes.json',
           'deployment.json',
           '**/tagTranslation.worker-*.js',
           '**/unofficialTagTranslations-*.js',
