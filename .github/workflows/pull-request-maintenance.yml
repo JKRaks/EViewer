@@ -64,6 +64,15 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo
+            const reviewReminder = '@JKRaks 请审查预发流水线和功能验证结果，确认通过后手动合并此 PR。'
+            const ensureReviewReminder = async pr => {
+              if (!(pr.body || '').includes(reviewReminder)) {
+                await github.rest.pulls.update({
+                  owner, repo, pull_number: pr.number,
+                  body: [pr.body || '', reviewReminder].filter(Boolean).join('\n\n'),
+                })
+              }
+            }
             const findOpen = async () => {
               const { data } = await github.rest.pulls.list({
                 owner, repo, state: 'open', base: 'main', head: `${owner}:pre`,
@@ -72,6 +81,7 @@ jobs:
             }
             const existing = await findOpen()
             if (existing) {
+              await ensureReviewReminder(existing)
               core.notice(`已有 pre → main PR：${existing.html_url}`)
               return
             }
@@ -89,7 +99,9 @@ jobs:
                 body: [
                   '此 PR 由 pre 分支更新自动创建，后续 pre 提交会自动加入此 PR。',
                   '',
-                  '请确认预发流水线和功能验证通过后手动合并；合并到 main 将触发生产发布。',
+                  reviewReminder,
+                  '',
+                  '合并到 main 将触发生产发布。',
                   'pre 和 main 会保留，其他本仓库 PR 来源分支在合并后自动清理。',
                 ].join('\n'),
               })
@@ -98,6 +110,7 @@ jobs:
               if (error.status === 422) {
                 const concurrent = await findOpen()
                 if (concurrent) {
+                  await ensureReviewReminder(concurrent)
                   core.notice(`已有 pre → main PR：${concurrent.html_url}`)
                   return
                 }
