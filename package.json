@@ -8,8 +8,7 @@
   },
   "scripts": {
     "deploy:cloudflare": "node deploy/cloudflare/release.mjs",
-    "deploy:pages": "node deploy/cloudflare/pages-release.mjs",
-    "dev:worker": "node deploy/eproxy/node_modules/wrangler/bin/wrangler.js dev --config wrangler.jsonc --ip 127.0.0.1 --port 8787",
+    "dev:worker": "wrangler dev --config wrangler.jsonc --ip 127.0.0.1 --port 8787",
     "dev": "vite",
     "build": "run-p type-check \"build-only {@}\" --",
     "preview": "vite preview",
