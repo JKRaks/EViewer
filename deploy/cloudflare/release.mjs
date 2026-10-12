@@ -1,5 +1,5 @@
 import { execFile, spawn } from 'node:child_process'
-import { cp, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -9,8 +9,6 @@ import ts from 'typescript'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const wrangler = path.join(root, 'deploy/eproxy/node_modules/wrangler/bin/wrangler.js')
-const projectName = 'eviewer'
-const productionBranch = 'main'
 const git = promisify(execFile)
 
 async function assertCleanCheckout(commit) {
@@ -19,98 +17,59 @@ async function assertCleanCheckout(commit) {
   if (head !== commit || changed) throw new Error('请提交所有修改，并使用当前 HEAD 发布')
 }
 
-async function workerConfig() {
-  const filename = path.join(root, 'deploy/eproxy/wrangler.jsonc')
-  const parsed = ts.parseConfigFileTextToJson(filename, await readFile(filename, 'utf8'))
-  if (parsed.error) throw new Error('Worker 配置不是有效的 JSONC')
-  return parsed.config
-}
-
-function prNumber(value) {
-  if (!/^[1-9]\d{0,9}$/.test(String(value))) throw new Error('PR 编号不正确')
-  return String(value)
-}
-
-export async function releasePlan({ branch, commit, pr }) {
-  if (!branch || /[\0\r\n]/.test(branch)) throw new Error('缺少有效的发布分支')
+export async function releasePlan({ branch, commit }) {
+  if (!['main', 'pre'].includes(branch)) throw new Error('仅允许发布固定 pre 或 main 分支')
   if (!/^[a-f0-9]{40}$/.test(commit || '')) throw new Error('发布必须使用完整的 Git 提交编号')
-  const base = await workerConfig()
-  const environment = branch === productionBranch ? 'production' : 'preview'
-  const workerName =
-    environment === 'production'
-      ? base.name
-      : `${base.name}-${pr ? `pr-${prNumber(pr)}` : 'preview'}-${commit.slice(0, 16)}`
-  const worker = {
-    ...base,
-    main: path.join(root, 'proxy-server.workers.js'),
-    name: workerName,
-    vars: {
-      ...base.vars,
-      EVIEWER_PROXY_REVISION: commit,
-      EVIEWER_PROXY_ENVIRONMENT: environment,
-    },
+  const filename = path.join(root, 'wrangler.jsonc')
+  const parsed = ts.parseConfigFileTextToJson(filename, await readFile(filename, 'utf8'))
+  if (parsed.error) throw new Error('应用配置不是有效的 JSONC')
+  const config = parsed.config
+  if (
+    config.assets?.binding !== 'ASSETS' ||
+    !config.previews ||
+    config.pages_build_output_dir ||
+    config.env
+  )
+    throw new Error('发布配置必须使用 Static Assets 和原生 Preview')
+  delete config.$schema
+  config.main = path.resolve(root, config.main)
+  config.assets.directory = path.resolve(root, config.assets.directory)
+  config.vars = {
+    ...config.vars,
+    EVIEWER_PROXY_REVISION: commit,
+    EVIEWER_PROXY_ENVIRONMENT: 'production',
   }
-  delete worker.$schema
-  if (environment === 'preview') {
-    worker.routes = []
-    worker.workers_dev = false
-    worker.preview_urls = false
-    worker.keep_vars = false
-    worker.vars.ALLOWED_AUTH_EXPORT_ORIGINS = ''
-    worker.ratelimits = base.ratelimits.map((binding) => ({ ...binding, namespace_id: '1' }))
+  config.previews.vars = {
+    ...config.previews.vars,
+    EVIEWER_PROXY_REVISION: commit,
+    EVIEWER_PROXY_ENVIRONMENT: 'preview',
   }
-  const deployment = {
-    services: [{ binding: 'EPROXY', service: workerName }],
-    vars: {
-      EVIEWER_PROXY_REVISION: commit,
-      EVIEWER_PROXY_ENVIRONMENT: environment,
-    },
+  return {
+    branch,
+    commit,
+    environment: branch === 'main' ? 'production' : 'preview',
+    workerName: config.name,
+    config,
   }
-  const pages = {
-    name: projectName,
-    pages_build_output_dir: path.join(root, 'dist'),
-    compatibility_date: base.compatibility_date,
-    ...deployment,
-    env: { [environment]: deployment },
-  }
-  return { branch, commit, environment, workerName, accountId: base.account_id, worker, pages }
 }
 
-function runWrangler(args, cwd) {
+function runWrangler(args, cwd, outputFile) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [wrangler, ...args], {
       cwd,
       stdio: 'inherit',
-      env: { ...process.env, WRANGLER_SEND_METRICS: 'false' },
+      env: {
+        ...process.env,
+        WRANGLER_SEND_METRICS: 'false',
+        WRANGLER_LOG_PATH: process.env.WRANGLER_LOG_PATH || path.join(cwd, '.wrangler/logs'),
+        WRANGLER_OUTPUT_FILE_PATH: outputFile,
+      },
     })
     child.on('error', reject)
-    child.on('exit', (code) => {
-      if (code === 0) resolve()
-      else reject(new Error(`Wrangler ${args[0]} 失败（${code}）`))
-    })
-  })
-}
-
-function cloudflareApi(accountId, fetcher) {
-  const token = process.env.CLOUDFLARE_API_TOKEN
-  if (!token) throw new Error('请在安全环境变量或 Actions Secrets 中配置 CLOUDFLARE_API_TOKEN')
-  return async (endpoint, method = 'GET') => {
-    const response = await fetcher(
-      `https://api.cloudflare.com/client/v4/accounts/${accountId}${endpoint}`,
-      {
-        method,
-        headers: { Authorization: `Bearer ${token}` },
-        signal: AbortSignal.timeout(30_000),
-      },
+    child.on('exit', (code) =>
+      code === 0 ? resolve() : reject(new Error(`Wrangler ${args[0]} 失败（${code}）`)),
     )
-    const payload = await response.json()
-    if (!response.ok || !payload.success) {
-      throw new Error(
-        `Cloudflare API ${response.status}: ${payload.errors?.map((error) => error.message).join('; ') || '请求失败'}`,
-      )
-    }
-    return payload.result
-  }
+  })
 }
 
 export async function release(
@@ -118,163 +77,107 @@ export async function release(
   { run = runWrangler, fetcher = fetch, verifyCheckout = assertCleanCheckout, wait = delay } = {},
 ) {
   const plan = await releasePlan(options)
-  if (process.env.CLOUDFLARE_ACCOUNT_ID && process.env.CLOUDFLARE_ACCOUNT_ID !== plan.accountId) {
-    throw new Error('发布账号与仓库中的 Cloudflare 账号不一致')
-  }
-  if (!options.dryRun) await verifyCheckout(plan.commit)
-  // Build the frontend before changing either live service.
-  await readFile(path.join(root, 'dist/index.html'))
-  const api = options.dryRun ? undefined : cloudflareApi(plan.accountId, fetcher)
-  if (api) {
-    const project = await api(`/pages/projects/${projectName}`)
-    if (project.production_branch !== productionBranch) {
-      throw new Error('Pages 生产分支必须为 main，已停止发布')
-    }
-  }
-  console.log(
-    JSON.stringify({
-      environment: plan.environment,
-      branch: plan.branch,
-      revision: plan.commit,
-      worker: plan.workerName,
-      binding: 'EPROXY',
-      dryRun: Boolean(options.dryRun),
-    }),
+  if (
+    process.env.CLOUDFLARE_ACCOUNT_ID &&
+    process.env.CLOUDFLARE_ACCOUNT_ID !== plan.config.account_id
   )
-  const directory = await mkdtemp(path.join(tmpdir(), 'eviewer-release-'))
+    throw new Error('发布账号与仓库中的 Cloudflare 账号不一致')
+  await readFile(path.join(plan.config.assets.directory, 'index.html'))
+  const build = JSON.parse(
+    await readFile(path.join(plan.config.assets.directory, 'deployment.json'), 'utf8'),
+  )
+  if (build.revision !== plan.commit) throw new Error('前端构建与发布提交不一致，请重新构建')
+  if (!options.dryRun) {
+    await verifyCheckout(plan.commit)
+    if (!process.env.CLOUDFLARE_API_TOKEN)
+      throw new Error('请在安全环境变量或 Actions Secrets 中配置 CLOUDFLARE_API_TOKEN')
+  }
+  const directory = await mkdtemp(path.join(tmpdir(), 'eviewer-static-assets-'))
   try {
-    await writeFile(path.join(directory, 'worker.json'), JSON.stringify(plan.worker, null, 2))
-    await writeFile(path.join(directory, 'wrangler.json'), JSON.stringify(plan.pages, null, 2))
-    await cp(path.join(root, 'functions'), path.join(directory, 'functions'), { recursive: true })
-    await run(
-      [
-        'pages',
-        'functions',
-        'build',
-        'functions',
-        '--outfile',
-        path.join(directory, 'pages.bundle'),
-        '--project-directory',
-        directory,
-        '--build-metadata-path',
-        path.join(directory, 'pages-metadata.json'),
-      ],
-      directory,
+    const configPath = path.join(directory, 'wrangler.json')
+    const outputFile = path.join(directory, 'wrangler-output.jsonl')
+    // Native Preview has no dry-run. Compile its scoped settings with deploy
+    // --dry-run; publishing a Preview always uses the native preview command.
+    const config =
+      options.dryRun && plan.environment === 'preview'
+        ? { ...plan.config, ...plan.config.previews }
+        : plan.config
+    await writeFile(configPath, JSON.stringify(config, null, 2))
+    console.log(
+      JSON.stringify({
+        worker: plan.workerName,
+        branch: plan.branch,
+        revision: plan.commit,
+        dryRun: Boolean(options.dryRun),
+      }),
     )
-    const bundle = await readFile(path.join(directory, 'pages.bundle'))
-    const boundary = bundle.subarray(2, bundle.indexOf('\r\n')).toString()
-    const multipart = await new Response(bundle, {
-      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}` },
-    }).formData()
-    const metadataFile = multipart.get('metadata')
-    const metadata = JSON.parse(
-      typeof metadataFile === 'string' ? metadataFile : await metadataFile.text(),
+    const args = options.dryRun
+      ? ['deploy', '--dry-run', '--outdir', path.join(directory, 'bundle')]
+      : plan.environment === 'preview'
+        ? ['preview', '--name', 'pre', '--worker-name', plan.workerName, '--ignore-base-config']
+        : ['deploy']
+    await run([...args, '--config', configPath], root, outputFile)
+    if (options.dryRun) return plan
+    const events = (await readFile(outputFile, 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line))
+    const event = events.findLast(
+      (item) => item.type === (plan.environment === 'preview' ? 'preview' : 'deploy'),
     )
     if (
-      !metadata.bindings?.some(
-        (binding) => binding.name === 'EPROXY' && binding.service === plan.workerName,
-      ) ||
-      !metadata.bindings?.some(
-        (binding) => binding.name === 'EVIEWER_PROXY_REVISION' && binding.text === plan.commit,
-      ) ||
-      !metadata.bindings?.some(
-        (binding) =>
-          binding.name === 'EVIEWER_PROXY_ENVIRONMENT' && binding.text === plan.environment,
-      )
-    ) {
-      throw new Error('Pages 编译产物未包含对应的 Worker 与发布版本')
-    }
-    await run(
-      [
-        'deploy',
-        '--config',
-        path.join(directory, 'worker.json'),
-        ...(options.dryRun ? ['--dry-run', '--outdir', path.join(directory, 'worker-output')] : []),
-      ],
-      directory,
+      event?.worker_name !== plan.workerName ||
+      (plan.environment === 'preview' && event.preview_name !== 'pre')
     )
-    if (options.dryRun) return plan
-    await run(
-      [
-        'pages',
-        'deploy',
-        '--project-name',
-        projectName,
-        '--branch',
-        plan.branch,
-        '--commit-hash',
-        plan.commit,
-        '--commit-dirty=false',
-      ],
-      directory,
-    )
+      throw new Error('Wrangler 发布结果未指向目标应用或固定 pre Preview')
+    const urls =
+      plan.environment === 'preview'
+        ? event.deployment_urls || []
+        : (event.targets || []).filter((target) => /^https:\/\//.test(target))
+    const target = urls.find((url) => {
+      try {
+        return new URL(url).protocol === 'https:'
+      } catch {
+        return false
+      }
+    })
+    if (!target) throw new Error('发布结果未提供可验证的应用 URL')
     for (let attempt = 0; attempt < 10; attempt++) {
-      const deployments = await api(
-        `/pages/projects/${projectName}/deployments?env=${plan.environment}&per_page=25`,
-      )
-      const deployment = deployments.find(
-        (item) =>
-          item.deployment_trigger?.metadata?.commit_hash === plan.commit &&
-          item.deployment_trigger?.metadata?.branch === plan.branch,
-      )
-      if (deployment?.url) {
-        try {
-          const health = await fetcher(new URL('/health', deployment.url), {
+      try {
+        const response = await fetcher(new URL('/health', target), {
+          cache: 'no-store',
+          signal: AbortSignal.timeout(10_000),
+        })
+        const health = await response.json()
+        if (
+          response.ok &&
+          health.revision === plan.commit &&
+          health.environment === plan.environment &&
+          health.hosting === 'workers-static-assets' &&
+          health.assets === true
+        ) {
+          const assetResponse = await fetcher(new URL('/deployment.json', target), {
             cache: 'no-store',
             signal: AbortSignal.timeout(10_000),
           })
-          const status = await health.json()
-          if (
-            health.ok &&
-            status.revision === plan.commit &&
-            status.environment === plan.environment
-          ) {
-            console.log(`发布并验证完成：${deployment.url}`)
-            return plan
+          if (!assetResponse.ok || (await assetResponse.json()).revision !== plan.commit) {
+            if (attempt < 9) await wait(3_000)
+            continue
           }
-        } catch {
-          // A new Pages deployment may take a few seconds to propagate.
+          console.log(`发布并验证完成：${target}`)
+          if (plan.environment === 'preview')
+            console.log(`固定 pre 地址：${(event.preview_urls || []).join(', ')}`)
+          return plan
         }
+      } catch {
+        // Allow propagation without repeating the publish.
       }
       if (attempt < 9) await wait(3_000)
     }
-    throw new Error('未能确认 Pages 与 Worker 版本一致，请检查部署状态及 EPROXY 绑定')
+    throw new Error('未能确认静态资源与代理属于目标提交，请检查部署状态')
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
-}
-
-export async function cleanupPreview(pr, branch, { fetcher = fetch } = {}) {
-  if (!branch || branch === productionBranch) throw new Error('清理预览必须提供非生产分支')
-  const base = await workerConfig()
-  const prefix = `${base.name}-pr-${prNumber(pr)}-`
-  const api = cloudflareApi(base.account_id, fetcher)
-  const workers = (await api('/workers/scripts')).filter(
-    (worker) =>
-      worker.id.startsWith(prefix) && /^[a-f0-9]{16}$/.test(worker.id.slice(prefix.length)),
-  )
-  const commits = new Set(workers.map((worker) => worker.id.slice(prefix.length)))
-  const matches = []
-  for (let page = 1; ; page++) {
-    const deployments = await api(
-      `/pages/projects/${projectName}/deployments?env=preview&per_page=25&page=${page}`,
-    )
-    for (const deployment of deployments) {
-      const commit = deployment.deployment_trigger?.metadata?.commit_hash || ''
-      if (
-        commits.has(commit.slice(0, 16)) &&
-        deployment.deployment_trigger?.metadata?.branch === branch
-      )
-        matches.push(deployment)
-    }
-    if (deployments.length < 25) break
-  }
-  // Collect before deleting so pagination does not skip deployments as the list shrinks.
-  // Delete Pages first; do not leave live pages bound to deleted Workers.
-  for (const deployment of matches)
-    await api(`/pages/projects/${projectName}/deployments/${deployment.id}?force=true`, 'DELETE')
-  for (const worker of workers) await api(`/workers/scripts/${worker.id}`, 'DELETE')
-  console.log(`已清理 PR #${pr} 的 ${workers.length} 个预发 Worker`)
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -283,19 +186,10 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
       options: {
         branch: { type: 'string' },
         commit: { type: 'string' },
-        pr: { type: 'string' },
         'dry-run': { type: 'boolean' },
-        'cleanup-pr': { type: 'string' },
       },
     })
-    if (values['cleanup-pr']) await cleanupPreview(values['cleanup-pr'], values.branch)
-    else
-      await release({
-        branch: values.branch,
-        commit: values.commit,
-        pr: values.pr,
-        dryRun: values['dry-run'],
-      })
+    await release({ branch: values.branch, commit: values.commit, dryRun: values['dry-run'] })
   } catch (error) {
     const message = String(error.message)
     console.error(

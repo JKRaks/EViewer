@@ -1,6 +1,8 @@
-# Pages 与 eproxy 自动发布
+# Pages 与 eproxy 回退发布
 
-发布入口为仓库的 `.github/workflows/cloudflare-release.yml`，由同一提交依次构建前端、检查 Worker、编译并核对 Pages 绑定、发布 Worker、发布 Pages，最后通过新部署的 `/health` 核对提交编号与环境。
+这是保留的原 Pages 方案。当前默认部署已迁移到 Workers Static Assets，参见根目录 README。原发布脚本保留为 `deploy/cloudflare/pages-release.mjs`（`npm run deploy:pages`）；备份标签可恢复原工作流。
+
+原自动发布入口为仓库的 `.github/workflows/cloudflare-release.yml`，由同一提交依次构建前端、检查 Worker、编译并核对 Pages 绑定、发布 Worker、发布 Pages，最后通过新部署的 `/health` 核对提交编号与环境。
 
 | 来源                 | Worker                      | Pages 的 EPROXY       |
 | -------------------- | --------------------------- | --------------------- |
@@ -16,7 +18,7 @@
 
 [Workers Preview 的服务绑定限制](https://developers.cloudflare.com/workers/previews/resources/#service-bindings)是调用目标 Worker 的生产部署，不会自动对应目标 Worker 的同名 Preview。因此这里创建实际的独立 Worker，而不是绑定 Preview URL，也不使用 URL 代理。
 
-`deploy/cloudflare/release.mjs` 为当前 Pages 上传生成带 `EPROXY` 的 Wrangler 配置。固定版本 Wrangler 4.136.0 将服务目标和提交编号写入该次上传的 Functions bundle 元数据；脚本在发布前解析上传产物确认绑定。配置与产物在临时目录中生成并清理，仓库没有按分支不断改写的配置文件。原有 Git 集成的 Pages 项目可以使用 Wrangler 上传，无需另建项目。
+`deploy/cloudflare/pages-release.mjs` 为当前 Pages 上传生成带 `EPROXY` 的 Wrangler 配置。固定版本 Wrangler 4.136.0 将服务目标和提交编号写入该次上传的 Functions bundle 元数据；脚本在发布前解析上传产物确认绑定。配置与产物在临时目录中生成并清理，仓库没有按分支不断改写的配置文件。原有 Git 集成的 Pages 项目可以使用 Wrangler 上传，无需另建项目。
 
 ## 一次性启用
 
@@ -36,7 +38,7 @@ npm ci
 npm ci --prefix deploy/eproxy
 npm run build
 npm run check --prefix deploy/eproxy
-npm run deploy:cloudflare -- --dry-run --branch feature/example --pr 11 --commit 完整40位提交编号
+npm run deploy:pages -- --dry-run --branch feature/example --pr 11 --commit 完整40位提交编号
 ```
 
 演练不需要登录，也不会发布；会检查 Worker 部署产物以及实际 Pages Functions 上传包内的绑定。只检查生产配置时将 `--branch` 设为 `main`，省略 `--pr`。
