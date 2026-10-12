@@ -36,13 +36,37 @@
   "ratelimits": [
     { "name": "proxy-df", "namespace_id": "2", "simple": { "limit": 10, "period": 10 } },
   ],
-  "observability": { "enabled": true },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "redact_query_string": false,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 0.2,
+      "invocation_logs": true,
+      "persist": true,
+    },
+    "traces": { "enabled": true, "head_sampling_rate": 1, "persist": true },
+    "issues": { "enabled": true },
+  },
   "previews": {
     "vars": { "ALLOWED_AUTH_EXPORT_ORIGINS": "", "EVIEWER_PROXY_ENVIRONMENT": "preview" },
     "version_metadata": { "binding": "EVIEWER_VERSION" },
     "ratelimits": [
       { "name": "proxy-df", "namespace_id": "3", "simple": { "limit": 10, "period": 10 } },
     ],
-    "observability": { "enabled": true },
+    "observability": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "redact_query_string": false,
+      "logs": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "invocation_logs": true,
+        "persist": true,
+      },
+      "traces": { "enabled": true, "head_sampling_rate": 1, "persist": true },
+      "issues": { "enabled": true },
+    },
   },
 }
