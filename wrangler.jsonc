@@ -10,7 +10,7 @@
     "nodejs_compat_populate_process_env",
   ],
   "workers_dev": true,
-  "preview_urls": false,
+  "preview_urls": true,
   "keep_vars": false,
   // Trial on workers.dev first. Production domain cutover is a separate step.
   "routes": [],

@@ -102,6 +102,8 @@ npm run deploy:cloudflare -- --dry-run --branch main --commit 完整40位当前�
 
 原生 Preview 命令没有 dry-run，演练用其预发变量和绑定编译同一资源包；实际 `pre` 发布使用 `wrangler preview --name pre`，不会调用生产 `deploy`。Preview 的变量、版本元数据及限流绑定在 `previews` 中明确声明，资产和兼容性设置放在顶层。生产与预发使用不同的限流 namespace。
 
+`preview_urls: true` 同时允许原生 Preview 的访问地址。已有 Worker 的开关不会由 `wrangler preview` 自动同步，发布脚本会核对目标 Worker，并通过局部 PATCH 启用它的预览 URL，保留生产路由和子域状态。实际返回可能不含 `worker_name`，脚本通过 Cloudflare API 核对 Worker、Preview 和部署 ID，再验证前后端提交、页面深链及 API 路由。
+
 实际发布移除 `--dry-run`，要求工作区干净、当前 HEAD 与参数一致、`deployment.json` 中的前端构建提交一致，并配置 `CLOUDFLARE_API_TOKEN`。部署后检查 `/health` 与静态 `deployment.json` 的提交、环境及资产绑定。请求仅在发布时做有限验证，不在浏览器持续轮询。新旧页面仍需保持接口兼容，已打开的旧标签页不会因发布立即刷新。
 
 GitHub Actions 使用仓库 Secret `CLOUDFLARE_API_TOKEN`，需目标账号的 Workers Scripts: Edit、Account Settings: Read 权限。PR 验证任务不读取 Token；发布任务只在 `pre` 或 `main` 推送后运行，并使用同一工作流构建的前端产物。不要同时开启重复的 Cloudflare 自动构建入口；若改用 Workers Builds，应关闭这条 Actions 发布任务。原生 Preview 需要 Wrangler 4.135.0 以上，本仓库固定 4.136.0。
