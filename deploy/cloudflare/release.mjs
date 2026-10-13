@@ -8,7 +8,7 @@ import { setTimeout as delay } from 'node:timers/promises'
 import ts from 'typescript'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
-const wrangler = path.join(root, 'deploy/eproxy/node_modules/wrangler/bin/wrangler.js')
+const wrangler = path.join(root, 'node_modules/wrangler/bin/wrangler.js')
 const git = promisify(execFile)
 
 async function assertCleanCheckout(commit) {

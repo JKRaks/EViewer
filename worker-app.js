@@ -25,9 +25,7 @@ export default {
     const { pathname } = new URL(request.url)
     if (isApiPath(pathname)) {
       const apiRequest = new Request(request)
-      // This app and its proxy are one deployment. Do not forward caller-supplied
-      // legacy Pages version selectors to the embedded proxy.
-      apiRequest.headers.delete('X-EViewer-Proxy-Revision')
+      // Do not let callers select a different Worker version for an upstream request.
       apiRequest.headers.delete('Cloudflare-Workers-Version-Overrides')
       const response = await proxy.fetch(apiRequest, env)
       if (pathname !== '/health' || !response.ok) return response
