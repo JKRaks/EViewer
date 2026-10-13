@@ -1113,20 +1113,7 @@ export default {
     })
     let response
     try {
-      const expectedRevision = request.headers.get('X-EViewer-Proxy-Revision')
-      if (
-        expectedRevision &&
-        env?.EVIEWER_PROXY_REVISION &&
-        expectedRevision !== env.EVIEWER_PROXY_REVISION
-      ) {
-        response = jsonResponse(
-          request,
-          { error: '代理服务版本未同步，请等待部署完成后刷新页面' },
-          503,
-        )
-      } else {
-        response = await handleRequest(request, env)
-      }
+      response = await handleRequest(request, env)
       return response
     } catch (error) {
       recordRequestError(request, 'request.exception', error)
