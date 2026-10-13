@@ -25,6 +25,7 @@ git checkout -b feature/your-feature-name
 ```
 
 命名建议：
+
 - `feature/` - 新功能
 - `fix/` - Bug 修复
 - `docs/` - 文档更新
@@ -36,17 +37,17 @@ git checkout -b feature/your-feature-name
 安装依赖：
 
 ```bash
-npm install
+npm ci
 ```
 
 启动开发服务器：
 
 ```bash
-npm run dev              # Vite 开发服务器
+npm run dev              # Vite 开发服务器（热更新）
 npm run dev:worker       # 本地 Worker（包含前端与代理）
 ```
 
-> **注意**：`dev:worker` 需要先运行 `npm run build` 构建前端资产。
+> **注意**：`dev:worker` 需要先运行 `npm run build` 构建前端资产。如需热更新开发，可另启动 Vite 开发服务器并将 `VITE_EH_URL` 指向 Worker 地址。
 
 ### 4. 代码规范 / Code Standards
 
@@ -56,10 +57,12 @@ npm run dev:worker       # 本地 Worker（包含前端与代理）
 npm run lint            # 运行 ESLint 自动修复
 npm run format          # 运行 Prettier 格式化
 npm run type-check      # TypeScript 类型检查
+npm run check:worker    # Worker 代码检查
 npm run build           # 构建成功
 ```
 
 **代码风格：**
+
 - 遵循项目现有代码风格和命名约定
 - TypeScript 类型标注完整
 - 组件和函数职责单一
@@ -69,13 +72,14 @@ npm run build           # 构建成功
 
 使用清晰的提交信息，推荐格式：
 
-```
+```text
 <type>(<scope>): <subject>
 
 <body>
 ```
 
 **Type 类型：**
+
 - `feat`: 新功能
 - `fix`: Bug 修复
 - `docs`: 文档更新
@@ -86,7 +90,8 @@ npm run build           # 构建成功
 - `chore`: 构建或工具变动
 
 **示例：**
-```
+
+```text
 feat(viewer): add zoom controls to image viewer
 
 Add zoom in/out buttons and keyboard shortcuts (+ / -) to the image viewer.
@@ -114,6 +119,7 @@ git push origin feature/your-feature-name
 5. **检查 CI 状态**：确保所有检查通过
 
 **分支策略说明：**
+
 - 功能分支 → `pre`：所有新功能和修复先合并到预发环境
 - `pre` → `main`：经所有者在预发环境充分测试后，由维护者将 `pre` 合并到生产分支
 
@@ -130,6 +136,7 @@ git push origin feature/your-feature-name
 发现 Bug 或有功能建议？请在 [Issues](https://github.com/JKRaks/EViewer/issues) 中提交。
 
 **Bug 报告应包含：**
+
 - 问题描述
 - 复现步骤
 - 预期行为
@@ -138,6 +145,7 @@ git push origin feature/your-feature-name
 - 截图或错误日志（如有）
 
 **功能建议应包含：**
+
 - 功能描述
 - 使用场景
 - 预期效果
@@ -158,6 +166,7 @@ git push origin feature/your-feature-name
 - **合并到 `main`**：由项目所有者操作，部署到生产环境
 
 开发者应：
+
 1. 提交 PR 到 `pre` 分支
 2. 确保 CI 验证通过
 3. 等待代码审查
