@@ -31,7 +31,7 @@
 
 前端通过 `VITE_EH_URL` 指向的代理地址发送请求，代理转发至 E-Hentai / ExHentai 并附加认证 Cookie。生产环境中前端静态资源与代理由同一个 `eviewer-app` Worker 提供服务。
 
-```
+```text
 浏览器 → Cloudflare Worker (eviewer-app)
               ├── /              → Vue SPA 静态资源
               ├── /ehentai/*     → 代理 e-hentai.org
@@ -111,14 +111,14 @@ npm run deploy:cloudflare -- --dry-run --branch main --commit <完整40位提交
 ### 分支规则
 
 | 推送目标 | Worker 名称 |
-|---------|------------|
-| `main`  | `eviewer-app`（生产） |
-| `pre`   | `eviewer-app` Preview |
+| --------- | ------------ |
+| `main` | `eviewer-app`（生产） |
+| `pre` | `eviewer-app` Preview |
 | 功能分支 PR | 仅构建和演练，合入 `pre` 后测试 |
 
 ## 项目结构
 
-```
+```text
 EViewer/
 ├── src/
 │   ├── components/       # Vue 组件
