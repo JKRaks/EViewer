@@ -1,7 +1,7 @@
 # EViewer
 
 [![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Node.js Version](https://img.shields.io/badge/node-%5E20.19.0%20%7C%7C%20%3E%3D22.12.0-brightgreen)](https://nodejs.org/)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.12.0-brightgreen)](https://nodejs.org/)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vue.js)](https://vuejs.org/)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare)](https://workers.cloudflare.com/)
 
@@ -9,23 +9,21 @@
 
 ## 功能
 
-- 浏览首页推荐、昨日排行与 Toplists
-- 搜索画廊（支持标签选择器）
-- 查看画廊详情与评论
-- 图片阅读器
-- 收藏夹管理
-- 阅读历史
-- 下载管理
-- 画廊分享（生成二维码）
-- HentaiVerse 战斗面板集成
-- 深色 / 浅色主题切换
-- PWA 支持
+- **浏览**：首页推荐、昨日排行与 Toplists
+- **搜索**：画廊搜索（支持标签选择器）
+- **阅读**：图片阅读器、画廊详情与评论
+- **收藏**：收藏夹管理、阅读历史
+- **账号**：认证配置、Cookie 管理
+- **资源**：种子下载、画廊分享（生成二维码）
+- **HentaiVerse**：战斗面板集成、装备与技能管理
+- **主题**：深色 / 浅色主题切换
+- **PWA**：离线访问支持
 
 ## 技术栈
 
 - **前端**：Vue 3、TypeScript、Vue Router、Pinia、Element Plus
 - **构建**：Vite 7、vue-tsc
-- **代理**：Node.js（本地开发）/ Cloudflare Workers（生产）
+- **代理**：Cloudflare Workers（生产与本地开发）
 - **存储**：IndexedDB（`idb`）、localStorage
 - **部署**：Cloudflare Workers Static Assets
 
@@ -46,12 +44,12 @@
 
 ### 前置要求
 
-- Node.js `^20.19.0` 或 `>=22.12.0`
+- Node.js `>=22.12.0`（推荐 Node.js 24）
 
 ### 安装
 
 ```sh
-npm install
+npm ci
 ```
 
 ### 启动 Vite 开发服务器
@@ -67,22 +65,18 @@ npm run dev
 同时运行前端资产与代理逻辑，地址为 `http://127.0.0.1:8787`，支持 Vue Router 深链接。
 
 ```sh
-npm install
+npm ci
 npm run build
 npm run dev:worker
 ```
+
+如需热更新开发，可另启动 Vite 开发服务器（`npm run dev`）并将 `VITE_EH_URL` 指向 Worker 地址。
 
 ## 认证配置
 
 代理使用 `ipb_member_id` 和 `ipb_pass_hash` Cookie 访问原站。在应用的「账号信息 → 认证信息 → 登录态」页面中填写并保存，或通过「提取 Cookie」按钮查看当前值。
 
 认证导出接口为 `POST /ehentai/auth/export`，仅接受同源或明确配置的 origin。
-
-**Node 代理：**
-
-```sh
-ALLOWED_ORIGINS="https://viewer.example.com" node proxy-server.js
-```
 
 **Cloudflare Worker（`wrangler.jsonc`）：**
 
@@ -141,7 +135,6 @@ EViewer/
 │   └── App.vue           # 根组件
 ├── deploy/cloudflare/    # Cloudflare 部署脚本
 ├── tool/                 # 标签组采集工具
-├── proxy-server.js       # Node.js 本地代理
 ├── proxy-server.workers.js  # Cloudflare Worker 代理逻辑
 ├── worker-app.js         # Worker 入口（静态资源 + 代理）
 └── wrangler.jsonc        # Wrangler 配置
@@ -150,16 +143,17 @@ EViewer/
 ## 其他命令
 
 ```sh
-npm run type-check   # TypeScript 类型检查
-npm run lint         # ESLint 自动修复
-npm run format       # Prettier 格式化 src/
-npm run build        # 生产构建
-npm run preview      # 预览构建产物
+npm run type-check      # TypeScript 类型检查
+npm run check:worker    # Worker 代码检查
+npm run lint            # ESLint 自动修复
+npm run format          # Prettier 格式化 src/
+npm run build           # 生产构建
+npm run preview         # 预览构建产物
 ```
 
 ## 版本管理
 
-项目使用 `pre` 分支进行预发环境测试，通过验证后合并到 `main` 生产分支。Cloudflare Workers 支持版本回滚，可在控制台或通过 API 操作。
+项目使用 `pre` 分支进行预发环境测试，通过验证后合并到 `main` 生产分支。Cloudflare Workers 支持版本回滚，可在 Workers 控制台的「Deployments」选项卡或通过 Wrangler CLI 操作。
 
 ## 开发环境推荐
 
