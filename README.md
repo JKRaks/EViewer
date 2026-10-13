@@ -1,117 +1,181 @@
-# jks-ehm
+# EViewer
 
-This template should help get you started developing with Vue 3 in Vite.
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.12.0-brightgreen)](https://nodejs.org/)
+[![Vue 3](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vue.js)](https://vuejs.org/)
+[![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare)](https://workers.cloudflare.com/)
 
-## Recommended IDE Setup
+基于 Vue 3 + Vite 构建的 E-Hentai / ExHentai 网页阅读器，通过自部署反向代理访问原站，支持部署至 Cloudflare Workers。
 
-[VS Code](https://code.visualstudio.com/) + [Vue (Official)](https://marketplace.visualstudio.com/items?itemName=Vue.volar) (and disable Vetur).
+## 功能
 
-## Recommended Browser Setup
+- **浏览**：首页推荐、昨日排行与 Toplists
+- **搜索**：画廊搜索（支持标签选择器）
+- **阅读**：图片阅读器、画廊详情与评论
+- **收藏**：收藏夹管理、阅读历史
+- **账号**：认证配置、Cookie 管理
+- **资源**：种子下载、画廊分享（生成二维码）
+- **HentaiVerse**：战斗面板集成、装备与技能管理
+- **主题**：深色 / 浅色主题切换
+- **PWA**：离线访问支持
 
-- Chromium-based browsers (Chrome, Edge, Brave, etc.):
-  - [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-  - [Turn on Custom Object Formatter in Chrome DevTools](http://bit.ly/object-formatters)
-- Firefox:
-  - [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)
-  - [Turn on Custom Object Formatter in Firefox DevTools](https://fxdx.dev/firefox-devtools-custom-object-formatters/)
+## 技术栈
 
-## Type Support for `.vue` Imports in TS
+- **前端**：Vue 3、TypeScript、Vue Router、Pinia、Element Plus
+- **构建**：Vite 7、vue-tsc
+- **代理**：Cloudflare Workers（生产与本地开发）
+- **存储**：IndexedDB（`idb`）、localStorage
+- **部署**：Cloudflare Workers Static Assets
 
-TypeScript cannot handle type information for `.vue` imports by default, so we replace the `tsc` CLI with `vue-tsc` for type checking. In editors, we need [Volar](https://marketplace.visualstudio.com/items?itemName=Vue.volar) to make the TypeScript language service aware of `.vue` types.
+## 架构概述
 
-## Customize configuration
+前端通过 `VITE_EH_URL` 指向的代理地址发送请求，代理转发至 E-Hentai / ExHentai 并附加认证 Cookie。生产环境中前端静态资源与代理由同一个 `eviewer-app` Worker 提供服务。
 
-See [Vite Configuration Reference](https://vite.dev/config/).
+```text
+浏览器 → Cloudflare Worker (eviewer-app)
+              ├── /              → Vue SPA 静态资源
+              ├── /ehentai/*     → 代理 e-hentai.org
+              ├── /exhentai/*    → 代理 exhentai.org
+              ├── /auth/*        → 认证接口
+              └── /hentaiverse/* → HentaiVerse 接口
+```
 
-## Project Setup
+## 本地开发
 
-### 提取当前认证 Cookie
+### 前置要求
 
-在「账号信息 → 认证信息 → 登录态」点击「提取 Cookie」，可查看并复制当前代理使用的
-`ipb_member_id` 和 `ipb_pass_hash`。关闭结果、切换认证页签、切换账号或离开页面会清空提取内容。
-需要同步更新前端和代理；已有 HttpOnly Cookie 无需重新保存。
+- Node.js `>=22.12.0`（推荐 Node.js 24）
 
-导出接口为 `POST /ehentai/auth/export`，响应禁止缓存。来源仅接受同源、明确配置的前端完整
-origin 及带端口的本地 HTTP 开发地址。多个 origin 用逗号分隔，不要包含路径或末尾斜杠：
+### 安装
 
 ```sh
-# Node 代理
-ALLOWED_ORIGINS="https://viewer.example.com,https://admin.example.com" node proxy-server.js
+npm ci
 ```
 
-Cloudflare Worker 请使用 binding，无需修改 `ORIGIN_MAP`：
-
-```toml
-# wrangler.toml
-[vars]
-ALLOWED_AUTH_EXPORT_ORIGINS = "https://viewer.example.com,https://admin.example.com"
-```
-
-`proxy-server.workers.js` 仍是可单独部署的 Worker 入口，来源解析和判断函数也保持在该文件中，
-不需要额外上传 JavaScript 依赖文件。
-
-`VITE_EH_URL` 决定前端请求的代理地址；如果它与前端页面不同源，必须把**前端页面的
-origin**（而不是 `VITE_EH_URL` 的值）加入 Node `ALLOWED_ORIGINS` 或 Worker
-`ALLOWED_AUTH_EXPORT_ORIGINS`。例如页面为 `https://viewer.example.com/app`、
-`VITE_EH_URL=https://proxy.example.com/ehentai`，应配置 `https://viewer.example.com`。通配符 `*`
-仅可用于普通代理 CORS，绝不会授权 Cookie 导出。
-
-```sh
-npm install
-```
-
-### Compile and Hot-Reload for Development
+### 启动 Vite 开发服务器
 
 ```sh
 npm run dev
 ```
 
-### Type-Check, Compile and Minify for Production
+需要一个运行中的代理实例，将 `VITE_EH_URL` 指向它（默认可用下方 Worker 开发服务器）。
 
-```sh
-npm run build
-```
+### 启动本地 Cloudflare Worker 开发服务器
 
-### Lint with [ESLint](https://eslint.org/)
-
-```sh
-npm run lint
-```
-
-## Workers Static Assets 迁移试运行
-
-前端 `dist` 与原有代理由同一个 `eviewer-app` Worker 部署。固定 `pre` 分支使用原生 Worker Preview，`main` 使用 Production；功能分支 PR 仅构建和演练，先合入 `pre`，测试完成后再从 `pre` 合入 `main`。不会按 PR 或提交创建独立的代理 Worker。
-
-试运行配置没有绑定生产自定义域名，原 Pages 项目与 `eproxy` 保留。迁移到同一自定义域名需要在测试通过后单独切换绑定；原来的 `pages.dev` 地址不能直接变成 Worker 的地址。`workers.dev` 测试地址是新域名，需要单独登录。
+同时运行前端资产与代理逻辑，地址为 `http://127.0.0.1:8787`，支持 Vue Router 深链接。
 
 ```sh
 npm ci
-npm ci --prefix deploy/eproxy
 npm run build
 npm run dev:worker
 ```
 
-本地 Worker 使用 127.0.0.1:8787，支持 Vue 路由深链接。静态资源直接分发，`/ehentai`、`/exhentai`、`/github`、`/auth/*`、`/hentaiverse/*`、`/image-proxy`、`/health` 先进入原有代理；未知 API 返回 JSON 404，不回退到首页。`.assetsignore` 防止公开 Pages 路由配置和服务端 Worker 文件。
+如需热更新开发，可另启动 Vite 开发服务器（`npm run dev`）并将 `VITE_EH_URL` 指向 Worker 地址。
 
-离线部署演练：
+## 认证配置
 
-```sh
-npm run deploy:cloudflare -- --dry-run --branch pre --commit 完整40位当前提交编号
-npm run deploy:cloudflare -- --dry-run --branch main --commit 完整40位当前提交编号
+代理使用 `ipb_member_id` 和 `ipb_pass_hash` Cookie 访问原站。在应用的「账号信息 → 认证信息 → 登录态」页面中填写并保存，或通过「提取 Cookie」按钮查看当前值。
+
+认证导出接口为 `POST /ehentai/auth/export`，仅接受同源或明确配置的 origin。
+
+**Cloudflare Worker（`wrangler.jsonc`）：**
+
+```jsonc
+"vars": {
+  "ALLOWED_AUTH_EXPORT_ORIGINS": "https://viewer.example.com"
+}
 ```
 
-原生 Preview 命令没有 dry-run，演练用其预发变量和绑定编译同一资源包；实际 `pre` 发布使用 `wrangler preview --name pre`，不会调用生产 `deploy`。Preview 的变量、版本元数据及限流绑定在 `previews` 中明确声明，资产和兼容性设置放在顶层。生产与预发使用不同的限流 namespace。
+> `VITE_EH_URL` 与前端页面不同源时，应将**前端页面的 origin** 加入允许列表，而不是 `VITE_EH_URL` 的值。
 
-`preview_urls: true` 同时允许原生 Preview 的访问地址。已有 Worker 的开关不会由 `wrangler preview` 自动同步，发布脚本会核对目标 Worker，并通过局部 PATCH 启用它的预览 URL，保留生产路由和子域状态。实际返回可能不含 `worker_name`，脚本通过 Cloudflare API 核对 Worker、Preview 和部署 ID，再验证前后端提交、页面深链及 API 路由。
+## 部署（Cloudflare Workers）
 
-实际发布移除 `--dry-run`，要求工作区干净、当前 HEAD 与参数一致、`deployment.json` 中的前端构建提交一致，并配置 `CLOUDFLARE_API_TOKEN`。部署后检查 `/health` 与静态 `deployment.json` 的提交、环境及资产绑定。请求仅在发布时做有限验证，不在浏览器持续轮询。新旧页面仍需保持接口兼容，已打开的旧标签页不会因发布立即刷新。
+### 一次性准备
 
-GitHub Actions 使用仓库 Secret `CLOUDFLARE_API_TOKEN`，需目标账号的 Workers Scripts: Edit、Account Settings: Read 权限。PR 验证任务不读取 Token；发布任务只在 `pre` 或 `main` 推送后运行，并使用同一工作流构建的前端产物。不要同时开启重复的 Cloudflare 自动构建入口；若改用 Workers Builds，应关闭这条 Actions 发布任务。原生 Preview 需要 Wrangler 4.135.0 以上，本仓库固定 4.136.0。
+1. 在 GitHub 仓库 **Settings → Secrets and variables → Actions** 添加 `CLOUDFLARE_API_TOKEN`，需具备 Workers Scripts: Edit、Account Settings: Read 及目标区域的相关权限。
+2. 保持 `main` 为生产分支，`pre` 为预发分支。
+3. 关闭 Cloudflare 控制台的自动构建，由本仓库 CI 统一发布。
 
-### 备份与回退
+### 发布流程
 
-迁移前已验证的代码位于远程标签 `backup/pages-before-static-assets-20261012-7c46097`，当前生产 Git main 另存为 `backup/main-before-static-assets-20261012-12d74ad`。完整 Git bundle 及 SHA-256 校验文件另保存在云工作区 `/workspace/backups/`；bundle 已通过 `git bundle verify`，不包含未跟踪的账号凭据或本地配置。迁移分支基于此版本，固定 `pre` 分支也从此版本建立。
+推送至 `pre` 或 `main` 后，GitHub Actions（`.github/workflows/cloudflare-release.yml`）自动构建并部署。
 
-原 Pages 发布脚本保留为 `deploy/cloudflare/pages-release.mjs`，可通过 `npm run deploy:pages` 调用；`functions/[[path]].js`、Pages 路由文件和 `deploy/eproxy/wrangler.jsonc` 保留。需要回到完整原方案时，从备份标签建立回退分支，按备份中的流程发布 Pages 和 eproxy，并同步恢复自定义域名绑定。切换域名前还需读取和保存 Cloudflare 的当前绑定、生产部署及设置；本地 Git 备份不包含这些云端配置。
+手动发布演练（不实际上传）：
 
-Workers 新应用可独立回滚版本，静态资源与代理随同该版本回滚。试运行阶段无需删除原 Pages、eproxy 或历史预览 Worker，待新环境验证通过再安排清理。
+```sh
+npm run deploy:cloudflare -- --dry-run --branch main --commit <完整40位提交编号>
+```
+
+实际发布移除 `--dry-run` 并确保工作区干净、已通过 `wrangler login` 或设置 `CLOUDFLARE_API_TOKEN`。
+
+### 分支规则
+
+| 推送目标 | Worker 名称 |
+| --------- | ------------ |
+| `main` | `eviewer-app`（生产） |
+| `pre` | `eviewer-app` Preview |
+| 功能分支 PR | 仅构建和演练，合入 `pre` 后测试 |
+
+## 项目结构
+
+```text
+EViewer/
+├── src/
+│   ├── components/       # Vue 组件
+│   │   └── hentaiverse/  # HentaiVerse 相关组件
+│   ├── composables/      # 可组合函数
+│   ├── core/             # 核心业务逻辑
+│   │   ├── auth/         # 认证相关
+│   │   ├── books/        # 画廊管理
+│   │   ├── cache/        # 缓存策略
+│   │   ├── data/         # 数据层
+│   │   └── hentaiverse/  # HentaiVerse 逻辑
+│   ├── router/           # Vue Router 路由
+│   ├── views/            # 页面视图
+│   └── App.vue           # 根组件
+├── deploy/cloudflare/    # Cloudflare 部署脚本
+├── tool/                 # 标签组采集工具
+├── proxy-server.workers.js  # Cloudflare Worker 代理逻辑
+├── worker-app.js         # Worker 入口（静态资源 + 代理）
+└── wrangler.jsonc        # Wrangler 配置
+```
+
+## 其他命令
+
+```sh
+npm run type-check      # TypeScript 类型检查
+npm run check:worker    # Worker 代码检查
+npm run lint            # ESLint 自动修复
+npm run format          # Prettier 格式化 src/
+npm run build           # 生产构建
+npm run preview         # 预览构建产物
+```
+
+## 版本管理
+
+项目使用 `pre` 分支进行预发环境测试，通过验证后合并到 `main` 生产分支。Cloudflare Workers 支持版本回滚，可在 Workers 控制台的「Deployments」选项卡或通过 Wrangler CLI 操作。
+
+## 开发环境推荐
+
+- **编辑器**：[VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar)（禁用 Vetur）
+- **浏览器扩展**：[Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)（Chromium）/ [Vue.js devtools](https://addons.mozilla.org/en-US/firefox/addon/vue-js-devtools/)（Firefox）
+- 在 Chrome DevTools 中开启 [Custom Object Formatter](http://bit.ly/object-formatters) 以获得更好的 Vue 对象展示
+
+## 贡献
+
+欢迎提交 Issue 和 Pull Request。贡献代码前请确保：
+
+- 代码通过 `npm run lint` 和 `npm run type-check`
+- 遵循项目现有代码风格
+- PR 描述清楚改动内容和原因
+
+详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+
+## 相关文档
+
+- [标签组采集工具](tool/README.md) - 从 E-Hentai 采集标签分类数据
+- [贡献指南](CONTRIBUTING.md) - 如何为项目贡献代码
+
+## License
+
+本项目采用 [GNU General Public License v3.0](LICENSE.txt) 开源协议。
