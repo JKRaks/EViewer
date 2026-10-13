@@ -13,11 +13,13 @@ This script collects master tags and their child tags from `https://repo.e-henta
 The tools page requires an authenticated E-Hentai session. Put the value of the browser's `Cookie` request header in `tool/.eh-cookie` as a single line, or provide via environment variable.
 
 **通过文件 / Via file:**
+
 ```powershell
 python tool/fetch_taggroups.py --cookie-file tool/.eh-cookie
 ```
 
 **通过环境变量（不写入项目） / Via environment (no file):**
+
 ```powershell
 $env:EH_COOKIE = 'ipb_member_id=...; ipb_pass_hash=...'
 python tool/fetch_taggroups.py
