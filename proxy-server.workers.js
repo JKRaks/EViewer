@@ -208,7 +208,9 @@ function buildUpstreamHeaders(request) {
     if (value) headers.set(name, value)
   }
   const cookie = getAllowedAuthCookieHeader(request.headers.get('cookie') || '')
-  if (cookie) headers.set('Cookie', cookie)
+  // EH redirects inline_set=dm_e after setting sl=dm_2. Keep the Extended
+  // layout required by gallery parsers without persisting upstream cookies.
+  headers.set('Cookie', [cookie, 'sl=dm_2'].filter(Boolean).join('; '))
   return headers
 }
 
