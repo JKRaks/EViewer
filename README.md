@@ -92,7 +92,7 @@ npm run dev:worker
 
 ### 一次性准备
 
-1. 在 GitHub 仓库 **Settings → Secrets and variables → Actions** 添加仓库 Secrets `CLOUDFLARE_ACCOUNT_ID` 和 `CLOUDFLARE_API_TOKEN`。Token 需具备 Workers Scripts: Edit、Account Settings: Read 及目标区域的相关权限。真实账号 ID 和私人部署地址不写入源码；公开访问地址以仓库描述为准。
+1. 在 GitHub 仓库 **Settings → Secrets and variables → Actions** 添加 `CLOUDFLARE_API_TOKEN`，需具备 Workers Scripts: Edit、Account Settings: Read 及目标区域的相关权限。
 2. 保持 `main` 为生产分支，`pre` 为预发分支。
 3. 关闭 Cloudflare 控制台的自动构建，由本仓库 CI 统一发布。
 
@@ -106,14 +106,14 @@ npm run dev:worker
 npm run deploy:cloudflare -- --dry-run --branch main --commit <完整40位提交编号>
 ```
 
-实际发布移除 `--dry-run`，确保工作区干净，并在安全环境变量中设置 `CLOUDFLARE_ACCOUNT_ID` 和 `CLOUDFLARE_API_TOKEN`。部署演练与本地 Worker 开发无需这两个值。
+实际发布移除 `--dry-run` 并确保工作区干净、已通过 `wrangler login` 或设置 `CLOUDFLARE_API_TOKEN`。
 
 ### 分支规则
 
-| 推送目标    | Worker 名称                     |
-| ----------- | ------------------------------- |
-| `main`      | `eviewer-app`（生产）           |
-| `pre`       | `eviewer-app` Preview           |
+| 推送目标 | Worker 名称 |
+| --------- | ------------ |
+| `main` | `eviewer-app`（生产） |
+| `pre` | `eviewer-app` Preview |
 | 功能分支 PR | 仅构建和演练，合入 `pre` 后测试 |
 
 ## 项目结构
