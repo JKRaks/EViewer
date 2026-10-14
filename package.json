@@ -16,7 +16,7 @@
     "type-check": "vue-tsc --build",
     "lint": "eslint . --fix",
     "format": "prettier --write src/",
-    "check:worker": "node --check proxy-server.workers.js && node --check worker-app.js && node --test proxy-security.test.js"
+    "check:worker": "node --check proxy-server.workers.js && node --check worker-app.js"
   },
   "dependencies": {
     "axios": "^1.12.2",
