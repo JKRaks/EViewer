@@ -24,6 +24,7 @@
     ],
   },
   "vars": {
+    "ALLOWED_ORIGINS": "",
     "ALLOWED_AUTH_EXPORT_ORIGINS": "",
     "EVIEWER_PROXY_ENVIRONMENT": "production",
     "PROXY_LOG_LEVEL": "info",
@@ -47,6 +48,7 @@
   },
   "previews": {
     "vars": {
+      "ALLOWED_ORIGINS": "",
       "ALLOWED_AUTH_EXPORT_ORIGINS": "",
       "EVIEWER_PROXY_ENVIRONMENT": "preview",
       "PROXY_LOG_LEVEL": "debug",
