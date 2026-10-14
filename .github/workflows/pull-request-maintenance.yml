@@ -65,7 +65,7 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo
-            const reviewReminder = '@JKRaks 请审查预发流水线和功能验证结果，确认通过后手动合并此 PR。'
+            const reviewReminder = `@${owner} 请审查预发流水线和功能验证结果，确认通过后手动合并此 PR。`
             const ensureReviewReminder = async pr => {
               if (!(pr.body || '').includes(reviewReminder)) {
                 await github.rest.pulls.update({
