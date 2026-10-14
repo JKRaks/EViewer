@@ -12,13 +12,11 @@ const ORIGIN_MAP = [
     path: '/ehentai',
     host: 'e-hentai.org',
     schema: 'https',
-    allowedOrigins: ['*'],
   },
   {
     path: '/exhentai',
     host: 'exhentai.org',
     schema: 'https',
-    allowedOrigins: ['*'],
   },
 ]
 
@@ -27,7 +25,6 @@ const IMAGE_LOOKUP_MAX_BYTES = IMAGE_PROXY_MAX_BYTES + 1024 * 1024
 const AUTH_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
 const AUTH_COOKIE_NAMES = ['ipb_member_id', 'ipb_pass_hash']
 const AUTH_COOKIE_PATHS = ['/ehentai', '/hentaiverse']
-const LOCAL_DEVELOPMENT_ORIGIN = /^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/
 const HENTAIVERSE_ORIGIN = 'https://hentaiverse.org'
 const REQUEST_LOGS = new WeakMap()
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 }
@@ -103,7 +100,7 @@ async function fetchUpstream(request, target, options) {
   const context = REQUEST_LOGS.get(request)
   if (context) context.upstreamRequests++
   try {
-    const response = await fetch(target, options)
+    const response = await fetch(target, { ...options, cache: 'no-store' })
     const upstream = {
       host: url.hostname,
       path: sanitizeLogPath(url.pathname),
@@ -161,15 +158,11 @@ export function parseAllowedAuthExportOrigins(value = '') {
 }
 
 /**
- * 认证导出专用的来源判断，不复用普通代理的通配符 CORS 策略。
+ * 凭据接口只信任同源或明确配置的完整来源，包括本地开发来源。
  */
 export function isTrustedAuthExportOrigin(origin, requestOrigin, configuredOrigins = []) {
   if (!origin) return false
-  return (
-    origin === requestOrigin ||
-    LOCAL_DEVELOPMENT_ORIGIN.test(origin) ||
-    configuredOrigins.includes(origin)
-  )
+  return origin === requestOrigin || configuredOrigins.includes(origin)
 }
 
 function parseAllowedImageUrl(value) {
@@ -179,17 +172,61 @@ function parseAllowedImageUrl(value) {
 
   const targetUrl = new URL(value)
   const allowedHost = targetUrl.hostname === 'ehgt.org' || targetUrl.hostname.endsWith('.ehgt.org')
-  if (targetUrl.protocol !== 'https:' || !allowedHost) {
+  if (
+    targetUrl.protocol !== 'https:' ||
+    !allowedHost ||
+    targetUrl.port ||
+    targetUrl.username ||
+    targetUrl.password
+  ) {
     throw new Error('不允许代理该图片地址')
   }
   return targetUrl
 }
 
-function isAllowedRequesterOrigin(origin) {
-  if (!origin) return true
-  if (/^http:\/\/(?:localhost|127\.0\.0\.1):\d+$/.test(origin)) return true
-  return ORIGIN_MAP.some(
-    (config) => config.allowedOrigins.includes('*') || config.allowedOrigins.includes(origin),
+function isAllowedRequesterOrigin(request) {
+  const origin = getRequesterOrigin(request)
+  if (!origin) {
+    // Same-origin fetches may omit Origin. Never authorize an unsafe request
+    // from Fetch Metadata alone; CLI reads remain usable without browser headers.
+    return (
+      ['GET', 'HEAD'].includes(request.method) &&
+      !['cross-site', 'same-site'].includes(request.headers.get('sec-fetch-site'))
+    )
+  }
+  return isTrustedAuthExportOrigin(
+    origin,
+    new URL(request.url).origin,
+    REQUEST_LOGS.get(request)?.allowedOrigins || [],
+  )
+}
+
+function buildUpstreamHeaders(request) {
+  const headers = new Headers()
+  for (const name of ['accept', 'accept-language', 'content-type']) {
+    const value = request.headers.get(name)
+    if (value) headers.set(name, value)
+  }
+  const cookie = getAllowedAuthCookieHeader(request.headers.get('cookie') || '')
+  if (cookie) headers.set('Cookie', cookie)
+  return headers
+}
+
+function appendOriginVary(headers) {
+  const vary = headers.get('Vary') || ''
+  if (vary === '*' || vary.split(',').some((value) => value.trim().toLowerCase() === 'origin'))
+    return
+  headers.set('Vary', vary ? `${vary}, Origin` : 'Origin')
+}
+
+// Clear every scope produced by older proxy versions before installing a new
+// host-only credential. A leading dot and no dot identify the same Domain scope.
+function clearLegacyAuthCookies(requestUrl) {
+  return ['/', ...AUTH_COOKIE_PATHS, '/exhentai'].flatMap((path) =>
+    AUTH_COOKIE_NAMES.flatMap((name) => {
+      const cookie = buildAuthCookie(name, '', requestUrl, path, true)
+      return [cookie, `${cookie}; Domain=${requestUrl.hostname}`]
+    }),
   )
 }
 
@@ -235,30 +272,22 @@ function jsonResponse(request, payload, status = 200, cookies = []) {
     'Content-Type': 'application/json',
   })
   const requesterOrigin = getRequesterOrigin(request)
-  if (requesterOrigin && isAllowedRequesterOrigin(requesterOrigin)) {
+  if (requesterOrigin && isAllowedRequesterOrigin(request)) {
     headers.set('Access-Control-Allow-Origin', requesterOrigin)
     headers.set('Access-Control-Allow-Credentials', 'true')
-    headers.set('Vary', 'Origin')
+    appendOriginVary(headers)
   }
   cookies.forEach((cookie) => headers.append('Set-Cookie', cookie))
   return new Response(JSON.stringify(payload), { status, headers })
 }
 
 async function handleAuthRequest(request, requestUrl) {
-  const requesterOrigin = getRequesterOrigin(request)
-  if (!isAllowedRequesterOrigin(requesterOrigin)) {
+  if (!isAllowedRequesterOrigin(request)) {
     return jsonResponse(request, { success: false, message: '不允许的请求来源' }, 403)
   }
 
   if (requestUrl.pathname === '/auth/logout') {
-    return jsonResponse(
-      request,
-      { success: true },
-      200,
-      AUTH_COOKIE_PATHS.flatMap((path) =>
-        AUTH_COOKIE_NAMES.map((name) => buildAuthCookie(name, '', requestUrl, path, true)),
-      ),
-    )
+    return jsonResponse(request, { success: true }, 200, clearLegacyAuthCookies(requestUrl))
   }
 
   const contentLength = Number(request.headers.get('content-length') || '0')
@@ -285,10 +314,13 @@ async function handleAuthRequest(request, requestUrl) {
     request,
     { success: true, memberId, expiresAt: Date.now() + AUTH_COOKIE_MAX_AGE * 1000 },
     200,
-    AUTH_COOKIE_PATHS.flatMap((path) => [
-      buildAuthCookie('ipb_member_id', memberId, requestUrl, path),
-      buildAuthCookie('ipb_pass_hash', passHash, requestUrl, path),
-    ]),
+    [
+      ...clearLegacyAuthCookies(requestUrl),
+      ...AUTH_COOKIE_PATHS.flatMap((path) => [
+        buildAuthCookie('ipb_member_id', memberId, requestUrl, path),
+        buildAuthCookie('ipb_pass_hash', passHash, requestUrl, path),
+      ]),
+    ],
   )
 }
 
@@ -301,7 +333,7 @@ function authExportJsonResponse(request, payload, status, trustedOrigin) {
   if (trustedOrigin && origin) {
     headers.set('Access-Control-Allow-Origin', origin)
     headers.set('Access-Control-Allow-Credentials', 'true')
-    headers.set('Vary', 'Origin')
+    appendOriginVary(headers)
   }
   return new Response(JSON.stringify(payload), { status, headers })
 }
@@ -348,7 +380,12 @@ function getAllowedAuthCookieHeader(cookieHeader = '') {
     const separator = part.indexOf('=')
     if (separator <= 0) return
     const name = part.slice(0, separator).trim()
-    if (AUTH_COOKIE_NAMES.includes(name)) allowed.set(name, part.slice(separator + 1).trim())
+    if (!AUTH_COOKIE_NAMES.includes(name)) return
+    const value = part.slice(separator + 1).trim()
+    if (allowed.has(name) && allowed.get(name) !== value) {
+      throw new Error('认证 Cookie 冲突，请退出后重新登录')
+    }
+    allowed.set(name, value)
   })
   return Array.from(allowed, ([name, value]) => `${name}=${value}`).join('; ')
 }
@@ -488,10 +525,10 @@ async function sendHentaiVerseResponse(request, upstream) {
     'Content-Type': upstream.headers.get('content-type') || 'text/html; charset=UTF-8',
   })
   const requesterOrigin = getRequesterOrigin(request)
-  if (requesterOrigin && isAllowedRequesterOrigin(requesterOrigin)) {
+  if (requesterOrigin && isAllowedRequesterOrigin(request)) {
     headers.set('Access-Control-Allow-Origin', requesterOrigin)
     headers.set('Access-Control-Allow-Credentials', 'true')
-    headers.set('Vary', 'Origin')
+    appendOriginVary(headers)
   }
   const location = upstream.headers.get('location')
   if (location) headers.set('X-HentaiVerse-Location', location)
@@ -499,8 +536,7 @@ async function sendHentaiVerseResponse(request, upstream) {
 }
 
 async function handleHentaiVerseRequest(request, requestUrl) {
-  const requesterOrigin = getRequesterOrigin(request)
-  if (!isAllowedRequesterOrigin(requesterOrigin)) {
+  if (!isAllowedRequesterOrigin(request)) {
     return jsonResponse(request, { error: '不允许的请求来源' }, 403)
   }
   try {
@@ -616,7 +652,9 @@ async function handleHentaiVerseRequest(request, requestUrl) {
  * 根据路径找到对应的配置
  */
 function findOriginConfig(pathname) {
-  return ORIGIN_MAP.find((config) => pathname.startsWith(config.path))
+  return ORIGIN_MAP.find(
+    (config) => pathname === config.path || pathname.startsWith(`${config.path}/`),
+  )
 }
 
 /**
@@ -638,51 +676,6 @@ function getRequesterOrigin(request) {
   }
 
   return null
-}
-
-/**
- * 获取请求的主机名
- */
-function getServerHost(request) {
-  const url = new URL(request.url)
-  return url.hostname
-}
-
-/**
- * 修改 Set-Cookie 头
- */
-function modifySetCookieHeaders(setCookieHeader, serverHost, targetHost) {
-  return setCookieHeader
-    .split(',')
-    .map((cookie) => {
-      let modifiedCookie = cookie
-        .trim()
-        // 替换域名为当前服务器的主机名
-        .replace(new RegExp(`Domain=\\.?${escapeRegExp(targetHost)}`, 'gi'), `Domain=${serverHost}`)
-        // 移除 Secure 标志（如果不是 HTTPS）
-        .replace(/;\s*Secure/gi, '')
-        // 调整 SameSite 策略
-        .replace(/;\s*SameSite=None/gi, '; SameSite=None')
-        .replace(/;\s*SameSite=Strict/gi, '; SameSite=None')
-
-      // 如果没有 Domain，添加当前服务器的主机名
-      if (!/Domain=/i.test(modifiedCookie)) {
-        modifiedCookie += `; Domain=${serverHost}`
-      }
-
-      // 如果没有 SameSite，添加一个
-      if (!/SameSite=/i.test(modifiedCookie)) {
-        modifiedCookie += '; SameSite=None; Secure'
-      }
-
-      // 确保有 Path
-      if (!/Path=/i.test(modifiedCookie)) {
-        modifiedCookie += '; Path=/'
-      }
-
-      return modifiedCookie
-    })
-    .join(', ')
 }
 
 /**
@@ -807,7 +800,7 @@ async function handleImageProxy(request, requestUrl) {
   const requesterOrigin = getRequesterOrigin(request)
   if (requesterOrigin) {
     headers.set('Access-Control-Allow-Origin', requesterOrigin)
-    headers.set('Vary', 'Origin')
+    appendOriginVary(headers)
   }
 
   return new Response(body, { status: 200, headers })
@@ -816,7 +809,7 @@ async function handleImageProxy(request, requestUrl) {
 /** 仅将受限 multipart 图片请求转发到源站图片检索入口。 */
 async function handleImageLookup(request) {
   const requesterOrigin = getRequesterOrigin(request)
-  if (!isAllowedRequesterOrigin(requesterOrigin)) {
+  if (!isAllowedRequesterOrigin(request)) {
     return jsonResponse(request, { error: '不允许的请求来源' }, 403)
   }
   if (request.method !== 'POST') {
@@ -838,7 +831,7 @@ async function handleImageLookup(request) {
   let response
 
   for (let redirectCount = 0; redirectCount <= 6; redirectCount++) {
-    const headers = new Headers(request.headers)
+    const headers = buildUpstreamHeaders(request)
     headers.delete('origin')
     headers.set('Host', targetUrl.host)
     headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
@@ -858,7 +851,13 @@ async function handleImageLookup(request) {
     const location = response.headers.get('location')
     if (!location) break
     targetUrl = new URL(location, targetUrl)
-    if (!allowedHosts.has(targetUrl.hostname) || targetUrl.protocol !== 'https:') {
+    if (
+      !allowedHosts.has(targetUrl.hostname) ||
+      targetUrl.protocol !== 'https:' ||
+      targetUrl.port ||
+      targetUrl.username ||
+      targetUrl.password
+    ) {
       return jsonResponse(request, { error: '图片搜索返回了不允许的重定向地址' }, 502)
     }
     method = 'GET'
@@ -869,13 +868,19 @@ async function handleImageLookup(request) {
     return jsonResponse(request, { error: '图片搜索重定向次数过多' }, 502)
   }
   const responseHeaders = new Headers(response.headers)
+  for (const name of [...responseHeaders.keys()]) {
+    if (name.startsWith('access-control-')) responseHeaders.delete(name)
+  }
   responseHeaders.set('Cache-Control', 'no-store')
+  responseHeaders.delete('CDN-Cache-Control')
+  responseHeaders.delete('Cloudflare-CDN-Cache-Control')
+  responseHeaders.delete('set-cookie')
   responseHeaders.delete('content-security-policy')
   responseHeaders.delete('x-frame-options')
   if (requesterOrigin) {
     responseHeaders.set('Access-Control-Allow-Origin', requesterOrigin)
     responseHeaders.set('Access-Control-Allow-Credentials', 'true')
-    responseHeaders.set('Vary', 'Origin')
+    appendOriginVary(responseHeaders)
   }
   return new Response(response.body, {
     status: response.status,
@@ -889,7 +894,7 @@ async function handleImageLookup(request) {
  */
 async function handleProxyRequest(request, config, pathname) {
   const requesterOrigin = getRequesterOrigin(request)
-  if (!isAllowedRequesterOrigin(requesterOrigin)) {
+  if (!isAllowedRequesterOrigin(request)) {
     return jsonResponse(request, { error: '不允许的请求来源' }, 403)
   }
 
@@ -897,12 +902,28 @@ async function handleProxyRequest(request, config, pathname) {
   const realPath = pathname.replace(new RegExp(`^${escapeRegExp(config.path)}`), '') || '/'
 
   // 构建目标 URL
-  const targetUrl = new URL(realPath, `${config.schema}://${config.host}`)
+  let decodedPath
+  try {
+    decodedPath = decodeURIComponent(realPath)
+  } catch {
+    return jsonResponse(request, { error: '代理路径编码不正确' }, 400)
+  }
+  const expectedOrigin = `${config.schema}://${config.host}`
+  const targetUrl = new URL(realPath, expectedOrigin)
+  if (
+    decodedPath.startsWith('//') ||
+    decodedPath.includes('\\') ||
+    targetUrl.origin !== expectedOrigin ||
+    targetUrl.username ||
+    targetUrl.password
+  ) {
+    return jsonResponse(request, { error: '不允许的代理目标' }, 400)
+  }
   const url = new URL(request.url)
   targetUrl.search = url.search
 
   // 构建代理请求头
-  const proxyHeaders = new Headers(request.headers)
+  const proxyHeaders = buildUpstreamHeaders(request)
 
   // 设置必要的请求头
   proxyHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
@@ -929,18 +950,16 @@ async function handleProxyRequest(request, config, pathname) {
 
   // 创建响应
   const responseHeaders = new Headers(response.headers)
-
-  // 获取当前服务器信息
-  const serverHost = getServerHost(request)
-  const serverUrl = new URL(request.url).origin
-
-  // 修改 Set-Cookie 头
-  if (responseHeaders.has('set-cookie')) {
-    const setCookieHeader = responseHeaders.get('set-cookie')
-
-    const modifiedSetCookie = modifySetCookieHeaders(setCookieHeader, serverHost, config.host)
-    responseHeaders.set('set-cookie', modifiedSetCookie)
+  for (const name of [...responseHeaders.keys()]) {
+    if (name.startsWith('access-control-')) responseHeaders.delete(name)
   }
+
+  const serverUrl = new URL(request.url).origin
+  // Authentication is owned by /auth/cookies, never by a proxied response.
+  responseHeaders.delete('set-cookie')
+  responseHeaders.set('Cache-Control', 'no-store')
+  responseHeaders.delete('CDN-Cache-Control')
+  responseHeaders.delete('Cloudflare-CDN-Cache-Control')
 
   // 如果是重定向，修改 Location 头
   if (responseHeaders.has('location')) {
@@ -955,8 +974,7 @@ async function handleProxyRequest(request, config, pathname) {
     responseHeaders.set('Access-Control-Allow-Credentials', 'true')
     responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS')
     responseHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, Cookie')
-    responseHeaders.set('Access-Control-Expose-Headers', 'Set-Cookie')
-    responseHeaders.set('Vary', 'Origin')
+    appendOriginVary(responseHeaders)
   }
 
   // 移除可能干扰 cookie 设置的头
@@ -978,7 +996,7 @@ function handleCorsPreFlight(request, requestUrl, allowedAuthExportOrigins) {
   const allowed =
     requestUrl.pathname === '/ehentai/auth/export'
       ? isTrustedAuthExportOrigin(requesterOrigin, requestUrl.origin, allowedAuthExportOrigins)
-      : isAllowedRequesterOrigin(requesterOrigin)
+      : isAllowedRequesterOrigin(request)
   if (!requesterOrigin || !allowed) {
     return new Response('Forbidden', { status: 403 })
   }
@@ -1024,7 +1042,7 @@ function handle404(pathname) {
 async function handleRequest(request, env = {}) {
   const url = new URL(request.url)
   const pathname = url.pathname
-  const allowedAuthExportOrigins = parseAllowedAuthExportOrigins(env.ALLOWED_AUTH_EXPORT_ORIGINS)
+  const allowedAuthExportOrigins = REQUEST_LOGS.get(request).allowedOrigins
 
   // 查找匹配的配置
   const config = findOriginConfig(pathname)
@@ -1032,6 +1050,22 @@ async function handleRequest(request, env = {}) {
   // 健康检查路由
   if (pathname === '/health') {
     return handleHealthCheck(env)
+  }
+
+  if (
+    request.method !== 'OPTIONS' &&
+    pathname !== '/image-proxy' &&
+    !isAllowedRequesterOrigin(request)
+  ) {
+    return jsonResponse(request, { error: '不允许的请求来源' }, 403)
+  }
+  // Login/logout must stay available to repair legacy conflicting cookies.
+  if (!pathname.startsWith('/auth/') && request.method !== 'OPTIONS') {
+    try {
+      getAllowedAuthCookieHeader(request.headers.get('cookie') || '')
+    } catch (error) {
+      return jsonResponse(request, { error: error.message, message: error.message }, 401)
+    }
   }
 
   if (request.method === 'POST' && (pathname === '/auth/cookies' || pathname === '/auth/logout')) {
@@ -1109,11 +1143,16 @@ export default {
       revision: env?.EVIEWER_PROXY_REVISION || null,
       logLevel: Object.hasOwn(LOG_LEVELS, env?.PROXY_LOG_LEVEL) ? env.PROXY_LOG_LEVEL : 'info',
       upstreamRequests: 0,
+      allowedOrigins: parseAllowedAuthExportOrigins(
+        `${env?.ALLOWED_ORIGINS || ''},${env?.ALLOWED_AUTH_EXPORT_ORIGINS || ''}`,
+      ),
     }
     REQUEST_LOGS.set(request, context)
     writeRequestLog(request, 'debug', 'request.started', {
       queryKeys: [...url.searchParams.keys()],
-      hasAuthCookie: Boolean(getAllowedAuthCookieHeader(request.headers.get('cookie') || '')),
+      hasAuthCookie: AUTH_COOKIE_NAMES.some((name) =>
+        (request.headers.get('cookie') || '').includes(`${name}=`),
+      ),
     })
     let response
     try {

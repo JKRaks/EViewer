@@ -177,6 +177,32 @@ git push origin feature/your-feature-name
 
 生产环境中前端和代理由同一个 Worker 提供，但本地开发时可以分离运行。注意环境变量 `VITE_EH_URL` 的配置。
 
+独立域名前端仍受支持。代理默认仅信任同源；跨域前端必须在 Worker 的
+`ALLOWED_ORIGINS` 中配置完整来源，多个来源用逗号分隔，例如
+`https://viewer.example,http://localhost:5173`。不接受通配符、路径或省略协议的域名，
+localhost 也必须显式配置。旧的 `ALLOWED_AUTH_EXPORT_ORIGINS` 继续作为可信来源补充，
+这些来源同样获准访问其他凭据接口；应仅配置自己控制的前端。
+
+通过仓库发布工作流部署时，设置 GitHub Actions 仓库变量 `ALLOWED_ORIGINS`（生产）
+和 `PREVIEW_ALLOWED_ORIGINS`（预发），发布脚本会分别注入对应 Worker 配置。
+本地 Wrangler 开发可在未提交的 `.dev.vars` 中设置 `ALLOWED_ORIGINS`。
+直接运行发布脚本也可使用同名环境变量。不要把实际私有域名或认证凭据提交到仓库；
+`keep_vars: false` 下仅在控制台修改配置会被后续发布覆盖。
+
+跨站认证仍使用 `SameSite=None; Secure; HttpOnly`，前端请求必须设置
+`credentials: 'include'`，生产前端和代理都应使用 HTTPS。浏览器阻止第三方 Cookie
+时，来源白名单不能解除该限制。登录、退出、导出及其他 POST 请求必须携带可信
+Origin 或 Referer；认证导出还必须携带 Origin 和 JSON Content-Type。
+
+代理只向 EH/HV 源站发送 `ipb_member_id`、`ipb_pass_hash`，不会转发其他 Cookie、
+Authorization 或 Cloudflare Access 凭据。源站 Set-Cookie 不再写回代理域名，
+认证 Cookie 由登录接口统一管理。升级后若提示认证 Cookie 冲突，请退出后重新登录；
+登录和退出都会清理旧版本的根路径及业务路径 Cookie。私有代理响应禁止共享缓存，
+公开图片代理继续使用不带凭据的缓存。
+
+`npm run check:worker` 包含代理安全回归测试，覆盖目标逃逸、跨域来源、凭据过滤、
+历史 Cookie 清理、重复值冲突、缓存和多用户并发。测试仅使用虚构凭据及模拟上游。
+
 ## 许可证 / License
 
 贡献的代码将采用项目的 [GPL-3.0](LICENSE.txt) 许可证。
