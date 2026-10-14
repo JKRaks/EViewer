@@ -30,6 +30,7 @@ def export_excel(input_path: Path, output_path: Path) -> dict[str, tuple[int, in
     workbook.properties.title = "E-Hentai Tag Groups"
     workbook.properties.subject = "Master tags and flattened child tags"
     workbook.properties.creator = "EViewer taggroup tool"
+    workbook.properties.lastModifiedBy = "EViewer taggroup tool"
     summary: dict[str, tuple[int, int]] = {}
 
     for namespace, tags in data.items():

@@ -97,7 +97,6 @@ async function buildShareCardData(
   book: bookInfoOutput,
   source: ShareQrSource,
 ): Promise<ShareCardData> {
-
   const tagInputs = book.tags.flatMap((collection) =>
     collection.items.map((tag) => ({ collection: collection.collection, tag })),
   )
@@ -161,7 +160,7 @@ async function loadCoverImage(
       return cover
     }
   } catch (error) {
-    console.debug(`封面跨域读取失败: ${url}`, error)
+    console.debug('封面跨域读取失败:', error instanceof Error ? error.name : 'UnknownError')
   }
 
   try {
@@ -180,10 +179,10 @@ async function loadCoverImage(
       return cover
     }
   } catch (error) {
-    console.debug(`封面代理读取失败: ${url}`, error)
+    console.debug('封面代理读取失败:', error instanceof Error ? error.name : 'UnknownError')
   }
 
-  console.warn('分享卡无法读取封面，将使用占位图:', url)
+  console.warn('分享卡无法读取封面，将使用占位图')
   return null
 }
 
