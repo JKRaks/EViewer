@@ -20,12 +20,6 @@ const ORIGIN_MAP = [
     schema: 'https',
     allowedOrigins: ['*'],
   },
-  {
-    path: '/github',
-    host: 'github.com',
-    schema: 'https',
-    allowedOrigins: ['*'],
-  },
 ]
 
 const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024

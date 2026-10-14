@@ -6,8 +6,6 @@ export const API_ROUTES = [
   '/ehentai/*',
   '/exhentai',
   '/exhentai/*',
-  '/github',
-  '/github/*',
   '/auth/*',
   '/hentaiverse/*',
   '/image-proxy',
