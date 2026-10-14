@@ -48,8 +48,6 @@ jobs:
     env:
       CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       NODE_USE_ENV_PROXY: '1'
-      ALLOWED_ORIGINS: ${{ vars.ALLOWED_ORIGINS }}
-      PREVIEW_ALLOWED_ORIGINS: ${{ vars.PREVIEW_ALLOWED_ORIGINS }}
     steps:
       - uses: actions/checkout@v6
         with:
