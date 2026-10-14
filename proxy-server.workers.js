@@ -38,6 +38,15 @@ const HENTAIVERSE_ORIGIN = 'https://hentaiverse.org'
 const REQUEST_LOGS = new WeakMap()
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 }
 
+function sanitizeLogPath(pathname) {
+  return pathname
+    .replace(
+      /\/dynjs\/[^/]+\/[^/]+\/equip-[^/]+\.js/g,
+      '/dynjs/[redacted]/[redacted]/equip-[redacted].js',
+    )
+    .replace(/\/(g|s|equip)\/[^\s"'<>]+/g, '/$1/[redacted]')
+}
+
 function sanitizeLogText(value, request) {
   let text = String(value || '')
   // Exceptions can embed URLs or credentials. Keep their diagnostic text,
@@ -54,7 +63,7 @@ function sanitizeLogText(value, request) {
     .replace(/https?:\/\/[^\s"'<>]+/g, (value) => {
       try {
         const url = new URL(value)
-        return `${url.origin}${url.pathname}`
+        return sanitizeLogPath(url.pathname)
       } catch {
         return '[url]'
       }
@@ -63,6 +72,7 @@ function sanitizeLogText(value, request) {
       /((?:ipb_pass_hash|ipb_member_id|token|authorization)\s*[=:]\s*)[^\s,;&]+/gi,
       '$1[redacted]',
     )
+    .replace(/\/dynjs\/[^\s"'<>]+/g, '/dynjs/[redacted]')
     .slice(0, 4096)
 }
 
@@ -102,7 +112,7 @@ async function fetchUpstream(request, target, options) {
     const response = await fetch(target, options)
     const upstream = {
       host: url.hostname,
-      path: url.pathname,
+      path: sanitizeLogPath(url.pathname),
       method: options?.method || target.method || 'GET',
       status: response.status,
       durationMs: Math.round(performance.now() - startedAt),
@@ -115,7 +125,7 @@ async function fetchUpstream(request, target, options) {
     if (context)
       context.upstream = {
         host: url.hostname,
-        path: url.pathname,
+        path: sanitizeLogPath(url.pathname),
         method: options?.method || target.method || 'GET',
         durationMs: Math.round(performance.now() - startedAt),
       }
@@ -1100,7 +1110,7 @@ export default {
     const startedAt = performance.now()
     const context = {
       requestId: crypto.randomUUID(),
-      path: url.pathname,
+      path: sanitizeLogPath(url.pathname),
       environment: env?.EVIEWER_PROXY_ENVIRONMENT || 'unknown',
       revision: env?.EVIEWER_PROXY_REVISION || null,
       logLevel: Object.hasOwn(LOG_LEVELS, env?.PROXY_LOG_LEVEL) ? env.PROXY_LOG_LEVEL : 'info',

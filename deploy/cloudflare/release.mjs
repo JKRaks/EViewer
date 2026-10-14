@@ -32,6 +32,13 @@ export async function releasePlan({ branch, commit }) {
   )
     throw new Error('发布配置必须使用 Static Assets 和原生 Preview')
   delete config.$schema
+  delete config.account_id
+  const accountId = process.env.CLOUDFLARE_ACCOUNT_ID?.trim()
+  if (accountId) {
+    if (!/^[a-f0-9]{32}$/i.test(accountId))
+      throw new Error('CLOUDFLARE_ACCOUNT_ID 必须是 32 位十六进制账号 ID')
+    config.account_id = accountId
+  }
   config.main = path.resolve(root, config.main)
   config.assets.directory = path.resolve(root, config.assets.directory)
   config.vars = {
@@ -61,7 +68,9 @@ function runWrangler(args, cwd, outputFile) {
       env: {
         ...process.env,
         WRANGLER_SEND_METRICS: 'false',
-        WRANGLER_LOG_PATH: process.env.WRANGLER_LOG_PATH || path.join(cwd, '.wrangler/logs'),
+        WRANGLER_LOG: 'error',
+        WRANGLER_WRITE_LOGS: 'false',
+        WRANGLER_LOG_SANITIZE: 'true',
         WRANGLER_OUTPUT_FILE_PATH: outputFile,
       },
     })
@@ -162,11 +171,6 @@ export async function release(
   { run = runWrangler, fetcher = fetch, verifyCheckout = assertCleanCheckout, wait = delay } = {},
 ) {
   const plan = await releasePlan(options)
-  if (
-    process.env.CLOUDFLARE_ACCOUNT_ID &&
-    process.env.CLOUDFLARE_ACCOUNT_ID !== plan.config.account_id
-  )
-    throw new Error('发布账号与仓库中的 Cloudflare 账号不一致')
   await readFile(path.join(plan.config.assets.directory, 'index.html'))
   const build = JSON.parse(
     await readFile(path.join(plan.config.assets.directory, 'deployment.json'), 'utf8'),
@@ -174,6 +178,8 @@ export async function release(
   if (build.revision !== plan.commit) throw new Error('前端构建与发布提交不一致，请重新构建')
   if (!options.dryRun) {
     await verifyCheckout(plan.commit)
+    if (!plan.config.account_id)
+      throw new Error('请在安全环境变量或仓库 Actions Secret 中配置 CLOUDFLARE_ACCOUNT_ID')
     if (!process.env.CLOUDFLARE_API_TOKEN)
       throw new Error('请在安全环境变量或 Actions Secrets 中配置 CLOUDFLARE_API_TOKEN')
   }
@@ -222,9 +228,6 @@ export async function release(
           type: event?.type,
           worker_name: event?.worker_name,
           preview_name: event?.preview_name,
-          preview_slug: event?.preview_slug,
-          deployment_urls: event?.deployment_urls,
-          preview_urls: event?.preview_urls,
         })}`,
       )
     if (plan.environment === 'preview') event = await resolvePreview(plan, event, fetcher)
@@ -266,13 +269,9 @@ export async function release(
           await verifyApp(target, fetcher)
           if (plan.environment === 'preview')
             await verifyPreviewAlias(event.preview_urls, plan, fetcher)
-          console.log(`发布并验证完成：${target}`)
-          if (plan.environment === 'preview')
-            console.log(`固定 pre 地址：${(event.preview_urls || []).join(', ')}`)
+          console.log(`发布并验证完成：${plan.environment}；revision=${plan.commit}`)
           if (process.env.GITHUB_ACTIONS && plan.environment === 'preview')
-            console.log(
-              `::notice::Preview 验证通过：${target}；固定地址：${(event.preview_urls || []).join(', ')}；revision=${plan.commit}`,
-            )
+            console.log(`::notice::Preview 验证通过；revision=${plan.commit}`)
           return plan
         }
       } catch (error) {

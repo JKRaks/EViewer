@@ -44,7 +44,6 @@ export class httpClass {
       if (method === 'GET') {
         const queryString = this.buildParam(param)
         const fullUrl = queryString ? `${url}?${queryString}` : url
-        console.log('发送 GET 请求:', fullUrl)
         response = await this.followRedirects(
           fullUrl,
           'GET',
@@ -54,7 +53,6 @@ export class httpClass {
         )
       } else {
         const data = param.getRequestData() ?? jsonClass.serialize(param)
-        console.log('发送 POST 请求:', url)
         response = await this.followRedirects(
           url,
           'POST',
@@ -74,12 +72,23 @@ export class httpClass {
         response.data.includes('eventpane') &&
         response.data.includes('hentaiverse.org')
       ) {
-        void import('../hentaiverse/hentaiVerseStore').then(({ inspectGalleryHtmlForEncounter }) => {
-          inspectGalleryHtmlForEncounter(response.data)
-        })
+        void import('../hentaiverse/hentaiVerseStore').then(
+          ({ inspectGalleryHtmlForEncounter }) => {
+            inspectGalleryHtmlForEncounter(response.data)
+          },
+        )
       }
     } catch (error: unknown) {
-      if (!axios.isCancel(error)) console.error('请求失败:', error)
+      if (!axios.isCancel(error)) {
+        console.error(
+          '请求失败:',
+          axios.isAxiosError(error)
+            ? { code: error.code, status: error.response?.status }
+            : error instanceof Error
+              ? error.name
+              : 'UnknownError',
+        )
+      }
       result.msg = (error as Error).message
     }
     return result
@@ -139,7 +148,6 @@ export class httpClass {
           response = await this.axiosInstance.get<string>(currentUrl, config)
         }
       } catch (error) {
-        if (!axios.isCancel(error)) console.error('请求错误:', error)
         throw error
       }
 
