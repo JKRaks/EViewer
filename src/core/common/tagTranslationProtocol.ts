@@ -73,13 +73,6 @@ export type TagTranslationWorkerRequest =
       limit: number
       useCache: boolean
     }
-  | {
-      id: number
-      type: 'resolve-tag'
-      namespace: string
-      value: string
-      useCache: boolean
-    }
 
 export type TagTranslationWorkerResponse =
   | {
@@ -92,7 +85,6 @@ export type TagTranslationWorkerResponse =
   | { id: number; type: 'namespaces-complete'; namespaces: TagNamespaceSummary[] }
   | { id: number; type: 'master-tags-complete'; page: TagMasterPage }
   | { id: number; type: 'search-complete'; results: SearchableTag[] }
-  | { id: number; type: 'resolve-complete'; result: SearchableTag | null }
   | { id: number; type: 'error'; message: string }
 
 export const tagTranslationDatasetVersion = '2026-07-15-15bdf67e-v1'
