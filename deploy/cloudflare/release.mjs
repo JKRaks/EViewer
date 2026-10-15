@@ -43,17 +43,11 @@ export async function releasePlan({ branch, commit }) {
   config.assets.directory = path.resolve(root, config.assets.directory)
   config.vars = {
     ...config.vars,
-    ...(process.env.ALLOWED_ORIGINS !== undefined
-      ? { ALLOWED_ORIGINS: process.env.ALLOWED_ORIGINS }
-      : {}),
     EVIEWER_PROXY_REVISION: commit,
     EVIEWER_PROXY_ENVIRONMENT: 'production',
   }
   config.previews.vars = {
     ...config.previews.vars,
-    ...(process.env.PREVIEW_ALLOWED_ORIGINS !== undefined
-      ? { ALLOWED_ORIGINS: process.env.PREVIEW_ALLOWED_ORIGINS }
-      : {}),
     EVIEWER_PROXY_REVISION: commit,
     EVIEWER_PROXY_ENVIRONMENT: 'preview',
   }
@@ -211,7 +205,7 @@ export async function release(
     const args = options.dryRun
       ? ['deploy', '--dry-run', '--outdir', path.join(directory, 'bundle')]
       : plan.environment === 'preview'
-        ? ['preview', '--name', 'pre', '--worker-name', plan.workerName, '--ignore-base-config']
+        ? ['preview', '--name', 'pre', '--worker-name', plan.workerName]
         : ['deploy']
     await run([...args, '--config', configPath], root, outputFile)
     if (options.dryRun) return plan

@@ -5,7 +5,8 @@
   "compatibility_date": "2025-10-19",
   "workers_dev": true,
   "preview_urls": true,
-  "keep_vars": false,
+  // Preserve Cloudflare-managed bindings; origin allowlists are Secret bindings.
+  "keep_vars": true,
   // Production custom domains are configured separately.
   "routes": [],
   "assets": {
@@ -24,8 +25,6 @@
     ],
   },
   "vars": {
-    "ALLOWED_ORIGINS": "",
-    "ALLOWED_AUTH_EXPORT_ORIGINS": "",
     "EVIEWER_PROXY_ENVIRONMENT": "production",
     "PROXY_LOG_LEVEL": "info",
   },
@@ -48,8 +47,6 @@
   },
   "previews": {
     "vars": {
-      "ALLOWED_ORIGINS": "",
-      "ALLOWED_AUTH_EXPORT_ORIGINS": "",
       "EVIEWER_PROXY_ENVIRONMENT": "preview",
       "PROXY_LOG_LEVEL": "debug",
     },
