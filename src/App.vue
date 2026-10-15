@@ -31,7 +31,6 @@ import { useFloatingActions } from '@/composables/useFloatingActions'
 import { useAuthState } from '@/core/auth/authState'
 import { useIndexedDbCacheSettings } from '@/core/cache/cacheSettings'
 import { hentaiVerseState } from '@/core/hentaiverse/hentaiVerseRuntime'
-import { useGlobalState } from './core/common/globalStore'
 
 const EncounterPrompt = defineAsyncComponent(
   () => import('@/components/hentaiverse/EncounterPrompt.vue'),
@@ -61,7 +60,6 @@ const scrollThreshold = 48
 const stopScrollModeSync = initializeLayoutScrollMode()
 let scrollTarget: HTMLElement | Window | null = null
 const { pageFloatingActions, clearFloatingActions } = useFloatingActions()
-const globalState = useGlobalState()
 const authState = useAuthState()
 const cacheSettings = useIndexedDbCacheSettings()
 const themeModeList = ['auto', 'dark', 'light'] as const
@@ -90,11 +88,7 @@ const themeModeMeta = {
 }
 
 const activeMenu = computed(() => route.path)
-const activeThemeMode = computed(() => {
-  return themeModeList.includes(globalState.theme as (typeof themeModeList)[number])
-    ? (globalState.theme as (typeof themeModeList)[number])
-    : 'auto'
-})
+const activeThemeMode = ref<(typeof themeModeList)[number]>('auto')
 const visiblePageActions = computed(() => {
   return pageFloatingActions.value
     .filter((item) => item.show !== false && item.placement !== 'menu')
@@ -229,7 +223,7 @@ const handleSystemThemeChange = () => {
 const toggleThemeMode = () => {
   const currentIndex = themeModeList.indexOf(activeThemeMode.value)
   const nextIndex = (currentIndex + 1) % themeModeList.length
-  globalState.theme = themeModeList[nextIndex] ?? 'auto'
+  activeThemeMode.value = themeModeList[nextIndex] ?? 'auto'
 }
 
 const goMenuItem = (item: (typeof menuItems.value)[number]) => {

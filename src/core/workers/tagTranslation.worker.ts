@@ -26,7 +26,6 @@ let tagSearchIndexPromise: Promise<TagSearchIndex> | undefined
 interface TagSearchIndex {
   namespaces: TagNamespaceSummary[]
   byNamespace: Map<string, SearchableTag[]>
-  byAlias: Map<string, SearchableTag>
 }
 
 workerScope.addEventListener('message', (event: MessageEvent<TagTranslationWorkerRequest>) => {
@@ -81,16 +80,6 @@ async function handleRequest(request: TagTranslationWorkerRequest) {
         type: 'search-complete',
         results: searchTags(index, request.keyword, request.namespace, request.limit),
       })
-      return
-    }
-
-    if (request.type === 'resolve-tag') {
-      const index = await getTagSearchIndex(request.useCache)
-      const result =
-        index.byAlias.get(
-          createLookupKey(normalize(request.namespace), normalize(request.value)),
-        ) ?? null
-      postResponse({ id: request.id, type: 'resolve-complete', result })
       return
     }
 
@@ -189,22 +178,10 @@ function addMasterRecords(
 
 function finalizeSearchIndex(records: SearchableTag[]): TagSearchIndex {
   const byNamespace = new Map<string, SearchableTag[]>()
-  const byAlias = new Map<string, SearchableTag>()
   for (const record of records) {
     const tags = byNamespace.get(record.namespace) ?? []
     tags.push(record)
     byNamespace.set(record.namespace, tags)
-    for (const alias of [record.master, ...record.aliases]) {
-      const key = createLookupKey(record.namespace, normalize(alias))
-      const existing = byAlias.get(key)
-      if (
-        !existing ||
-        record.source === 'official' ||
-        normalize(record.master) === normalize(alias)
-      ) {
-        byAlias.set(key, record)
-      }
-    }
   }
 
   byNamespace.forEach((tags) =>
@@ -218,7 +195,7 @@ function finalizeSearchIndex(records: SearchableTag[]): TagSearchIndex {
     displayName: collectionNames[namespace] ?? namespace,
     count: tags.length,
   }))
-  return { namespaces, byNamespace, byAlias }
+  return { namespaces, byNamespace }
 }
 
 function searchTags(

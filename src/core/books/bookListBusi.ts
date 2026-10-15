@@ -70,14 +70,13 @@ export class bookListBusi {
     const htmlResult = await httpClass.sendRequest(queryParams)
     if (htmlResult.isSuccess) {
       const bodyParser = parserClass.loadBody(htmlResult.data!)
+      const list = bodyParser.getElementBySelector('table.itg.glte')
+      if (list.invalid) {
+        result.msg = '源站未返回可识别的流行画册列表，请重新加载'
+        return result
+      }
       //解析画册列表
-      const elements = bodyParser.getElementsBySelector([
-        'div.ido',
-        'div',
-        'table.itg.glte',
-        '>tbody',
-        '>tr',
-      ])
+      const elements = list.getElementsBySelector(':scope > tbody > tr')
       for (const element of elements) {
         const item = this.parseBookItem(element)
         if (item) result.data.push(item)

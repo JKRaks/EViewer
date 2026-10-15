@@ -59,15 +59,6 @@ export function searchMasterTags(keyword: string, namespace?: string, limit = 40
   })
 }
 
-export function resolveMasterTag(namespace: string, value: string) {
-  return requestWorker<SearchableTag | null>({
-    type: 'resolve-tag',
-    namespace,
-    value,
-    useCache: shouldUseTranslationCache(),
-  })
-}
-
 export async function getTagTranslationCacheStatus(): Promise<TagTranslationCacheStatus> {
   try {
     const database = await openCacheDatabase()
@@ -177,7 +168,5 @@ function handleWorkerMessage(event: MessageEvent<TagTranslationWorkerResponse>) 
     pending.resolve(response.page)
   } else if (response.type === 'search-complete') {
     pending.resolve(response.results)
-  } else {
-    pending.resolve(response.result)
   }
 }

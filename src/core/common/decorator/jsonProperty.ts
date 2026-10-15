@@ -57,22 +57,4 @@ export class jsonClass {
 
     return result
   }
-
-  // 反序列化对象
-  static deserialize<T>(data: Record<string, any>, targetClass: new () => T): T {
-    const instance = new targetClass()
-    const target = Object.getPrototypeOf(instance)
-
-    const properties = jsonClass.getJsonProperties(target)
-
-    for (const propertyKey of properties) {
-      const jsonKey = jsonClass.getJsonPropertyName(target, propertyKey)
-
-      if (jsonKey && data[jsonKey] !== undefined) {
-        ;(instance as any)[propertyKey] = data[jsonKey]
-      }
-    }
-
-    return instance
-  }
 }

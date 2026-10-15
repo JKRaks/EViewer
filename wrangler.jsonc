@@ -3,15 +3,10 @@
   "name": "eviewer-app",
   "main": "./worker-app.js",
   "compatibility_date": "2025-10-19",
-  "compatibility_flags": [
-    "enable_nodejs_process_v2",
-    "enable_nodejs_http_server_modules",
-    "enable_nodejs_http_modules",
-    "nodejs_compat_populate_process_env",
-  ],
   "workers_dev": true,
   "preview_urls": true,
-  "keep_vars": false,
+  // Preserve Cloudflare-managed bindings; origin allowlists are Secret bindings.
+  "keep_vars": true,
   // Production custom domains are configured separately.
   "routes": [],
   "assets": {
@@ -23,8 +18,6 @@
       "/ehentai/*",
       "/exhentai",
       "/exhentai/*",
-      "/github",
-      "/github/*",
       "/auth/*",
       "/hentaiverse/*",
       "/image-proxy",
@@ -32,7 +25,6 @@
     ],
   },
   "vars": {
-    "ALLOWED_AUTH_EXPORT_ORIGINS": "",
     "EVIEWER_PROXY_ENVIRONMENT": "production",
     "PROXY_LOG_LEVEL": "info",
   },
@@ -55,7 +47,6 @@
   },
   "previews": {
     "vars": {
-      "ALLOWED_AUTH_EXPORT_ORIGINS": "",
       "EVIEWER_PROXY_ENVIRONMENT": "preview",
       "PROXY_LOG_LEVEL": "debug",
     },
