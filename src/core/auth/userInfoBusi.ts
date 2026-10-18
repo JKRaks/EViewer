@@ -1,3 +1,4 @@
+import { formatSystemMessage } from '@/i18n'
 import { httpClass } from '../common/httpClass'
 import { parserClass } from '../common/parserClass'
 import type { userDonationInput } from '../model/auth/userDonationInput'
@@ -460,10 +461,11 @@ export class userInfoBusi {
 
   private validateUserConfig(data: userConfigData): void {
     const requireInteger = (value: string, label: string, min: number, max?: number) => {
-      if (!/^-?\d+$/.test(value)) throw new Error(`${label}必须为整数`)
+      if (!/^-?\d+$/.test(value))
+        throw new Error(formatSystemMessage('{p0}必须为整数', { p0: label }))
       const numberValue = Number(value)
       if (numberValue < min || (max !== undefined && numberValue > max)) {
-        throw new Error(`${label}超出允许范围`)
+        throw new Error(formatSystemMessage('{p0}超出允许范围', { p0: label }))
       }
     }
     const allowedValues: Record<string, [string, readonly string[]]> = {
@@ -487,9 +489,10 @@ export class userInfoBusi {
       pn: [data.gallery.thumbnailLabel, ['0', '1', '2']],
     }
     for (const [field, [value, allowed]] of Object.entries(allowedValues)) {
-      if (!allowed.includes(value)) throw new Error(`配置项 ${field} 的值无效`)
+      if (!allowed.includes(value))
+        throw new Error(formatSystemMessage('配置项 {p0} 的值无效', { p0: field }))
       if (data.disabledOptions[field]?.includes(value)) {
-        throw new Error(`配置项 ${field} 当前账户尚未解锁`)
+        throw new Error(formatSystemMessage('配置项 {p0} 当前账户尚未解锁', { p0: field }))
       }
     }
 
@@ -516,7 +519,11 @@ export class userInfoBusi {
       data.filters.maxUploaderExclusions > 0 &&
       uploaderCount > data.filters.maxUploaderExclusions
     ) {
-      throw new Error(`排除上传者不能超过 ${data.filters.maxUploaderExclusions} 个`)
+      throw new Error(
+        formatSystemMessage('排除上传者不能超过 {p0} 个', {
+          p0: data.filters.maxUploaderExclusions,
+        }),
+      )
     }
   }
 

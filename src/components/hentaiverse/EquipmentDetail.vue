@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
 import { computed } from 'vue'
 import type { HentaiVerseEquipmentDetail } from '@/core/hentaiverse/model/hentaiVerse'
 const props = defineProps<{ data: HentaiVerseEquipmentDetail }>()
@@ -8,27 +10,27 @@ const highlights = computed(
 </script>
 
 <template>
-  <section class="equipment-detail" :aria-label="`${data.name}的属性`">
-    <p class="equipment-summary">{{ data.summary }}</p>
+  <section class="equipment-detail" :aria-label="t('{p0}的属性', { p0: t(data.name) })">
+    <p class="equipment-summary">{{ t(data.summary) }}</p>
     <p v-if="highlights.length" class="equipment-highlights">
       <span v-for="metric in highlights" :key="metric.label"
-        >{{ metric.label }} {{ metric.value }}</span
+        >{{ t(metric.label) }} {{ t(metric.value) }}</span
       >
     </p>
-    <p v-for="effect in data.effects" :key="effect" class="equipment-effect">{{ effect }}</p>
+    <p v-for="effect in data.effects" :key="effect" class="equipment-effect">{{ t(effect) }}</p>
     <details>
-      <summary>完整属性</summary>
+      <summary>{{ t('完整属性') }}</summary>
       <div class="equipment-status">
-        <p v-for="status in data.status" :key="status">{{ status }}</p>
+        <p v-for="status in data.status" :key="status">{{ t(status) }}</p>
       </div>
       <section v-for="group in data.groups" :key="group.title" class="equipment-stat-group">
-        <h4>{{ group.title }}</h4>
+        <h4>{{ t(group.title) }}</h4>
         <dl>
           <template v-for="metric in group.metrics" :key="metric.label">
-            <dt>{{ metric.label }}</dt>
+            <dt>{{ t(metric.label) }}</dt>
             <dd>
-              {{ metric.value }}
-              <small v-if="metric.base">基础值 {{ metric.base }}</small>
+              {{ t(metric.value) }}
+              <small v-if="metric.base">{{ t('基础值 {p0}', { p0: metric.base }) }}</small>
             </dd>
           </template>
         </dl>
@@ -43,13 +45,13 @@ const highlights = computed(
   font-size: 12px;
   line-height: 1.6;
   overflow-wrap: anywhere;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 p {
   margin: 4px 0;
 }
 .equipment-effect {
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
 }
 .equipment-highlights {
   display: flex;
@@ -63,7 +65,7 @@ summary {
   width: fit-content;
   padding: 4px 0;
   cursor: pointer;
-  color: var(--el-color-primary);
+  color: var(--accent);
 }
 .equipment-status {
   margin: 8px 0;
@@ -71,7 +73,7 @@ summary {
 h4 {
   margin: 12px 0 6px;
   font-size: 12px;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
 }
 dl {
   display: grid;
@@ -87,6 +89,6 @@ dd {
 small {
   display: block;
   font-size: 11px;
-  color: var(--el-text-color-placeholder);
+  color: var(--placeholder);
 }
 </style>

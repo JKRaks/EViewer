@@ -1,4 +1,5 @@
 import { categoryEnum } from '@/core/common/enum/categoryEnum'
+import { t } from '@/i18n'
 import { bookInput } from '@/core/model/book/bookInput'
 import {
   createGallerySearchCriteria,
@@ -26,23 +27,23 @@ export function compileGallerySearch(criteria: gallerySearchCriteria): bookInput
   const titles = criteria.titleTerms.map((value) => value.trim()).filter(Boolean)
 
   if (includeTags.length + titles.length > maxIncludeTerms) {
-    errors.push(`标题和包含标签合计最多 ${maxIncludeTerms} 项`)
+    errors.push(t('标题和包含标签合计最多 {p0} 项', { p0: maxIncludeTerms }))
   }
   if (excludeTags.length > maxExcludeTerms) {
-    errors.push(`排除标签最多 ${maxExcludeTerms} 项`)
+    errors.push(t('排除标签最多 {p0} 项', { p0: maxExcludeTerms }))
   }
   if (criteria.minPages !== undefined && criteria.minPages < 0) {
-    errors.push('最少页数不能小于 0')
+    errors.push(t('最少页数不能小于 0'))
   }
   if (criteria.maxPages !== undefined && criteria.maxPages < 0) {
-    errors.push('最多页数不能小于 0')
+    errors.push(t('最多页数不能小于 0'))
   }
   if (
     criteria.minPages !== undefined &&
     criteria.maxPages !== undefined &&
     criteria.minPages > criteria.maxPages
   ) {
-    errors.push('最少页数不能大于最多页数')
+    errors.push(t('最少页数不能大于最多页数'))
   }
 
   const queryParts = [criteria.freeText.trim()]
@@ -51,7 +52,7 @@ export function compileGallerySearch(criteria: gallerySearchCriteria): bookInput
     queryParts.push(`uploader:${quoteSearchValue(criteria.uploader)}`)
   }
   if (criteria.uploaderUid.trim()) {
-    if (!/^\d+$/.test(criteria.uploaderUid.trim())) errors.push('上传者 UID 只能包含数字')
+    if (!/^\d+$/.test(criteria.uploaderUid.trim())) errors.push(t('上传者 UID 只能包含数字'))
     queryParts.push(`uploaduid:${criteria.uploaderUid.trim()}`)
   }
   includeTags.forEach((tag) => {
@@ -64,7 +65,9 @@ export function compileGallerySearch(criteria: gallerySearchCriteria): bookInput
 
   const query = queryParts.filter(Boolean).join(' ')
   if (query.length > maxQueryLength) {
-    errors.push(`搜索表达式为 ${query.length} 个字符，源站上限为 ${maxQueryLength}`)
+    errors.push(
+      t('搜索表达式为 {p0} 个字符，源站上限为 {p1}', { p0: query.length, p1: maxQueryLength }),
+    )
   }
   if (errors.length) throw new gallerySearchValidationError(errors)
 

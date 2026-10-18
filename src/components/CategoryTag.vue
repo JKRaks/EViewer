@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import TagChip from '@/components/primitives/TagChip.vue'
 import { computed } from 'vue'
 import { getCategoryDisplayName, getCategoryType } from '@/core/common/category'
 
@@ -18,9 +21,9 @@ const categoryText = computed(() => getCategoryDisplayName(props.category))
 </script>
 
 <template>
-  <el-tag :type="categoryType" :size="size" :effect="effect" class="category-tag">
-    {{ categoryText }}
-  </el-tag>
+  <TagChip :tone="categoryType" :size="size" :effect="effect" class="category-tag">
+    {{ t(categoryText) }}
+  </TagChip>
 </template>
 
 <style scoped>

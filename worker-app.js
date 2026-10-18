@@ -42,6 +42,15 @@ export default {
         { error: '静态资源暂时不可用' },
         { status: 503, headers: { 'Cache-Control': 'no-store' } },
       )
-    return env.ASSETS.fetch(request)
+    const asset = await env.ASSETS.fetch(request)
+    const headers = new Headers(asset.headers)
+    headers.set('X-Content-Type-Options', 'nosniff')
+    headers.set('Referrer-Policy', 'strict-origin-when-cross-origin')
+    headers.set('X-Frame-Options', 'DENY')
+    headers.set(
+      'Content-Security-Policy',
+      "object-src 'none'; base-uri 'self'; frame-ancestors 'none'",
+    )
+    return new Response(asset.body, { status: asset.status, statusText: asset.statusText, headers })
   },
 }

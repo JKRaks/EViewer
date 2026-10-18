@@ -1,10 +1,14 @@
 <script setup lang="ts">
+import { t, getDisplayLocale } from '@/i18n'
+
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
+import IconFrame from '@/components/primitives/IconFrame.vue'
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { Delete, MoreFilled, Star } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import 'element-plus/es/components/message/style/css'
-import 'element-plus/es/components/message-box/style/css'
+import { Trash2 as Delete, Ellipsis as MoreFilled, Star } from '@lucide/vue'
+import { notify, dialogs } from '@/components/primitives/feedback'
 import { useIndexedDbCacheSettings } from '@/core/cache/cacheSettings'
 import {
   clearReadingHistory,
@@ -70,7 +74,9 @@ function endSwipe() {
   if (!draggingId.value) return
   if (swipeMoved) {
     openMenuId.value = dragOffset.value < -menuWidth / 2 ? draggingId.value : ''
-    window.setTimeout(() => { swipeMoved = false }, 300)
+    window.setTimeout(() => {
+      swipeMoved = false
+    }, 300)
   }
   draggingId.value = ''
 }
@@ -78,27 +84,31 @@ function endSwipe() {
 function surfaceOffset(bookId: string) {
   return draggingId.value === bookId
     ? dragOffset.value
-    : openMenuId.value === bookId ? -menuWidth : 0
+    : openMenuId.value === bookId
+      ? -menuWidth
+      : 0
 }
 
 async function removeRecord(record: ReadingHistoryRecord) {
   try {
-    await ElMessageBox.confirm(`删除「${record.title}」的浏览记录？`, '删除记录', { type: 'warning' })
+    await dialogs.confirm(t('删除「{p0}」的浏览记录？', { p0: record.title }), t('删除记录'), {
+      type: 'warning',
+    })
     await deleteReadingHistory(record.bookId)
     if (openMenuId.value === record.bookId) openMenuId.value = ''
     await refresh()
   } catch (error) {
-    if (error !== 'cancel' && error !== 'close') ElMessage.error('删除浏览记录失败')
+    if (error !== 'cancel' && error !== 'close') notify.error(t('删除浏览记录失败'))
   }
 }
 
 async function removeAll() {
   try {
-    await ElMessageBox.confirm('清空全部浏览历史？', '清空浏览历史', { type: 'warning' })
+    await dialogs.confirm(t('清空全部浏览历史？'), t('清空浏览历史'), { type: 'warning' })
     await clearReadingHistory()
     await refresh()
   } catch (error) {
-    if (error !== 'cancel' && error !== 'close') ElMessage.error('清空浏览历史失败')
+    if (error !== 'cancel' && error !== 'close') notify.error(t('清空浏览历史失败'))
   }
 }
 </script>
@@ -106,17 +116,38 @@ async function removeAll() {
 <template>
   <main class="history-view">
     <header class="history-header">
-      <h1>浏览历史</h1>
-      <el-button v-if="records.length" :icon="Delete" @click="removeAll">清空全部</el-button>
+      <h1>{{ t('浏览历史') }}</h1>
+      <ActionButton v-if="records.length" :icon="Delete" @click="removeAll">{{
+        t('清空全部')
+      }}</ActionButton>
     </header>
-    <el-skeleton v-if="loading" :rows="3" animated />
-    <el-empty v-else-if="!settings.enabled || !settings.cacheReadingHistory" description="请在系统设置中开启浏览历史" />
-    <el-empty v-else-if="!records.length" description="暂无浏览历史" />
+    <SkeletonBlock v-if="loading" :rows="3" />
+    <EmptyState
+      v-else-if="!settings.enabled || !settings.cacheReadingHistory"
+      :description="t('请在系统设置中开启浏览历史')"
+    />
+    <EmptyState v-else-if="!records.length" :description="t('暂无浏览历史')" />
     <div v-else class="history-list">
       <article v-for="record in records" :key="record.bookId" class="history-item">
         <div class="history-item__menu">
-          <button type="button" class="history-item__favorite" :tabindex="openMenuId === record.bookId ? 0 : -1" :aria-label="`收藏《${record.title}》`" @click="openFavorite(record)"><el-icon><Star /></el-icon><span>收藏</span></button>
-          <button type="button" class="history-item__delete" :tabindex="openMenuId === record.bookId ? 0 : -1" :aria-label="`删除《${record.title}》的浏览记录`" @click="removeRecord(record)"><el-icon><Delete /></el-icon><span>删除</span></button>
+          <button
+            type="button"
+            class="history-item__favorite"
+            :tabindex="openMenuId === record.bookId ? 0 : -1"
+            :aria-label="t('收藏《{p0}》', { p0: record.title })"
+            @click="openFavorite(record)"
+          >
+            <IconFrame><Star /></IconFrame><span>{{ t('收藏') }}</span>
+          </button>
+          <button
+            type="button"
+            class="history-item__delete"
+            :tabindex="openMenuId === record.bookId ? 0 : -1"
+            :aria-label="t('删除《{p0}》的浏览记录', { p0: record.title })"
+            @click="removeRecord(record)"
+          >
+            <IconFrame><Delete /></IconFrame><span>{{ t('删除') }}</span>
+          </button>
         </div>
         <div
           class="history-item__surface"
@@ -124,7 +155,7 @@ async function removeAll() {
           :style="{ transform: `translateX(${surfaceOffset(record.bookId)}px)` }"
           role="link"
           tabindex="0"
-          :aria-label="`查看《${record.title}》详情`"
+          :aria-label="t('查看《{p0}》详情', { p0: record.title })"
           @click="openDetail(record)"
           @keydown.enter.prevent="openDetail(record)"
           @keydown.space.prevent="openDetail(record)"
@@ -136,9 +167,24 @@ async function removeAll() {
           <img v-if="record.coverUrl" :src="record.coverUrl" alt="" loading="lazy" />
           <div class="history-item__content">
             <h2>{{ record.title }}</h2>
-            <p>已看 {{ record.viewedOrdinals.length }} 张 · 上次看到第 {{ record.lastOrdinal }} 张 · {{ new Date(record.updatedAt).toLocaleString('zh-CN') }}</p>
+            <p>
+              {{
+                t('已看 {p0} 张 · 上次看到第 {p1} 张 · {p2}', {
+                  p0: record.viewedOrdinals.length,
+                  p1: record.lastOrdinal,
+                  p2: new Date(record.updatedAt).toLocaleString(getDisplayLocale()),
+                })
+              }}
+            </p>
           </div>
-          <button type="button" class="history-item__more" :aria-label="`显示《${record.title}》的操作`" @click.stop="openMenuId = openMenuId === record.bookId ? '' : record.bookId"><el-icon><MoreFilled /></el-icon></button>
+          <button
+            type="button"
+            class="history-item__more"
+            :aria-label="t('显示《{p0}》的操作', { p0: record.title })"
+            @click.stop="openMenuId = openMenuId === record.bookId ? '' : record.bookId"
+          >
+            <IconFrame><MoreFilled /></IconFrame>
+          </button>
         </div>
       </article>
     </div>
@@ -156,9 +202,17 @@ async function removeAll() {
   align-items: center;
   gap: 8px;
 }
-.history-header { justify-content: space-between; }
-.history-header h1 { margin: 0 0 20px; font-size: 24px; }
-.history-list { display: grid; gap: 12px; }
+.history-header {
+  justify-content: space-between;
+}
+.history-header h1 {
+  margin: 0 0 20px;
+  font-size: 24px;
+}
+.history-list {
+  display: grid;
+  gap: 12px;
+}
 .history-item {
   position: relative;
   min-width: 0;
@@ -174,24 +228,47 @@ async function removeAll() {
   align-items: center;
   gap: 14px;
   padding: 12px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--el-bg-color);
-  color: var(--el-text-color-primary);
+  background: var(--surface);
+  color: var(--foreground);
   cursor: pointer;
-  transition: transform 0.22s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  transition:
+    transform 0.22s ease,
+    border-color 0.2s ease,
+    box-shadow 0.2s ease;
   touch-action: pan-y;
 }
-.history-item__surface.is-dragging { transition: none; }
-.history-item__surface:hover {
-  border-color: var(--el-color-primary);
-  box-shadow: 0 0 0 1px var(--el-color-primary-light-5) inset;
+.history-item__surface.is-dragging {
+  transition: none;
 }
-.history-item__surface:focus-visible { outline: 2px solid var(--el-color-primary); outline-offset: -2px; }
-.history-item img { width: 82px; height: 112px; flex: none; object-fit: contain; }
-.history-item__content { min-width: 0; flex: 1; }
-.history-item h2 { margin: 0; overflow-wrap: anywhere; font-size: 16px; }
-.history-item p { color: var(--el-text-color-secondary); font-size: 13px; }
+.history-item__surface:hover {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent-ring) inset;
+}
+.history-item__surface:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.history-item img {
+  width: 82px;
+  height: 112px;
+  flex: none;
+  object-fit: contain;
+}
+.history-item__content {
+  min-width: 0;
+  flex: 1;
+}
+.history-item h2 {
+  margin: 0;
+  overflow-wrap: anywhere;
+  font-size: 16px;
+}
+.history-item p {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
 .history-item__menu {
   position: absolute;
   inset: 0 0 0 auto;
@@ -209,19 +286,31 @@ async function removeAll() {
   color: #fff;
   cursor: pointer;
 }
-.history-item__favorite { background: var(--el-color-primary); }
-.history-item__delete { background: var(--el-color-danger); }
+.history-item__favorite {
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+.history-item__delete {
+  background: var(--danger);
+  color: var(--background);
+}
 .history-item__more {
   flex: none;
   align-self: stretch;
   padding: 0 4px;
   border: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   background: transparent;
   cursor: pointer;
 }
 @media (max-width: 480px) {
-  .history-item img { width: 64px; height: 88px; }
-  .history-item__surface { min-height: 104px; gap: 10px; }
+  .history-item img {
+    width: 64px;
+    height: 88px;
+  }
+  .history-item__surface {
+    min-height: 104px;
+    gap: 10px;
+  }
 }
 </style>

@@ -1,4 +1,6 @@
 import { HENTAIVERSE_ABILITIES } from './hentaiVerseAbilityTranslations'
+import { rememberSourceText, registerMessages, formatSystemMessage } from '@/i18n'
+import interfaceMessages from './hentaiVerseInterface.en.json'
 
 const ATTRIBUTE_LABELS: Record<string, string> = {
   str: '力量',
@@ -742,6 +744,12 @@ export function getAttributeLabel(key: string) {
 }
 
 export function translateHentaiVerseText(value: string) {
+  return rememberSourceText(
+    translateHentaiVerseTextInChinese(value),
+    value.replace(/\s+/g, ' ').trim(),
+  )
+}
+function translateHentaiVerseTextInChinese(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
   if (LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()])
@@ -753,6 +761,12 @@ export function translateHentaiVerseText(value: string) {
 }
 
 export function translateHentaiVerseDescription(value: string) {
+  return rememberSourceText(
+    translateHentaiVerseDescriptionInChinese(value),
+    value.replace(/\s+/g, ' ').trim(),
+  )
+}
+function translateHentaiVerseDescriptionInChinese(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
   const slowed = source.match(
@@ -941,17 +955,33 @@ export function getHentaiVerseSettingControl(name: string, value: string, source
       groupLabel: '自动升级策略',
       label: translateHentaiVerseText(sourceLabel),
     }
-  if (/^\d{1,2}$/.test(name)) return { group: 'quickbar', label: `快捷栏 ${name}` }
+  if (/^\d{1,2}$/.test(name))
+    return { group: 'quickbar', label: formatSystemMessage('快捷栏 {p0}', { p0: name }) }
   if (/^ac_\d+$/.test(name))
-    return { group: 'autocast', label: `自动施法 ${Number(name.slice(3)) + 1}` }
+    return {
+      group: 'autocast',
+      label: formatSystemMessage('自动施法 {p0}', { p0: Number(name.slice(3)) + 1 }),
+    }
   if (/^as_[cs]_\d+$/.test(name)) {
     const action = name.startsWith('as_c_') ? '自动出售' : '自动分解'
-    return { group: 'autoProcess', label: `${translateHentaiVerseText(sourceLabel)} · ${action}` }
+    return {
+      group: 'autoProcess',
+      label: formatSystemMessage('{p0} · {p1}', {
+        p0: translateHentaiVerseText(sourceLabel),
+        p1: action,
+      }),
+    }
   }
   return { group: 'challenge', label: translateHentaiVerseText(sourceLabel || value || name) }
 }
 
 export function translateHentaiVerseBattleLog(value: string) {
+  return rememberSourceText(
+    translateHentaiVerseBattleLogInChinese(value),
+    value.replace(/\s+/g, ' ').trim(),
+  )
+}
+function translateHentaiVerseBattleLogInChinese(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
   // Completion panes can contain several sentences; translate each event separately.
@@ -978,18 +1008,24 @@ function translateBattleEvent(source: string): string {
   if (/^Arena challenge cleared[.!]?$/i.test(source)) return '竞技场挑战已通关！'
 
   const receivedDamage = source.match(
-    /^(.+?) (?:(\d+)x-crit|crit|hits|glances) you, causing ([\d,.]+) points? of (.+?) damage\.$/i,
+    /^(.+?) (?:(\d+)x-crit|crits?|hits|glances) you(?:, causing|; you partially (block|parry|resist) the attack, and take) ([\d,.]+) points? of (.+?) damage\.$/i,
   )
   if (receivedDamage) {
-    const damageType = translateBattleTerms(receivedDamage[4] || '')
+    const damageType = translateBattleTerms(receivedDamage[5] || '')
     const action = receivedDamage[2]
       ? `以 ${receivedDamage[2]} 倍暴击命中`
-      : /\bcrit\b/i.test(source)
+      : /\bcrits?\b/i.test(source)
         ? '暴击命中'
         : /\bglances\b/i.test(source)
           ? '擦中'
           : '命中'
-    return `${receivedDamage[1]} ${action}你，造成 ${receivedDamage[3]} 点${damageType}伤害。`
+    if (receivedDamage[3]) {
+      const defense = { block: '格挡', parry: '招架', resist: '抵抗' }[
+        receivedDamage[3].toLowerCase() as 'block' | 'parry' | 'resist'
+      ]
+      return `${receivedDamage[1]} ${action}你；你部分${defense}了攻击，受到 ${receivedDamage[4]} 点${damageType}伤害。`
+    }
+    return `${receivedDamage[1]} ${action}你，造成 ${receivedDamage[4]} 点${damageType}伤害。`
   }
 
   const dealtDamage = source.match(
@@ -1013,10 +1049,11 @@ function translateBattleEvent(source: string): string {
   const targetEvaded = source.match(/^(.+?) evades your attack\.$/i)
   if (targetEvaded) return `${targetEvaded[1]} 闪避了你的攻击。`
 
-  const gainedEffect = source.match(/^You gain the effect (.+?)\.$/i)
+  const gainedEffect = source.match(/^(You|.+?) gains? the effect (.+?)\.$/i)
   if (gainedEffect) {
-    const effect = translateBattleTerms(gainedEffect[1] || '')
-    return `你获得了“${effect}”效果。`
+    const effect = translateBattleTerms(gainedEffect[2] || '')
+    const actor = /^You$/i.test(gainedEffect[1]!) ? '你' : `${gainedEffect[1]} `
+    return `${actor}获得了“${effect}”效果。`
   }
 
   const lostEffect = source.match(/^You lose the effect (.+?)\.$/i)
@@ -1111,3 +1148,14 @@ export function decodeHentaiVerseGlyphs(root: ParentNode) {
       if (replacement) node.textContent = replacement
     })
 }
+
+// Reuse the established glossary for labels that were parsed before a language switch.
+registerMessages(interfaceMessages)
+registerMessages(
+  Object.fromEntries(
+    [
+      ...Object.values(DOMAIN_TRANSLATIONS).flatMap((terms) => Object.entries(terms)),
+      ...Object.entries(HENTAIVERSE_ABILITIES).map(([name, entry]) => [name, entry[0]]),
+    ].map(([source, translated]) => [translated, source]),
+  ),
+)

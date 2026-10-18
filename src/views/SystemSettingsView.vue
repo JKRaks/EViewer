@@ -1,9 +1,17 @@
 <script setup lang="ts">
+import { t, locale, setLocale, getDisplayLocale } from '@/i18n'
+import SelectField from '@/components/primitives/SelectField.vue'
+
+import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
+import RadioChoice from '@/components/primitives/RadioChoice.vue'
+import ToggleField from '@/components/primitives/ToggleField.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import Notice from '@/components/primitives/Notice.vue'
+import TagChip from '@/components/primitives/TagChip.vue'
+import ProgressMeter from '@/components/primitives/ProgressMeter.vue'
 import { computed, onMounted, reactive, ref } from 'vue'
-import { Delete, RefreshRight } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import 'element-plus/es/components/message/style/css'
-import 'element-plus/es/components/message-box/style/css'
+import { Trash2 as Delete, RotateCw as RefreshRight } from '@lucide/vue'
+import { notify, dialogs } from '@/components/primitives/feedback'
 import { useIndexedDbCacheSettings } from '@/core/cache/cacheSettings'
 import {
   validateIndexedDbEnvironment,
@@ -68,7 +76,7 @@ function refreshUserConfigCacheStatus() {
 
 async function rebuildUserConfiguration() {
   if (!authState.loggedIn || !authState.memberId) {
-    ElMessage.warning('请先维护认证信息')
+    notify.warning(t('请先维护认证信息'))
     return
   }
 
@@ -76,13 +84,13 @@ async function rebuildUserConfiguration() {
   try {
     const result = await rebuildUserConfigCache(authState.memberId)
     if (!result.isSuccess || !result.data) {
-      throw new Error(result.msg || '用户配置缓存重建失败')
+      throw new Error(result.msg || t('用户配置缓存重建失败'))
     }
     refreshUserConfigCacheStatus()
-    ElMessage.success('用户配置缓存已重建')
+    notify.success(t('用户配置缓存已重建'))
   } catch (error) {
-    console.error('重建用户配置缓存失败:', error)
-    ElMessage.error(error instanceof Error ? error.message : '用户配置缓存重建失败')
+    console.error(t('重建用户配置缓存失败:'), error)
+    notify.error(error instanceof Error ? error.message : t('用户配置缓存重建失败'))
   } finally {
     userConfigRebuildRunning.value = false
   }
@@ -96,7 +104,7 @@ async function handleIndexedDbToggle() {
   const status = await refreshIndexedDbInformation()
   if (!status.usable) {
     settings.enabled = false
-    ElMessage.error('当前环境无法使用 IndexedDB，已关闭缓存')
+    notify.error(t('当前环境无法使用 IndexedDB，已关闭缓存'))
   }
 }
 
@@ -126,7 +134,7 @@ async function refreshIndexedDbInformation(showResult = false) {
 
   const status = await indexedDbRefreshPromise
   if (showResult) {
-    ElMessage[status.usable ? 'success' : 'error'](status.message)
+    notify[status.usable ? 'success' : 'error'](status.message)
   }
   return status
 }
@@ -134,7 +142,7 @@ async function refreshIndexedDbInformation(showResult = false) {
 async function rebuildTranslations() {
   const environment = await runIndexedDbValidation()
   if (!environment.usable) {
-    ElMessage.error(environment.message)
+    notify.error(environment.message)
     return
   }
 
@@ -146,22 +154,22 @@ async function rebuildTranslations() {
       rebuildState.completed = completed
       rebuildState.total = total
     })
-    ElMessage.success(`标签翻译缓存已重建，共 ${count.toLocaleString()} 条索引`)
+    notify.success(t('标签翻译缓存已重建，共 {p0} 条索引', { p0: count.toLocaleString() }))
     window.setTimeout(() => void refreshIndexedDbInformation(), 0)
   } catch (error) {
-    console.error('重建标签翻译缓存失败:', error)
-    ElMessage.error('重建失败，请先重新校验 IndexedDB')
+    console.error(t('重建标签翻译缓存失败:'), error)
+    notify.error(t('重建失败，请先重新校验 IndexedDB'))
   } finally {
     rebuildState.running = false
   }
 }
 
 async function clearCache(kind: 'details' | 'images') {
-  const label = kind === 'details' ? '画册详情' : '画册图片信息'
+  const label = kind === 'details' ? t('画册详情') : t('画册图片信息')
   try {
-    await ElMessageBox.confirm(`确定清除全部${label}缓存吗？`, '清除缓存', {
-      confirmButtonText: '清除',
-      cancelButtonText: '取消',
+    await dialogs.confirm(t('确定清除全部{p0}缓存吗？', { p0: label }), t('清除缓存'), {
+      confirmButtonText: t('清除'),
+      cancelButtonText: t('取消'),
       type: 'warning',
     })
     if (kind === 'details') {
@@ -169,38 +177,38 @@ async function clearCache(kind: 'details' | 'images') {
     } else {
       await clearGalleryImageCache()
     }
-    ElMessage.success(`${label}缓存已清除`)
+    notify.success(t('{p0}缓存已清除', { p0: label }))
     window.setTimeout(() => void refreshIndexedDbInformation(), 0)
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') {
-      console.error(`清除${label}缓存失败:`, error)
-      ElMessage.error(`清除${label}缓存失败`)
+      console.error(t('清除{p0}缓存失败:', { p0: label }), error)
+      notify.error(t('清除{p0}缓存失败', { p0: label }))
     }
   }
 }
 
 async function clearReadingHistoryFromSettings() {
   try {
-    await ElMessageBox.confirm('确定清除全部浏览历史吗？', '清除浏览历史', {
-      confirmButtonText: '清除',
-      cancelButtonText: '取消',
+    await dialogs.confirm(t('确定清除全部浏览历史吗？'), t('清除浏览历史'), {
+      confirmButtonText: t('清除'),
+      cancelButtonText: t('取消'),
       type: 'warning',
     })
     await clearReadingHistory()
-    ElMessage.success('浏览历史已清除')
+    notify.success(t('浏览历史已清除'))
   } catch (error) {
-    if (error !== 'cancel' && error !== 'close') ElMessage.error('清除浏览历史失败')
+    if (error !== 'cancel' && error !== 'close') notify.error(t('清除浏览历史失败'))
   }
 }
 
 async function clearAllIndexedDb() {
   try {
-    await ElMessageBox.confirm(
-      '确定完全清理 IndexedDB 中的标签翻译、画册详情、图片信息和浏览历史吗？',
-      '完全清理 IndexedDB',
+    await dialogs.confirm(
+      t('确定完全清理 IndexedDB 中的标签翻译、画册详情、图片信息和浏览历史吗？'),
+      t('完全清理 IndexedDB'),
       {
-        confirmButtonText: '完全清理',
-        cancelButtonText: '取消',
+        confirmButtonText: t('完全清理'),
+        cancelButtonText: t('取消'),
         type: 'warning',
       },
     )
@@ -208,12 +216,12 @@ async function clearAllIndexedDb() {
     resetTagTranslationRuntime()
     await deleteCacheDatabase()
     tagCacheStatus.value = { available: false, count: 0 }
-    ElMessage.success('IndexedDB 已完全清理')
+    notify.success(t('IndexedDB 已完全清理'))
     window.setTimeout(() => void refreshIndexedDbInformation(), 0)
   } catch (error) {
     if (error !== 'cancel' && error !== 'close') {
-      console.error('完全清理 IndexedDB 失败:', error)
-      ElMessage.error('完全清理 IndexedDB 失败')
+      console.error(t('完全清理 IndexedDB 失败:'), error)
+      notify.error(t('完全清理 IndexedDB 失败'))
     }
   } finally {
     fullClearRunning.value = false
@@ -229,197 +237,244 @@ function formatBytes(bytes?: number) {
 }
 
 function formatDate(timestamp?: number) {
-  return timestamp ? new Date(timestamp).toLocaleString('zh-CN') : '尚未重建'
+  return timestamp ? new Date(timestamp).toLocaleString(getDisplayLocale()) : t('尚未重建')
 }
 </script>
 
 <template>
   <main class="settings-view">
     <header class="settings-header">
-      <h1>系统设置</h1>
+      <h1>{{ t('系统设置') }}</h1>
     </header>
 
     <section class="settings-section">
-      <h2>分享设置</h2>
+      <h2>{{ t('分享设置') }}</h2>
       <div class="setting-row setting-row--primary">
         <div>
-          <div class="setting-name">默认链接类型</div>
-          <div class="setting-value">用于分享图片中的二维码链接</div>
+          <div class="setting-name">{{ t('默认链接类型') }}</div>
+          <div class="setting-value">{{ t('用于分享图片中的二维码链接') }}</div>
         </div>
-        <el-radio-group v-model="shareSettings.preferredLinkType" aria-label="默认分享链接类型">
-          <el-radio value="site">本站</el-radio>
-          <el-radio value="source">源站</el-radio>
-        </el-radio-group>
+        <ChoiceGroup v-model="shareSettings.preferredLinkType" :aria-label="t('默认分享链接类型')">
+          <RadioChoice value="site">{{ t('本站') }}</RadioChoice>
+          <RadioChoice value="source">{{ t('源站') }}</RadioChoice>
+        </ChoiceGroup>
       </div>
     </section>
 
     <section class="settings-section">
-      <h2>IndexedDB 缓存</h2>
+      <h2>{{ t('IndexedDB 缓存') }}</h2>
       <div class="setting-row setting-row--primary">
         <div>
-          <div class="setting-name">开启 IndexedDB</div>
-          <div class="setting-value">关闭后直接使用 JSON 文件和网络数据</div>
+          <div class="setting-name">{{ t('开启 IndexedDB') }}</div>
+          <div class="setting-value">{{ t('关闭后直接使用 JSON 文件和网络数据') }}</div>
         </div>
-        <el-switch v-model="settings.enabled" @change="handleIndexedDbToggle" />
+        <ToggleField
+          :aria-label="t('开启 IndexedDB')"
+          v-model="settings.enabled"
+          @change="handleIndexedDbToggle"
+        />
       </div>
 
       <div class="setting-row">
-        <span class="setting-name">缓存标签翻译</span>
-        <el-switch v-model="settings.cacheTagTranslations" :disabled="!settings.enabled" />
+        <span class="setting-name">{{ t('缓存标签翻译') }}</span>
+        <ToggleField
+          :aria-label="t('缓存标签翻译')"
+          v-model="settings.cacheTagTranslations"
+          :disabled="!settings.enabled"
+        />
       </div>
       <div class="setting-row">
-        <span class="setting-name">缓存画册详情</span>
-        <el-switch v-model="settings.cacheBookDetails" :disabled="!settings.enabled" />
+        <span class="setting-name">{{ t('缓存画册详情') }}</span>
+        <ToggleField
+          :aria-label="t('缓存画册详情')"
+          v-model="settings.cacheBookDetails"
+          :disabled="!settings.enabled"
+        />
       </div>
       <div class="setting-row">
-        <span class="setting-name">缓存画册图片信息</span>
-        <el-switch v-model="settings.cacheBookImageInfo" :disabled="!settings.enabled" />
+        <span class="setting-name">{{ t('缓存画册图片信息') }}</span>
+        <ToggleField
+          :aria-label="t('缓存画册图片信息')"
+          v-model="settings.cacheBookImageInfo"
+          :disabled="!settings.enabled"
+        />
       </div>
       <div class="setting-row">
         <div>
-          <span class="setting-name">记录浏览历史</span>
-          <div class="setting-value">记录看过的图片和继续阅读的位置；关闭后隐藏历史入口</div>
+          <span class="setting-name">{{ t('记录浏览历史') }}</span>
+          <div class="setting-value">
+            {{ t('记录看过的图片和继续阅读的位置；关闭后隐藏历史入口') }}
+          </div>
         </div>
-        <el-switch v-model="settings.cacheReadingHistory" :disabled="!settings.enabled" />
+        <ToggleField
+          :aria-label="t('记录浏览历史')"
+          v-model="settings.cacheReadingHistory"
+          :disabled="!settings.enabled"
+        />
       </div>
     </section>
 
     <section class="settings-section">
-      <h2>用户配置缓存</h2>
+      <h2>{{ t('用户配置缓存') }}</h2>
       <div class="setting-row setting-row--primary">
         <div>
           <div class="setting-name">
             {{
               userConfigCacheStatus.available
-                ? `${userConfigCacheStatus.favoriteCategoryCount} 个收藏分类`
-                : '尚未建立'
+                ? t('{p0} 个收藏分类', { p0: userConfigCacheStatus.favoriteCategoryCount })
+                : t('尚未建立')
             }}
           </div>
           <div class="setting-value">
             {{
               authState.loggedIn
-                ? `用户 ${authState.memberId} · ${formatDate(userConfigCacheStatus.updatedAt)}`
-                : '登录后可缓存当前用户配置和收藏分类'
+                ? t('用户 {p0} · {p1}', {
+                    p0: authState.memberId,
+                    p1: formatDate(userConfigCacheStatus.updatedAt),
+                  })
+                : t('登录后可缓存当前用户配置和收藏分类')
             }}
           </div>
         </div>
-        <el-button
-          type="primary"
+        <ActionButton
+          variant="default"
           :icon="RefreshRight"
           :loading="userConfigRebuildRunning"
           :disabled="!authState.loggedIn"
           @click="rebuildUserConfiguration"
+          >{{ t('重建') }}</ActionButton
         >
-          重建
-        </el-button>
       </div>
-      <el-alert
+      <Notice
         class="setting-tip"
-        title="收藏分类优先读取当前用户缓存；切换账号或退出登录时会自动清理。"
-        type="info"
+        :title="t('收藏分类优先读取当前用户缓存；切换账号或退出登录时会自动清理。')"
+        tone="info"
         :closable="false"
-        show-icon
       />
     </section>
 
     <section class="settings-section">
-      <h2>环境校验</h2>
+      <h2>{{ t('环境校验') }}</h2>
       <div class="setting-row">
         <div class="status-content">
-          <el-tag :type="environmentStatusType" effect="plain">
-            {{ environmentStatus?.usable ? '可用' : environmentStatus ? '不可用' : '未检测' }}
-          </el-tag>
-          <span class="setting-value">{{ environmentStatus?.message ?? '等待检测' }}</span>
+          <TagChip :tone="environmentStatusType" effect="plain">
+            {{
+              environmentStatus?.usable ? t('可用') : environmentStatus ? t('不可用') : t('未检测')
+            }}
+          </TagChip>
+          <span class="setting-value">{{ t(environmentStatus?.message ?? '等待检测') }}</span>
         </div>
-        <el-button
+        <ActionButton
           :icon="RefreshRight"
           :loading="validationRunning"
           @click="refreshIndexedDbInformation(true)"
+          >{{ t('刷新') }}</ActionButton
         >
-          刷新
-        </el-button>
       </div>
       <div v-if="environmentStatus?.usable" class="storage-summary">
-        已使用 {{ formatBytes(environmentStatus.usage) }} / 配额
-        {{ formatBytes(environmentStatus.quota) }}
+        {{
+          t('已使用 {p0} / 配额 {p1}', {
+            p0: formatBytes(environmentStatus.usage),
+            p1: formatBytes(environmentStatus.quota),
+          })
+        }}
       </div>
-      <el-alert
+      <Notice
         class="setting-tip"
-        title="无痕模式、浏览器存储限制或空间不足可能导致 IndexedDB 不可用；检测会执行一次临时读写并立即清理。"
-        type="info"
+        :title="
+          t(
+            '无痕模式、浏览器存储限制或空间不足可能导致 IndexedDB 不可用；检测会执行一次临时读写并立即清理。',
+          )
+        "
+        tone="info"
         :closable="false"
-        show-icon
       />
     </section>
 
     <section class="settings-section">
-      <h2>标签翻译缓存</h2>
+      <h2>{{ t('标签翻译缓存') }}</h2>
       <div class="setting-row">
         <div>
           <div class="setting-name">
             {{
               tagCacheStatus.available
-                ? `${tagCacheStatus.count.toLocaleString()} 条索引`
-                : '尚未建立'
+                ? t('{p0} 条索引', { p0: tagCacheStatus.count.toLocaleString() })
+                : t('尚未建立')
             }}
           </div>
           <div class="setting-value">{{ formatDate(tagCacheStatus.updatedAt) }}</div>
         </div>
-        <el-button
-          type="primary"
+        <ActionButton
+          variant="default"
           :icon="RefreshRight"
           :loading="rebuildState.running"
           :disabled="!settings.enabled || !settings.cacheTagTranslations || fullClearRunning"
           @click="rebuildTranslations"
+          >{{ t('重建') }}</ActionButton
         >
-          重建
-        </el-button>
       </div>
-      <el-progress v-if="rebuildState.running" :percentage="rebuildPercentage" :stroke-width="8" />
+      <ProgressMeter
+        v-if="rebuildState.running"
+        :percentage="rebuildPercentage"
+        :stroke-width="8"
+      />
     </section>
 
     <section class="settings-section">
-      <h2>缓存管理</h2>
+      <h2>{{ t('缓存管理') }}</h2>
       <div class="setting-row">
-        <span class="setting-name">画册详情</span>
-        <el-button
+        <span class="setting-name">{{ t('画册详情') }}</span>
+        <ActionButton
           :icon="Delete"
           :disabled="rebuildState.running || fullClearRunning"
           @click="clearCache('details')"
+          >{{ t('清除') }}</ActionButton
         >
-          清除
-        </el-button>
       </div>
       <div class="setting-row">
-        <span class="setting-name">画册图片信息</span>
-        <el-button
+        <span class="setting-name">{{ t('画册图片信息') }}</span>
+        <ActionButton
           :icon="Delete"
           :disabled="rebuildState.running || fullClearRunning"
           @click="clearCache('images')"
+          >{{ t('清除') }}</ActionButton
         >
-          清除
-        </el-button>
       </div>
       <div class="setting-row">
-        <span class="setting-name">浏览历史</span>
-        <el-button :icon="Delete" :disabled="fullClearRunning" @click="clearReadingHistoryFromSettings">清除</el-button>
+        <span class="setting-name">{{ t('浏览历史') }}</span>
+        <ActionButton
+          :icon="Delete"
+          :disabled="fullClearRunning"
+          @click="clearReadingHistoryFromSettings"
+          >{{ t('清除') }}</ActionButton
+        >
       </div>
       <div class="setting-row">
         <div>
-          <div class="setting-name">全部 IndexedDB 数据</div>
-          <div class="setting-value">标签翻译、画册详情、图片信息和浏览历史</div>
+          <div class="setting-name">{{ t('全部 IndexedDB 数据') }}</div>
+          <div class="setting-value">{{ t('标签翻译、画册详情、图片信息和浏览历史') }}</div>
         </div>
-        <el-button
-          type="danger"
-          plain
+        <ActionButton
+          variant="destructive"
           :icon="Delete"
           :loading="fullClearRunning"
           :disabled="rebuildState.running"
           @click="clearAllIndexedDb"
+          >{{ t('完全清理') }}</ActionButton
         >
-          完全清理
-        </el-button>
       </div>
+    </section>
+
+    <section class="settings-section">
+      <h2>{{ t('界面语言') }}</h2>
+      <SelectField
+        :model-value="locale"
+        :aria-label="t('界面语言')"
+        @update:model-value="setLocale(String($event))"
+      >
+        <option value="zh-CN">简体中文</option>
+        <option value="en">English</option>
+      </SelectField>
     </section>
   </main>
 </template>
@@ -429,12 +484,12 @@ function formatDate(timestamp?: number) {
   width: min(100%, 760px);
   margin: 0 auto;
   padding: 28px 20px 96px;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
 }
 
 .settings-header {
   padding-bottom: 18px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .settings-header h1 {
@@ -445,14 +500,14 @@ function formatDate(timestamp?: number) {
 
 .settings-section {
   padding: 24px 0 8px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .settings-section h2 {
   margin: 0 0 8px;
   font-size: 15px;
   font-weight: 600;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .setting-row {
@@ -476,7 +531,7 @@ function formatDate(timestamp?: number) {
 .storage-summary {
   font-size: 12px;
   line-height: 1.6;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .status-content {
@@ -496,11 +551,6 @@ function formatDate(timestamp?: number) {
 
 .setting-tip {
   margin: 6px 0 12px;
-}
-
-.setting-tip :deep(.el-alert__title) {
-  font-size: 12px;
-  line-height: 1.6;
 }
 
 @media (max-width: 560px) {

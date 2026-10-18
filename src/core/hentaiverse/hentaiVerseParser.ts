@@ -1,3 +1,4 @@
+import { formatSystemMessage } from '@/i18n'
 import type {
   HentaiVerseAttribute,
   HentaiVerseBattleAction,
@@ -29,6 +30,7 @@ import type {
   HentaiVerseInventorySlot,
   HentaiVerseChallenge,
   HentaiVerseStatGroup,
+  HentaiVerseMetric,
   HentaiVerseItemWorldPage,
 } from './model/hentaiVerse'
 import { getHentaiVerseSection } from './hentaiVerseProtocol'
@@ -208,7 +210,7 @@ function parseAttributes(scriptText: string): HentaiVerseAttribute[] {
   }))
 }
 
-function parseMetrics(document: Document, scriptText: string) {
+function parseMetrics(document: Document, scriptText: string): HentaiVerseMetric[] {
   const metrics = new Map<string, string>()
   const scripted: Array<[string, string]> = [
     ['可用经验', 'usable_exp'],
@@ -227,6 +229,13 @@ function parseMetrics(document: Document, scriptText: string) {
   if (stamina) metrics.set('体力', stamina)
   const exp = cleanText(document.querySelector('#level_details')?.textContent)
   if (exp) metrics.set('升级经验', translateHentaiVerseText(exp))
+  const experience = exp.match(/([\d,]+)\s*\/\s*([\d,]+)/)
+  const currentExperience = Number(experience?.[1]?.replace(/,/g, ''))
+  const requiredExperience = Number(experience?.[2]?.replace(/,/g, ''))
+  const experiencePercent =
+    Number.isFinite(currentExperience) && requiredExperience > 0
+      ? Math.min(100, Math.max(0, (currentExperience / requiredExperience) * 100))
+      : undefined
   const credits =
     matchValue(scriptText, /\bcredit_balance\s*=\s*([\d,]+)/) ||
     matchValue(
@@ -239,7 +248,13 @@ function parseMetrics(document: Document, scriptText: string) {
     /you have\s*([\d,]+)\s*tokens? of blood/i,
   )
   if (bloodTokens) metrics.set('鲜血代币', bloodTokens)
-  return Array.from(metrics, ([label, value]) => ({ label, value }))
+  return Array.from(metrics, ([label, value]) => ({
+    label,
+    value,
+    ...(label === '升级经验' && experiencePercent !== undefined
+      ? { percent: experiencePercent }
+      : {}),
+  }))
 }
 
 function readPersonaCapacity(document: Document) {
@@ -321,7 +336,9 @@ function parseEquipment(
         node.dataset.equipSet ||
         readNamedValue(source, 'equip_set') ||
         String(index + 1)
-      const label = setImage ? `套装 ${id}` : readNodeLabel(node) || `套装 ${id}`
+      const label = setImage
+        ? formatSystemMessage('套装 {p0}', { p0: id })
+        : readNodeLabel(node) || formatSystemMessage('套装 {p0}', { p0: id })
       sets.set(id, {
         id,
         label,
@@ -590,7 +607,7 @@ function parseAbilities(
       action?.name === 'unlock_slot' || node.matches('.locked, .disabled, [aria-disabled="true"]')
     slots.push({
       id,
-      label: `槽位 ${index + 1}`,
+      label: formatSystemMessage('槽位 {p0}', { p0: index + 1 }),
       abilityId,
       abilityName: locked ? '' : abilityName || (abilityId ? readNodeLabel(node) : ''),
       locked,
@@ -639,7 +656,9 @@ function parseTraining(document: Document, scriptText: string): HentaiVerseTrain
     if (!cells[0] || cells.length < 7) return
     const id = sourceId || `unavailable-${cells[0]}`
     const maxLevel = cells[6] && cells[6] !== '0' ? cells[6] : ''
-    const duration = (cells[3] || '').replace(/^(\d+)\s*h$/i, '$1 小时')
+    const duration = (cells[3] || '').replace(/^(\d+)\s*h$/i, (_, hours) =>
+      formatSystemMessage('{p0} 小时', { p0: hours }),
+    )
     options.push({
       id,
       name: translateHentaiVerseText(cells[0]),
@@ -816,7 +835,12 @@ function parseForms(
                 group.key === 'autocast'
                   ? {
                       ...group,
-                      description: `${group.description} 当前已保存配置：${translateHentaiVerseDescription(cleanText(document.querySelector('#settings_upkeep')?.textContent))}`,
+                      description: formatSystemMessage('{p0} 当前已保存配置：{p1}', {
+                        p0: group.description,
+                        p1: translateHentaiVerseDescription(
+                          cleanText(document.querySelector('#settings_upkeep')?.textContent),
+                        ),
+                      }),
                     }
                   : group,
               )
@@ -913,7 +937,9 @@ function parseBattleEntryActions(
         {
           name: 'initid',
           value: id,
-          label: challengeName ? `${prefix}：${challengeName}` : prefix,
+          label: challengeName
+            ? formatSystemMessage('{p0}：{p1}', { p0: prefix, p1: challengeName })
+            : prefix,
         },
       ]
     },
@@ -955,6 +981,17 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
   const completionText = readBattleCompletion(completionPane)
   // Active battles keep an empty completion pane in the DOM as an AJAX target.
   const completed = Boolean(completionText)
+  const victorious =
+    completed &&
+    /\bYou are victorious\b|\bArena challenge cleared\b/i.test(cleanText(completionPane?.textContent))
+  const monsters = parseMonsters(document)
+  if (victorious) {
+    // Victory responses can remove health bars instead of returning zero-width bars.
+    monsters.forEach((monster) => {
+      monster.defeated = true
+      monster.healthPercent = 0
+    })
+  }
   const sourceTitle = cleanText(document.querySelector('#pane_battle h1, h1, title')?.textContent)
   return {
     token,
@@ -963,7 +1000,7 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
       : translateHentaiVerseText(sourceTitle || 'HentaiVerse 战斗'),
     vitals: parseBattleVitals(document),
     effects: parseBattleEffects(document),
-    monsters: parseMonsters(document),
+    monsters,
     actions: parseBattleActions(document),
     log: parseBattleLog(document).slice(-40),
     completed,
@@ -1071,7 +1108,7 @@ function parseMonsters(document: Document): HentaiVerseBattleMonster[] {
       const level = cleanText(node.querySelector('.btm2 > div:nth-child(2)')?.textContent)
       const health = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="health"]'))
       const magic = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="magic"]'))
-      const status = level ? `等级 ${level}` : ''
+      const status = level ? formatSystemMessage('等级 {p0}', { p0: level }) : ''
       monsters.set(id, {
         id,
         name,
@@ -1152,7 +1189,9 @@ function getBattleActionPresentation(node: HTMLElement, mode: HentaiVerseBattleM
         image?.alt ||
         node.textContent,
     ) ||
-    (skill ? `${mode === 'items' ? '物品' : '技能'} ${skill}` : sourceName || mode)
+    (skill
+      ? formatSystemMessage('{p0} {p1}', { p0: mode === 'items' ? '物品' : '技能', p1: skill })
+      : sourceName || mode)
   const item = mode === 'items' ? getHentaiVerseItemPresentation(String(skill)) : undefined
   return {
     label:
@@ -1163,7 +1202,7 @@ function getBattleActionPresentation(node: HTMLElement, mode: HentaiVerseBattleM
       BATTLE_ACTION_DESCRIPTIONS[sourceLabel.toLowerCase()] ||
       BATTLE_ACTION_DESCRIPTIONS[mode] ||
       translateHentaiVerseDescription(cleanText(scripted?.[2])) ||
-      `执行${translateHentaiVerseText(sourceLabel)}操作。`,
+      formatSystemMessage('执行{p0}操作。', { p0: translateHentaiVerseText(sourceLabel) }),
   }
 }
 
@@ -1360,15 +1399,18 @@ function readEquipmentSlotLabel(id: string, node: HTMLElement) {
     '12': '腿部',
     '15': '脚部',
   }
-  return labels[id] || `部位 ${id}`
+  return labels[id] || formatSystemMessage('部位 {p0}', { p0: id })
 }
 
 function readInventorySlotLabel(id: string) {
   const numericId = Number(id)
-  if (numericId >= 1 && numericId < 100) return `恢复品槽 ${numericId}`
-  if (numericId >= 100 && numericId < 200) return `卷轴槽 S${numericId - 100}`
-  if (numericId >= 200 && numericId < 300) return `附魔药槽 N${numericId - 200}`
-  return `物品槽 ${id}`
+  if (numericId >= 1 && numericId < 100)
+    return formatSystemMessage('恢复品槽 {p0}', { p0: numericId })
+  if (numericId >= 100 && numericId < 200)
+    return formatSystemMessage('卷轴槽 S{p0}', { p0: numericId - 100 })
+  if (numericId >= 200 && numericId < 300)
+    return formatSystemMessage('附魔药槽 N{p0}', { p0: numericId - 200 })
+  return formatSystemMessage('物品槽 {p0}', { p0: id })
 }
 
 function readAbilityPresentation(row: HTMLElement) {
@@ -1406,7 +1448,10 @@ function readAbilityPresentation(row: HTMLElement) {
     currentEffect: translateHentaiVerseDescription(readHtmlText(readValue(match[3]))),
     nextEffect: translateHentaiVerseDescription(readHtmlText(readValue(match[4]))),
     requirement: requirementMatch
-      ? `需要等级 ${requirementMatch[1]}，消耗 ${requirementMatch[2]} 点能力点`
+      ? formatSystemMessage('需要等级 {p0}，消耗 {p1} 点能力点', {
+          p0: requirementMatch[1],
+          p1: requirementMatch[2],
+        })
       : translateHentaiVerseText(requirementText),
   }
 }

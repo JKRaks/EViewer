@@ -1,4 +1,11 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import PixelIcon from './PixelIcon.vue'
+import SectionTabs from '@/components/primitives/SectionTabs'
+import SectionTab from '@/components/primitives/SectionTab.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
 import { computed, ref, watch } from 'vue'
 import type {
   HentaiVerseAbility,
@@ -75,7 +82,7 @@ function getEquipLabel(ability: HentaiVerseAbility) {
         (slot.abilityId === ability.id || (!slot.abilityId && slot.abilityName === ability.name)),
     )
     .map((slot) => slot.label.replace(/^槽位\s*/, ''))
-  return slots.length ? `已装配在 ${slots.join('、')} 位` : '选择装配'
+  return slots.length ? t('已装配在 {p0} 位', { p0: slots.join('、') }) : t('选择装配')
 }
 
 function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
@@ -86,24 +93,24 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 <template>
   <section class="ability-panel">
     <div class="ability-summary">
-      <el-tabs
+      <SectionTabs
         v-if="data.trees.length"
         :model-value="data.selectedTree"
         class="ability-trees"
         @tab-change="emit('tree', String($event))"
       >
-        <el-tab-pane
+        <SectionTab
           v-for="tree in data.trees"
           :key="tree.id"
-          :label="tree.label"
+          :label="t(tree.label)"
           :name="tree.id"
         />
-      </el-tabs>
+      </SectionTabs>
       <span v-if="data.abilityPoints"
-        >可用能力点 <strong>{{ data.abilityPoints }}</strong></span
+        >{{ t('可用能力点') }}<strong>{{ t(data.abilityPoints) }}</strong></span
       >
       <span v-if="data.masteryPoints"
-        >精通点 <strong>{{ data.masteryPoints }}</strong></span
+        >{{ t('精通点') }}<strong>{{ t(data.masteryPoints) }}</strong></span
       >
     </div>
 
@@ -116,13 +123,13 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
       >
         <div class="ability-main">
           <div>
-            <span class="ability-category">{{ ability.group }}</span>
-            <h3>{{ ability.name }}</h3>
-            <p v-if="ability.description">{{ ability.description }}</p>
+            <span class="ability-category">{{ t(ability.group) }}</span>
+            <h3 class="pixel-title"><PixelIcon kind="abilities" />{{ t(ability.name) }}</h3>
+            <p v-if="ability.description">{{ t(ability.description) }}</p>
           </div>
           <span class="ability-level"
-            >{{ ability.level === null ? '等级未知' : `等级 ${ability.level}`
-            }}<template v-if="ability.maxLevel"> / {{ ability.maxLevel }}</template></span
+            >{{ t(ability.level === null ? t('等级未知') : t('等级 {p0}', { p0: ability.level }))
+            }}<template v-if="ability.maxLevel"> / {{ t(ability.maxLevel) }}</template></span
           >
         </div>
         <div class="ability-meta">
@@ -132,34 +139,38 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
               type="button"
               class="ability-select"
               :aria-pressed="selectedAbilityId === ability.id"
-              :aria-label="`${ability.name}，${getEquipLabel(ability)}`"
+              :aria-label="t(`${ability.name}，${getEquipLabel(ability)}`)"
               :disabled="loading"
               @click.stop="selectAbility(ability)"
             >
-              {{ getEquipLabel(ability) }}
+              {{ t(getEquipLabel(ability)) }}
             </button>
-            <span v-if="ability.cost">{{ ability.cost }}</span>
+            <span v-if="ability.cost">{{ t(ability.cost) }}</span>
           </div>
           <div class="ability-actions">
-            <el-button
+            <ActionButton
               v-if="ability.action"
-              size="small"
-              :type="ability.action === 'reset_ability' ? 'danger' : 'primary'"
+              size="sm"
+              :variant="ability.action === 'reset_ability' ? 'destructive' : 'default'"
               :plain="ability.action === 'reset_ability'"
               :disabled="ability.disabled"
               :loading="loading"
               @click.stop="emit('action', ability.action, ability.id)"
             >
-              {{ ability.actionLabel || (ability.action === 'reset_ability' ? '重置' : '解锁') }}
-            </el-button>
-            <el-button
+              {{
+                t(
+                  ability.actionLabel ||
+                    (ability.action === 'reset_ability' ? t('重置') : t('解锁')),
+                )
+              }}
+            </ActionButton>
+            <ActionButton
               v-if="ability.action !== 'reset_ability' && ability.resetCost !== undefined"
-              size="small"
-              type="danger"
-              plain
+              size="sm"
+              variant="destructive"
               :loading="loading"
               @click.stop="emit('action', 'reset_ability', ability.id)"
-              >重置</el-button
+              >{{ t('重置') }}</ActionButton
             >
           </div>
         </div>
@@ -168,29 +179,37 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
           class="ability-effects"
           @click.stop
         >
-          <summary>查看当前与下一阶效果 · {{ ability.group }}</summary>
-          <p v-if="ability.currentEffect"><b>当前阶：</b>{{ ability.currentEffect }}</p>
-          <p v-if="ability.nextEffect"><b>下一阶：</b>{{ ability.nextEffect }}</p>
+          <summary>{{ t('查看当前与下一阶效果 · {p0}', { p0: t(ability.group) }) }}</summary>
+          <p v-if="ability.currentEffect">
+            <b>{{ t('当前阶：') }}</b
+            >{{ t(ability.currentEffect) }}
+          </p>
+          <p v-if="ability.nextEffect">
+            <b>{{ t('下一阶：') }}</b
+            >{{ t(ability.nextEffect) }}
+          </p>
         </details>
       </article>
     </div>
-    <el-empty v-else description="未能从源站解析当前能力树" />
+    <EmptyState v-else :description="t('未能从源站解析当前能力树')" />
 
     <div v-if="data.slots.length" class="ability-slots">
       <header>
         <div>
-          <span>能力槽</span>
+          <span>{{ t('能力槽') }}</span>
           <p
             :title="
               selectedAbility
-                ? `选择槽位装备 ${selectedAbility.name}`
-                : '先选择一个已解锁能力，再选择目标槽位'
+                ? t('选择槽位装备 {p0}', { p0: t(selectedAbility.name) })
+                : t('先选择一个已解锁能力，再选择目标槽位')
             "
           >
             {{
-              selectedAbility
-                ? `选择槽位装备 ${selectedAbility.name}`
-                : '先选择一个已解锁能力，再选择目标槽位'
+              t(
+                selectedAbility
+                  ? t('选择槽位装备 {p0}', { p0: t(selectedAbility.name) })
+                  : t('先选择一个已解锁能力，再选择目标槽位'),
+              )
             }}
           </p>
         </div>
@@ -202,11 +221,13 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
         :open="expandedSlotGroups.includes(group.label)"
       >
         <summary @click.prevent="toggleSlotGroup(group.label)">
-          {{ group.label }}
-          <small
-            >{{ group.slots.filter(isSlotEquipped).length }} /
-            {{ group.slots.length }} 已装配</small
-          >
+          {{ t(group.label) }}
+          <small>{{
+            t('{p0} / {p1} 已装配', {
+              p0: group.slots.filter(isSlotEquipped).length,
+              p1: group.slots.length,
+            })
+          }}</small>
         </summary>
         <div class="slot-grid">
           <div v-for="slot in group.slots" :key="slot.id" class="slot-entry">
@@ -223,10 +244,10 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
               "
               :title="
                 slot.locked
-                  ? `解锁需要 ${slot.unlockCost ?? '未知数量的'} 精通点`
+                  ? t('解锁需要 {p0} 精通点', { p0: slot.unlockCost ?? t('未知数量的') })
                   : !canEquip(slot) && selectedAbility
-                    ? '能力类型与槽位不匹配'
-                    : slot.abilityName
+                    ? t('能力类型与槽位不匹配')
+                    : t(slot.abilityName)
               "
               @click="
                 slot.locked && slot.action
@@ -235,28 +256,29 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
               "
             >
               <span class="slot-heading">
-                <span class="slot-label" :title="slot.label">{{ slot.label }}</span>
+                <span class="slot-label" :title="t(slot.label)">{{ t(slot.label) }}</span>
                 <span class="slot-state">{{
-                  slot.locked ? '未解锁' : isSlotEquipped(slot) ? '✓ 已装配' : '空闲'
+                  t(slot.locked ? t('未解锁') : isSlotEquipped(slot) ? t('✓ 已装配') : t('空闲'))
                 }}</span>
               </span>
-              <strong :title="slot.abilityName">{{
-                slot.locked
-                  ? '点击解锁'
-                  : slot.abilityName || (isSlotEquipped(slot) ? '已装配能力' : '空槽位')
+              <strong :title="t(slot.abilityName)">{{
+                t(
+                  slot.locked
+                    ? t('点击解锁')
+                    : slot.abilityName || (isSlotEquipped(slot) ? t('已装配能力') : t('空槽位')),
+                )
               }}</strong>
-              <small v-if="slot.locked && slot.unlockCost !== undefined"
-                >{{ slot.unlockCost }} 精通点</small
-              >
+              <small v-if="slot.locked && slot.unlockCost !== undefined">{{
+                t('{p0} 精通点', { p0: slot.unlockCost })
+              }}</small>
             </button>
-            <el-button
+            <ActionButton
               v-if="isSlotEquipped(slot)"
-              size="small"
-              text
-              type="danger"
+              size="sm"
+              variant="ghost"
               :disabled="loading"
               @click="emit('equip', slot.id, '0')"
-              >卸下能力</el-button
+              >{{ t('卸下能力') }}</ActionButton
             >
           </div>
         </div>
@@ -264,11 +286,17 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
     </div>
 
     <div v-if="data.canResetAll" class="ability-footer">
-      <el-button type="danger" plain :loading="loading" @click="emit('action', 'reset_all', '1')">
-        重置全部能力<template v-if="data.resetCost !== undefined"
-          >（{{ data.resetCost ? `${data.resetCost} 灵魂碎片` : '本次免费' }}）</template
+      <ActionButton
+        variant="destructive"
+        :loading="loading"
+        @click="emit('action', 'reset_all', '1')"
+        >{{ t('重置全部能力')
+        }}<template v-if="data.resetCost !== undefined"
+          >（{{
+            t(data.resetCost ? t('{p0} 灵魂碎片', { p0: data.resetCost }) : t('本次免费'))
+          }}）</template
         >
-      </el-button>
+      </ActionButton>
     </div>
   </section>
 </template>
@@ -295,23 +323,19 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
   flex: 1;
 }
 
-.ability-trees :deep(.el-tabs__header) {
-  margin-bottom: 0;
-}
-
 .ability-summary > span {
   flex: 0 0 auto;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .ability-summary strong {
-  color: var(--el-color-primary);
+  color: var(--accent);
 }
 
 .ability-slots {
   padding: 16px 0 20px;
-  border-top: 1px solid var(--el-border-color-lighter);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .ability-slots header span {
@@ -321,7 +345,7 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 .ability-slots header p {
   margin: 4px 0 12px;
   overflow: hidden;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -338,11 +362,11 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
   min-width: 0;
   min-height: 62px;
   padding: 8px 10px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--border);
   border-radius: 6px;
   text-align: left;
-  color: var(--el-text-color-primary);
-  background: var(--el-bg-color);
+  color: var(--foreground);
+  background: var(--surface);
   opacity: 1;
 }
 
@@ -354,7 +378,7 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 .slot-group {
   margin-top: 10px;
   padding: 12px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 10px;
 }
 .slot-group summary {
@@ -366,14 +390,14 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
   margin-left: 8px;
   font-size: 12px;
   font-weight: 400;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 .slot-group[open] summary {
   margin-bottom: 12px;
 }
 .ability-effects {
   margin-top: 10px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
   line-height: 1.7;
 }
@@ -385,9 +409,9 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 }
 
 .slot-grid button.equipped {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  box-shadow: inset 3px 0 0 var(--el-color-primary);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .slot-grid button:not(:disabled) {
@@ -396,7 +420,7 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 
 .slot-grid button.locked {
   border-style: dashed;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .slot-grid span,
@@ -405,7 +429,7 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 }
 
 .slot-grid span {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 
@@ -427,19 +451,19 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
   flex: 0 0 auto;
   padding: 0 5px;
   border-radius: 3px;
-  background: var(--el-fill-color);
+  background: var(--muted);
   font-size: 10px;
   line-height: 18px;
   white-space: nowrap;
 }
 
 .slot-grid button.equipped .slot-state {
-  color: var(--el-color-white);
-  background: var(--el-color-primary);
+  color: var(--white);
+  background: var(--accent);
 }
 
 .slot-grid button.equipped strong {
-  color: var(--el-color-primary);
+  color: var(--accent);
   font-weight: 700;
 }
 
@@ -460,7 +484,7 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 .ability-list article {
   min-width: 0;
   padding: 18px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 12px;
   transition:
     border-color 0.15s,
@@ -469,20 +493,20 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 }
 
 .ability-list article.selectable {
-  border-color: var(--el-color-primary-light-5);
-  background: var(--el-fill-color-light);
+  border-color: var(--accent-ring);
+  background: var(--muted);
   cursor: pointer;
 }
 
 .ability-list article.selectable:hover,
 .ability-list article.selectable:focus-within {
-  border-color: var(--el-color-primary);
+  border-color: var(--accent);
 }
 
 .ability-list article.selected {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
-  box-shadow: inset 0 0 0 1px var(--el-color-primary);
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 
 .ability-main,
@@ -506,7 +530,7 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
 
 .ability-main p {
   margin: 5px 0 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   line-height: 1.5;
 }
 
@@ -514,7 +538,7 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
   flex: 0 0 auto;
   padding: 4px 8px;
   border-radius: 6px;
-  background: var(--el-fill-color);
+  background: var(--muted);
   font-size: 12px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;
@@ -525,16 +549,16 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
   min-height: 26px;
   flex-wrap: wrap;
   padding-top: 14px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
   margin-top: 14px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
 .ability-category {
   display: block;
   margin-bottom: 5px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
@@ -543,7 +567,7 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
   flex-wrap: wrap;
   gap: 8px;
 }
-.ability-actions .el-button + .el-button {
+.ability-actions .ui-button + .ui-button {
   margin-left: 0;
 }
 
@@ -558,27 +582,27 @@ function isSlotEquipped(slot: HentaiVerseAbilitySlot) {
   min-height: 34px;
   min-width: 5em;
   padding: 6px 8px;
-  border: 1px solid var(--el-color-primary-light-5);
+  border: 1px solid var(--accent-ring);
   border-radius: 3px;
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  color: var(--accent);
+  background: var(--accent-soft);
   font: inherit;
   font-weight: 600;
   cursor: pointer;
 }
 
 .ability-select[aria-pressed='true'] {
-  color: var(--el-color-white);
-  background: var(--el-color-primary);
+  color: var(--white);
+  background: var(--accent);
 }
 
-.ability-actions :deep(.el-button),
-.slot-entry > .el-button {
+.ability-actions :deep(.ui-button),
+.slot-entry > .ui-button {
   min-height: 34px;
 }
 
 .ability-select:focus-visible {
-  outline: 2px solid var(--el-color-primary);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 

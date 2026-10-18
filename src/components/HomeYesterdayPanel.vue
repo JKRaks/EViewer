@@ -1,6 +1,14 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import IconFrame from '@/components/primitives/IconFrame.vue'
+import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
+import SkeletonLine from '@/components/primitives/SkeletonLine.vue'
+import Notice from '@/components/primitives/Notice.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
 import { computed, onMounted, ref } from 'vue'
-import { ArrowRight, Refresh, Trophy, Warning } from '@element-plus/icons-vue'
+import { ArrowRight, RefreshCw as Refresh, Trophy, TriangleAlert as Warning } from '@lucide/vue'
 import { RouterLink } from 'vue-router'
 import BookItem from '@/components/BookItem.vue'
 import { toplistBusi } from '@/core/books/toplistBusi'
@@ -30,10 +38,10 @@ async function fetchYesterday() {
       )
       return
     }
-    errorMessage.value = result.msg || '获取昨日热门失败'
+    errorMessage.value = result.msg || t('获取昨日热门失败')
   } catch (error) {
     if (version === requestVersion) {
-      errorMessage.value = error instanceof Error ? error.message : '获取昨日热门失败'
+      errorMessage.value = error instanceof Error ? error.message : t('获取昨日热门失败')
     }
   } finally {
     if (version === requestVersion) loading.value = false
@@ -46,35 +54,38 @@ onMounted(() => void fetchYesterday())
 <template>
   <div class="yesterday-panel">
     <header class="panel-header">
-      <slot name="navigation" />
       <div>
         <div class="panel-kicker">
-          <el-icon><Trophy /></el-icon> Daily Toplist
+          <IconFrame><Trophy /></IconFrame> {{ t('每日榜单') }}
         </div>
-        <h1>昨日热门画册</h1>
-        <p>按昨日榜单积分排列。</p>
+        <h1>{{ t('昨日热门画册') }}</h1>
+        <p>{{ t('按昨日榜单积分排列。') }}</p>
       </div>
       <RouterLink class="view-more-link" :to="{ name: 'toplists', query: { tl: 15, p: 0 } }">
-        <span>查看更多</span>
-        <el-icon><ArrowRight /></el-icon>
+        <span>{{ t('查看更多') }}</span>
+        <IconFrame><ArrowRight /></IconFrame>
       </RouterLink>
     </header>
 
-    <el-skeleton v-if="loading && entries.length === 0" animated>
+    <slot name="navigation" />
+
+    <SkeletonBlock v-if="loading && entries.length === 0">
       <template #template>
-        <div class="ranking-grid">
-          <el-skeleton-item v-for="index in 12" :key="index" variant="rect" class="skeleton-item" />
+        <div class="ranking-grid gallery-masonry">
+          <SkeletonLine v-for="index in 12" :key="index" variant="rect" class="skeleton-item" />
         </div>
       </template>
-    </el-skeleton>
-    <el-alert v-else-if="errorMessage && entries.length === 0" type="error" :closable="false">
+    </SkeletonBlock>
+    <Notice v-else-if="errorMessage && entries.length === 0" tone="error" :closable="false">
       <template #title
-        ><el-icon><Warning /></el-icon> {{ errorMessage }}</template
+        ><IconFrame><Warning /></IconFrame> {{ t(errorMessage) }}</template
       >
-      <el-button size="small" :icon="Refresh" @click="fetchYesterday">重新加载</el-button>
-    </el-alert>
-    <el-empty v-else-if="entries.length === 0" description="暂无昨日榜单数据" />
-    <div v-else class="ranking-grid" v-loading="loading">
+      <ActionButton size="sm" :icon="Refresh" @click="fetchYesterday">{{
+        t('重新加载')
+      }}</ActionButton>
+    </Notice>
+    <EmptyState v-else-if="entries.length === 0" :description="t('暂无昨日榜单数据')" />
+    <div v-else class="ranking-grid gallery-masonry" v-busy="loading">
       <BookItem
         v-for="entry in visibleEntries"
         :key="entry.book.bookId"
@@ -98,7 +109,7 @@ onMounted(() => void fetchYesterday())
   justify-content: space-between;
   gap: 20px;
   padding: 18px 2px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 .panel-header > div {
   min-width: 0;
@@ -108,19 +119,19 @@ onMounted(() => void fetchYesterday())
   display: flex;
   align-items: center;
   gap: 7px;
-  color: var(--el-color-primary);
+  color: var(--accent);
   font-size: 13px;
   font-weight: 600;
 }
 .panel-header h1 {
   margin: 5px 0 0;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
   font-size: 26px;
   line-height: 1.3;
 }
 .panel-header p {
   margin: 6px 0 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
 }
 .view-more-link {
@@ -128,14 +139,14 @@ onMounted(() => void fetchYesterday())
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 14px;
   text-decoration: none;
   transition: color 0.15s ease;
 }
 .view-more-link:hover,
 .view-more-link:focus-visible {
-  color: var(--el-color-primary);
+  color: var(--accent);
 }
 .ranking-grid {
   columns: 360px;
@@ -164,6 +175,32 @@ onMounted(() => void fetchYesterday())
   }
   .ranking-grid {
     columns: 1;
+  }
+}
+.ranking-grid {
+  display: grid;
+  columns: auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 26px 22px;
+}
+.ranking-grid > :deep(.book-item) {
+  margin: 0;
+}
+.ranking-grid > .ui-empty,
+.ranking-grid > .load-more-trigger,
+.ranking-grid > .loading-more,
+.ranking-grid > .no-more {
+  grid-column: 1/-1;
+}
+@media (max-width: 1050px) {
+  .ranking-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 767px) {
+  .ranking-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 14px;
   }
 }
 </style>

@@ -30,7 +30,7 @@
   },
   "version_metadata": { "binding": "EVIEWER_VERSION" },
   "ratelimits": [
-    { "name": "proxy-df", "namespace_id": "2", "simple": { "limit": 10, "period": 10 } },
+    { "name": "proxy-df", "namespace_id": "2", "simple": { "limit": 120, "period": 60 } },
   ],
   "observability": {
     "enabled": true,
@@ -52,7 +52,7 @@
     },
     "version_metadata": { "binding": "EVIEWER_VERSION" },
     "ratelimits": [
-      { "name": "proxy-df", "namespace_id": "3", "simple": { "limit": 10, "period": 10 } },
+      { "name": "proxy-df", "namespace_id": "3", "simple": { "limit": 120, "period": 60 } },
     ],
     "observability": {
       "enabled": true,

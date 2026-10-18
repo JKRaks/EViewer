@@ -1,6 +1,13 @@
 <script setup lang="ts">
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
-import { ArrowLeft, Check, Search } from '@element-plus/icons-vue'
+import { t, locale } from '@/i18n'
+
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Search, Plus, Minus, Check } from '@lucide/vue'
+import TextField from './primitives/TextField.vue'
+import SegmentedControl from './primitives/SegmentedControl.vue'
+import TagChip from './primitives/TagChip.vue'
+import EmptyState from './primitives/EmptyState.vue'
+import ActionButton from './primitives/ActionButton.vue'
 import {
   listMasterTags,
   listTagNamespaces,
@@ -8,7 +15,7 @@ import {
 } from '@/core/common/tagTranslationWorkerClient'
 import type { SearchableTag, TagNamespaceSummary } from '@/core/common/tagTranslationProtocol'
 import type { selectedGalleryTag } from '@/core/model/book/gallerySearchCriteria'
-
+import { galleryTagKey, selectGalleryTag } from '@/core/books/gallerySearchState'
 const props = defineProps<{
   includeTags: selectedGalleryTag[]
   excludeTags: selectedGalleryTag[]
@@ -17,446 +24,526 @@ const emit = defineEmits<{
   'update:includeTags': [value: selectedGalleryTag[]]
   'update:excludeTags': [value: selectedGalleryTag[]]
 }>()
-const visible = defineModel<boolean>({ default: false })
-
 const namespaces = ref<TagNamespaceSummary[]>([])
 const activeNamespace = ref('')
-const mobileStage = ref<'namespaces' | 'tags'>('namespaces')
-const selectionMode = ref<'include' | 'exclude'>('include')
-const searchScope = ref<'all' | 'current'>('all')
+const searchScope = ref('all')
 const keyword = ref('')
 const loadingNamespaces = ref(false)
-const loadingTags = ref(false)
+const loadingSearch = ref(false)
+const pendingPages = ref(0)
+const error = ref('')
 const total = ref(0)
-const loadedTags = reactive(new Map<number, SearchableTag>())
+const loadedTags = ref(new Map<number, SearchableTag>())
 const loadedPages = new Set<number>()
 const scrollTop = ref(0)
-const viewportHeight = ref(420)
-const isMobile = ref(false)
-const listElement = ref<HTMLElement | null>(null)
+const viewportHeight = ref(320)
+const listElement = ref<HTMLElement>()
 const searchResults = ref<SearchableTag[]>([])
-let searchTimer: ReturnType<typeof globalThis.setTimeout> | undefined
-let searchVersion = 0
-let mediaQuery: MediaQueryList | undefined
-
-const rowHeight = 58
+const rowHeight = 80
 const pageSize = 160
+let searchVersion = 0
+let timer: ReturnType<typeof setTimeout> | undefined
+let disposed = false
+const searching = computed(() => !!keyword.value.trim())
 const activeNamespaceInfo = computed(() =>
   namespaces.value.find((item) => item.namespace === activeNamespace.value),
 )
-const searching = computed(() => keyword.value.trim().length > 0)
 const visibleRows = computed(() => {
-  if (searching.value) {
-    return searchResults.value.map((tag, index) => ({ index, tag }))
-  }
-  const start = Math.max(0, Math.floor(scrollTop.value / rowHeight) - 6)
-  const count = Math.ceil(viewportHeight.value / rowHeight) + 12
-  return Array.from({ length: Math.min(count, total.value - start) }, (_, offset) => {
-    const index = start + offset
-    return { index, tag: loadedTags.get(index) }
-  })
+  if (searching.value) return searchResults.value.map((tag, index) => ({ index, tag }))
+  const start = Math.max(0, Math.floor(scrollTop.value / rowHeight) - 4)
+  const count = Math.max(
+    0,
+    Math.min(Math.ceil(viewportHeight.value / rowHeight) + 8, total.value - start),
+  )
+  return Array.from({ length: count }, (_, offset) => ({
+    index: start + offset,
+    tag: loadedTags.value.get(start + offset),
+  }))
 })
-const listHeight = computed(() =>
-  searching.value ? searchResults.value.length * rowHeight : total.value * rowHeight,
+const listHeight = computed(
+  () => (searching.value ? searchResults.value.length : total.value) * rowHeight,
 )
-
-watch(visible, (opened) => {
-  if (!opened || namespaces.value.length) return
-  void loadNamespaces()
-})
-
-watch(keyword, () => {
-  globalThis.clearTimeout(searchTimer)
+watch([keyword, searchScope, activeNamespace], () => {
+  clearTimeout(timer)
+  if (keyword.value.trim()) loadingSearch.value = true
   const version = ++searchVersion
-  searchTimer = globalThis.setTimeout(() => void runSearch(version), 250)
+  scrollTop.value = 0
+  if (listElement.value) listElement.value.scrollTop = 0
+  timer = setTimeout(() => void runSearch(version), 250)
 })
-
-watch(searchScope, () => {
-  if (!keyword.value.trim()) return
-  const version = ++searchVersion
-  void runSearch(version)
-})
-
 async function loadNamespaces() {
   loadingNamespaces.value = true
+  error.value = ''
   try {
-    namespaces.value = await listTagNamespaces()
-    if (!activeNamespace.value && namespaces.value[0]) {
-      await selectNamespace(namespaces.value[0].namespace)
-      if (!isMobile.value) mobileStage.value = 'tags'
-    }
+    const result = await listTagNamespaces()
+    if (disposed) return
+    namespaces.value = result
+    if (!activeNamespace.value && result[0]) await selectNamespace(result[0].namespace)
+  } catch (cause) {
+    if (!disposed) error.value = cause instanceof Error ? cause.message : t('标签索引加载失败')
   } finally {
     loadingNamespaces.value = false
   }
 }
-
 async function selectNamespace(namespace: string) {
   activeNamespace.value = namespace
-  mobileStage.value = 'tags'
-  keyword.value = ''
   total.value = namespaces.value.find((item) => item.namespace === namespace)?.count ?? 0
-  loadedTags.clear()
+  loadedTags.value.clear()
   loadedPages.clear()
   scrollTop.value = 0
   if (listElement.value) listElement.value.scrollTop = 0
-  await loadTagPage(0)
+  if (!searching.value) await loadTagPage(0)
 }
-
 async function loadTagPage(index: number) {
-  if (!activeNamespace.value) return
-  const pageOffset = Math.floor(index / pageSize) * pageSize
-  if (loadedPages.has(pageOffset)) return
-  loadedPages.add(pageOffset)
-  loadingTags.value = true
+  const namespace = activeNamespace.value
+  if (!namespace || searching.value || index >= total.value) return
+  const offset = Math.floor(index / pageSize) * pageSize
+  if (loadedPages.has(offset)) return
+  loadedPages.add(offset)
+  pendingPages.value++
   try {
-    const page = await listMasterTags(activeNamespace.value, pageOffset, pageSize)
+    const page = await listMasterTags(namespace, offset, pageSize)
+    if (disposed || namespace !== activeNamespace.value) return
     total.value = page.total
-    page.items.forEach((tag, offset) => loadedTags.set(page.offset + offset, tag))
-  } catch (error) {
-    loadedPages.delete(pageOffset)
-    throw error
+    page.items.forEach((tag, index) => loadedTags.value.set(page.offset + index, tag))
+  } catch (cause) {
+    if (namespace === activeNamespace.value && !disposed) {
+      loadedPages.delete(offset)
+      error.value = cause instanceof Error ? cause.message : t('标签加载失败，请重试')
+    }
   } finally {
-    loadingTags.value = false
+    pendingPages.value--
   }
 }
-
-function handleListScroll(event: Event) {
+function handleScroll(event: Event) {
   const element = event.currentTarget as HTMLElement
   scrollTop.value = element.scrollTop
   viewportHeight.value = element.clientHeight
-  const lastVisible = Math.ceil((element.scrollTop + element.clientHeight) / rowHeight) + 10
-  void loadTagPage(lastVisible)
+  const first = Math.max(0, Math.floor(scrollTop.value / rowHeight) - 4)
+  void loadTagPage(first)
+  void loadTagPage(Math.ceil((scrollTop.value + viewportHeight.value) / rowHeight) + 4)
 }
-
 async function runSearch(version: number) {
   const query = keyword.value.trim()
+  error.value = ''
   if (!query) {
     searchResults.value = []
+    loadingSearch.value = false
     await nextTick()
-    void loadTagPage(Math.floor(scrollTop.value / rowHeight))
+    if (!disposed) await loadTagPage(0)
     return
   }
-  loadingTags.value = true
+  loadingSearch.value = true
   try {
-    const namespace = searchScope.value === 'current' ? activeNamespace.value : undefined
-    const results = await searchMasterTags(query, namespace, 50)
-    if (version === searchVersion) searchResults.value = results
+    const results = await searchMasterTags(
+      query,
+      searchScope.value === 'current' ? activeNamespace.value : undefined,
+      50,
+    )
+    if (!disposed && version === searchVersion) searchResults.value = results
+  } catch (cause) {
+    if (!disposed && version === searchVersion)
+      error.value = cause instanceof Error ? cause.message : t('查找失败，请重试')
   } finally {
-    if (version === searchVersion) loadingTags.value = false
+    if (version === searchVersion) loadingSearch.value = false
   }
 }
-
-function toggleTag(tag: SearchableTag) {
-  const selected: selectedGalleryTag = {
-    namespace: tag.namespace,
-    master: tag.master,
-    displayName: tag.displayName,
-    source: tag.source,
-  }
-  const own = selectionMode.value === 'include' ? props.includeTags : props.excludeTags
-  const other = selectionMode.value === 'include' ? props.excludeTags : props.includeTags
-  const key = tagKey(selected)
-  const alreadySelected = own.some((item) => tagKey(item) === key)
-  const nextOwn = alreadySelected ? own.filter((item) => tagKey(item) !== key) : [...own, selected]
-  const nextOther = other.filter((item) => tagKey(item) !== key)
-  if (selectionMode.value === 'include') {
-    emit('update:includeTags', nextOwn)
-    emit('update:excludeTags', nextOther)
-  } else {
-    emit('update:excludeTags', nextOwn)
-    emit('update:includeTags', nextOther)
-  }
+function toggleTag(tag: SearchableTag, mode: 'include' | 'exclude') {
+  const next = selectGalleryTag(props.includeTags, props.excludeTags, tag, mode)
+  emit('update:includeTags', next.includeTags)
+  emit('update:excludeTags', next.excludeTags)
 }
-
+function remove(tag: selectedGalleryTag, mode: 'include' | 'exclude') {
+  const key = galleryTagKey(tag)
+  if (mode === 'include')
+    emit(
+      'update:includeTags',
+      props.includeTags.filter((item) => galleryTagKey(item) !== key),
+    )
+  else
+    emit(
+      'update:excludeTags',
+      props.excludeTags.filter((item) => galleryTagKey(item) !== key),
+    )
+}
 function selectedMode(tag: SearchableTag) {
-  const key = tagKey(tag)
-  if (props.includeTags.some((item) => tagKey(item) === key)) return 'include'
-  if (props.excludeTags.some((item) => tagKey(item) === key)) return 'exclude'
-  return undefined
+  const key = galleryTagKey(tag)
+  return props.includeTags.some((item) => galleryTagKey(item) === key)
+    ? 'include'
+    : props.excludeTags.some((item) => galleryTagKey(item) === key)
+      ? 'exclude'
+      : ''
 }
-
-function updateMobileState(event: MediaQueryListEvent | MediaQueryList) {
-  isMobile.value = event.matches
-  if (!event.matches && activeNamespace.value) mobileStage.value = 'tags'
-}
-
-function backToNamespaces() {
-  keyword.value = ''
-  mobileStage.value = 'namespaces'
-}
-
-function getSearchResultDisplayName(tag: SearchableTag) {
-  if (!searching.value) return tag.displayName
-  const namespace = namespaces.value.find((item) => item.namespace === tag.namespace)
-  return `${namespace?.displayName ?? tag.namespace}:${tag.displayName}`
-}
-
-function tagKey(tag: Pick<SearchableTag, 'namespace' | 'master'>) {
-  return `${tag.namespace.toLowerCase()}\u0000${tag.master.toLowerCase()}`
-}
-
-onMounted(() => {
-  mediaQuery = globalThis.matchMedia('(max-width: 767px)')
-  updateMobileState(mediaQuery)
-  mediaQuery.addEventListener('change', updateMobileState)
-})
-
+onMounted(() => void loadNamespaces())
 onBeforeUnmount(() => {
-  globalThis.clearTimeout(searchTimer)
-  mediaQuery?.removeEventListener('change', updateMobileState)
+  disposed = true
+  searchVersion++
+  clearTimeout(timer)
 })
 </script>
-
 <template>
-  <el-dialog
-    v-model="visible"
-    title="选择标签"
-    width="min(920px, 94vw)"
-    :fullscreen="isMobile"
-    append-to-body
-    destroy-on-close
-    class="tag-picker-dialog"
-  >
-    <div class="picker-toolbar">
-      <el-segmented
-        v-model="selectionMode"
-        :options="[
-          { label: '包含', value: 'include' },
-          { label: '排除', value: 'exclude' },
-        ]"
-      />
-      <el-input v-model="keyword" clearable placeholder="搜索中文、英文或别名">
-        <template #prefix
-          ><el-icon><Search /></el-icon
-        ></template>
-      </el-input>
-      <el-segmented
+  <div class="tag-picker">
+    <div class="selected-trays">
+      <details open>
+        <summary>
+          {{ t('包含') }}<span>{{ includeTags.length }}</span>
+        </summary>
+        <div class="selected-tray">
+          <TagChip
+            v-for="tag in includeTags"
+            :key="galleryTagKey(tag)"
+            closable
+            @close="remove(tag, 'include')"
+            ><span :title="t(`${tag.namespace}:${tag.master}`)"
+              >{{ locale === 'en' ? tag.master : tag.displayName }}
+              <small>{{ tag.namespace }}</small></span
+            ></TagChip
+          ><span v-if="!includeTags.length" class="tray-placeholder">{{ t('想看到的标签') }}</span>
+        </div>
+      </details>
+      <details open>
+        <summary>
+          {{ t('排除') }}<span>{{ excludeTags.length }}</span>
+        </summary>
+        <div class="selected-tray">
+          <TagChip
+            v-for="tag in excludeTags"
+            :key="galleryTagKey(tag)"
+            tone="danger"
+            closable
+            @close="remove(tag, 'exclude')"
+            ><span :title="t(`${tag.namespace}:${tag.master}`)"
+              >{{ locale === 'en' ? tag.master : tag.displayName }}
+              <small>{{ tag.namespace }}</small></span
+            ></TagChip
+          ><span v-if="!excludeTags.length" class="tray-placeholder">{{
+            t('不想看到的标签')
+          }}</span>
+        </div>
+      </details>
+    </div>
+    <div class="tag-search">
+      <TextField
+        v-model="keyword"
+        clearable
+        :placeholder="t('搜索中文、原名或别名')"
+        :aria-label="t('搜索标签')"
+        ><template #prefix><Search :size="16" /></template></TextField
+      ><SegmentedControl
         v-model="searchScope"
         :options="[
-          { label: '全部分类', value: 'all' },
-          { label: '当前分类', value: 'current' },
+          { label: t('全部分类'), value: 'all' },
+          { label: t('当前分类'), value: 'current' },
         ]"
       />
     </div>
-
-    <div
-      class="picker-body"
-      :class="{ 'show-tags': mobileStage === 'tags' || searching }"
-    >
-      <aside v-loading="loadingNamespaces" class="namespace-list">
+    <p v-if="error" class="field-error" role="alert">
+      {{ t(error) }}
+      <ActionButton
+        size="sm"
+        @click="namespaces.length ? runSearch(++searchVersion) : loadNamespaces()"
+        >{{ t('重试') }}</ActionButton
+      >
+    </p>
+    <div class="picker-body">
+      <nav class="namespace-list" :aria-label="t('标签命名空间')" :aria-busy="loadingNamespaces">
         <button
           v-for="item in namespaces"
           :key="item.namespace"
           type="button"
-          :class="{ active: item.namespace === activeNamespace }"
+          :aria-pressed="item.namespace === activeNamespace"
           @click="selectNamespace(item.namespace)"
         >
-          <span>{{ item.displayName }}</span>
-          <small>{{ item.count }}</small>
+          <span>{{ locale === 'en' ? item.namespace : item.displayName }}</span
+          ><small>{{ item.count }}</small>
         </button>
-      </aside>
-
-      <section class="tag-list-panel">
-        <header class="tag-list-header">
-          <el-button
-            v-if="isMobile"
-            circle
-            text
-            :icon="ArrowLeft"
-            @click="backToNamespaces"
-          />
-          <div>
-            <strong>{{ searching ? '搜索结果' : activeNamespaceInfo?.displayName }}</strong>
-            <span>{{ searching ? searchResults.length : total }} 个主标签</span>
-          </div>
+      </nav>
+      <section class="tag-results">
+        <header>
+          <span>{{
+            searching
+              ? t('查找结果')
+              : (locale === 'en'
+                  ? activeNamespaceInfo?.namespace
+                  : activeNamespaceInfo?.displayName) || t('加载标签索引…')
+          }}</span
+          ><small>{{
+            searching ? t('最多显示 50 条，可继续输入缩小范围') : t('{p0} 个主标签', { p0: total })
+          }}</small
+          ><span v-if="loadingSearch || pendingPages" class="tag-loading" role="status">{{
+            t('加载中…')
+          }}</span>
         </header>
         <div
           ref="listElement"
-          v-loading="loadingTags && !visibleRows.length"
           class="virtual-tag-list"
-          @scroll="handleListScroll"
+          :aria-busy="loadingSearch"
+          @scroll="handleScroll"
         >
-          <div class="virtual-tag-space" :style="{ height: `${listHeight}px` }">
-            <button
+          <div :style="{ height: `${listHeight}px`, position: 'relative' }">
+            <div
               v-for="row in visibleRows"
-              :key="`${searching ? 'search' : 'list'}-${row.index}`"
-              type="button"
+              :key="`${searching ? 'search' : activeNamespace}-${row.index}`"
               class="tag-option"
-              :class="row.tag ? `is-${selectedMode(row.tag) ?? 'idle'}` : 'is-loading'"
+              :data-selected="row.tag && selectedMode(row.tag)"
               :style="{ transform: `translateY(${row.index * rowHeight}px)` }"
-              :disabled="!row.tag"
-              @click="row.tag && toggleTag(row.tag)"
             >
-              <template v-if="row.tag">
-                <span class="tag-option-name">{{ getSearchResultDisplayName(row.tag) }}</span>
-                <span class="tag-option-original"
-                  >{{ row.tag.namespace }}:{{ row.tag.master }}</span
-                >
-                <el-icon v-if="selectedMode(row.tag)"><Check /></el-icon>
-              </template>
-            </button>
+              <template v-if="row.tag"
+                ><div class="tag-name">
+                  <strong>{{
+                    locale === 'en' ? row.tag.master : row.tag.displayName || row.tag.master
+                  }}</strong
+                  ><small :title="t(`${row.tag.namespace}:${row.tag.master}`)"
+                    >{{ row.tag.namespace }}:{{ row.tag.master }}</small
+                  >
+                </div>
+                <div class="tag-actions">
+                  <button
+                    type="button"
+                    :aria-label="
+                      t('包含 {p0}', { p0: locale === 'en' ? row.tag.master : row.tag.displayName })
+                    "
+                    :aria-pressed="selectedMode(row.tag) === 'include'"
+                    @click="toggleTag(row.tag, 'include')"
+                  >
+                    <component
+                      :is="selectedMode(row.tag) === 'include' ? Check : Plus"
+                      :size="13"
+                    />{{ t('包含') }}</button
+                  ><button
+                    type="button"
+                    class="exclude"
+                    :aria-label="
+                      t('排除 {p0}', { p0: locale === 'en' ? row.tag.master : row.tag.displayName })
+                    "
+                    :aria-pressed="selectedMode(row.tag) === 'exclude'"
+                    @click="toggleTag(row.tag, 'exclude')"
+                  >
+                    <Minus :size="13" />{{ t('排除') }}
+                  </button>
+                </div></template
+              ><span v-else class="tag-loading">{{ t('加载中…') }}</span>
+            </div>
           </div>
-          <el-empty
-            v-if="searching && !loadingTags && !searchResults.length"
-            description="没有匹配的标签"
-            :image-size="72"
+          <EmptyState
+            v-if="searching && !loadingSearch && !searchResults.length"
+            :description="t('没有匹配的标签，试试原名或其他关键词')"
           />
         </div>
       </section>
     </div>
-  </el-dialog>
+  </div>
 </template>
-
 <style scoped>
-.picker-toolbar {
+.selected-trays {
   display: grid;
-  grid-template-columns: auto minmax(240px, 1fr) auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  margin: 14px 0 20px;
+}
+.selected-trays details {
+  min-width: 0;
+}
+.selected-trays summary {
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.selected-trays summary > span {
+  color: var(--muted-foreground);
+  margin-left: 6px;
+}
+.selected-tray {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-height: 40px;
+  padding-top: 8px;
+}
+.selected-tray small {
+  opacity: 0.8;
+  font-size: 10px;
+}
+.tray-placeholder {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.tag-search {
+  display: flex;
   gap: 12px;
+  align-items: center;
   margin-bottom: 14px;
 }
-
+.tag-search :deep(.ui-input) {
+  flex: 1;
+}
 .picker-body {
   display: grid;
-  grid-template-columns: 190px minmax(0, 1fr);
-  min-height: 480px;
-  border: 1px solid var(--el-border-color-light);
-  border-radius: 6px;
-  overflow: hidden;
+  grid-template-columns: 155px minmax(0, 1fr);
+  border-top: 1px solid var(--border-soft);
 }
-
 .namespace-list {
-  padding: 8px;
+  display: flex;
+  flex-direction: column;
+  max-height: 360px;
   overflow-y: auto;
-  border-right: 1px solid var(--el-border-color-light);
-  background: var(--el-fill-color-lighter);
+  padding: 8px 12px 8px 0;
+  border-right: 1px solid var(--border-soft);
 }
-
 .namespace-list button {
-  width: 100%;
-  min-height: 42px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 10px;
+  gap: 7px;
   border: 0;
   border-radius: 5px;
-  color: var(--el-text-color-regular);
   background: transparent;
-  cursor: pointer;
+  color: var(--text);
+  padding: 9px;
+  font-size: 12px;
+  text-align: left;
+  transition:
+    background-color var(--motion-fast),
+    color var(--motion-fast);
 }
-
-.namespace-list button.active {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+.namespace-list button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  color: var(--accent);
 }
-
 .namespace-list small {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
+  font-size: 10px;
 }
-.tag-list-panel {
+.tag-results {
   min-width: 0;
 }
-.tag-list-header {
-  height: 52px;
+.tag-results header {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 0 14px;
-  border-bottom: 1px solid var(--el-border-color-light);
-}
-.tag-list-header div {
-  display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  min-height: 40px;
+  padding: 8px 12px;
   gap: 8px;
-}
-.tag-list-header span {
-  color: var(--el-text-color-secondary);
   font-size: 12px;
 }
-.virtual-tag-list {
-  position: relative;
-  height: 426px;
-  overflow: auto;
+.tag-results header small,
+.tag-loading {
+  color: var(--muted-foreground);
+  font-size: 11px;
 }
-.virtual-tag-space {
-  position: relative;
-  min-width: 100%;
+.virtual-tag-list {
+  height: 320px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 .tag-option {
   position: absolute;
-  inset: 0 0 auto 0;
-  width: 100%;
-  height: 58px;
-  display: grid;
-  grid-template-columns: minmax(130px, 0.8fr) minmax(180px, 1.2fr) 24px;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 80px;
+  display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 16px;
-  border: 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
-  text-align: left;
-  color: var(--el-text-color-primary);
-  background: var(--el-bg-color);
-  cursor: pointer;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px 12px;
+  border-top: 1px solid var(--border-soft);
 }
-.tag-option:hover {
-  background: var(--el-fill-color-light);
+.tag-name {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
 }
-.tag-option.is-include {
-  background: var(--el-color-success-light-9);
-  color: var(--el-color-success-dark-2);
-}
-.tag-option.is-exclude {
-  background: var(--el-color-danger-light-9);
-  color: var(--el-color-danger-dark-2);
-}
-.tag-option.is-loading {
-  background: var(--el-fill-color-lighter);
-}
-.tag-option-name,
-.tag-option-original {
+.tag-name strong,
+.tag-name small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.tag-option-original {
-  color: var(--el-text-color-secondary);
+.tag-name strong {
   font-size: 13px;
+  font-weight: 500;
 }
-
+.tag-name small {
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.tag-actions {
+  display: flex;
+  gap: 5px;
+  flex: none;
+}
+.tag-actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  min-height: 36px;
+  padding: 5px 8px;
+  font-size: 11px;
+  color: var(--text);
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  transition:
+    background-color var(--motion-fast),
+    color var(--motion-fast);
+}
+.tag-actions button[aria-pressed='true'] {
+  background: var(--accent-soft);
+  border-color: var(--accent-ring);
+  color: var(--accent);
+}
+.tag-actions button.exclude[aria-pressed='true'] {
+  background: var(--danger-soft);
+  border-color: var(--danger);
+  color: var(--danger);
+}
 @media (max-width: 767px) {
-  .picker-toolbar {
-    grid-template-columns: 1fr 1fr;
+  .selected-trays {
+    gap: 12px;
   }
-  .picker-toolbar .el-input {
-    grid-column: 1 / -1;
-    grid-row: 1;
+  .tag-search {
+    flex-direction: column;
+    align-items: stretch;
   }
   .picker-body {
     display: block;
-    min-height: calc(100dvh - 190px);
-    border: 0;
   }
   .namespace-list {
-    height: calc(100dvh - 190px);
+    flex-direction: row;
+    padding: 8px 0;
+    gap: 6px;
     border-right: 0;
+    border-bottom: 1px solid var(--border-soft);
+    overflow-x: auto;
   }
-  .tag-list-panel {
+  .namespace-list button {
+    flex: none;
+    min-height: 44px;
+  }
+  .namespace-list small {
     display: none;
-  }
-  .picker-body.show-tags .namespace-list {
-    display: none;
-  }
-  .picker-body.show-tags .tag-list-panel {
-    display: block;
-  }
-  .virtual-tag-list {
-    height: calc(100dvh - 242px);
   }
   .tag-option {
-    grid-template-columns: minmax(90px, 0.8fr) minmax(120px, 1.2fr) 20px;
-    padding: 0 10px;
-    gap: 8px;
+    padding: 8px 0;
+    gap: 6px;
+  }
+  .tag-actions {
+    gap: 4px;
+  }
+  .tag-actions button {
+    min-height: 44px;
+    padding: 5px 7px;
+  }
+  .tag-actions svg {
+    display: none;
+  }
+  .virtual-tag-list {
+    height: min(320px, 40dvh);
+  }
+  .tag-results header {
+    padding-inline: 0;
   }
 }
 </style>

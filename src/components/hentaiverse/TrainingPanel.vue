@@ -1,4 +1,10 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import PixelIcon from './PixelIcon.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import ProgressMeter from '@/components/primitives/ProgressMeter.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import type { HentaiVerseTrainingPage } from '@/core/hentaiverse/model/hentaiVerse'
 
@@ -50,10 +56,14 @@ watch(
 const remaining = computed(() => {
   if (props.data.endsAt === undefined) return props.data.remaining
   const seconds = Math.max(0, Math.ceil((props.data.endsAt - now.value) / 1000))
-  if (!seconds) return '训练时间已到'
+  if (!seconds) return t('训练时间已到')
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
-  return `剩余 ${hours ? `${hours} 小时 ` : ''}${minutes} 分 ${seconds % 60} 秒`
+  return t('剩余 {p0}{p1} 分 {p2} 秒', {
+    p0: hours ? t('{p0} 小时 ', { p0: hours }) : '',
+    p1: minutes,
+    p2: seconds % 60,
+  })
 })
 </script>
 
@@ -61,22 +71,21 @@ const remaining = computed(() => {
   <section class="training-panel">
     <div v-if="active" class="training-progress">
       <div>
-        <span>进行中的训练</span>
-        <h3>{{ data.activeName || '训练进行中' }}</h3>
-        <p v-if="remaining">{{ remaining }}</p>
+        <span>{{ t('进行中的训练') }}</span>
+        <h3>{{ t(data.activeName || t('训练进行中')) }}</h3>
+        <p v-if="remaining">{{ t(remaining) }}</p>
       </div>
-      <strong>{{ progressLabel }}</strong>
-      <el-button
+      <strong>{{ t(progressLabel) }}</strong>
+      <ActionButton
         v-if="data.canCancel"
-        type="danger"
-        plain
+        variant="destructive"
         :loading="loading"
         @click="emit('cancel')"
-        >取消训练</el-button
+        >{{ t('取消训练') }}</ActionButton
       >
     </div>
-    <p v-else class="training-idle">当前没有进行中的训练</p>
-    <el-progress
+    <p v-else class="training-idle">{{ t('当前没有进行中的训练') }}</p>
+    <ProgressMeter
       v-if="active && progressPercent !== undefined"
       :percentage="progressPercent"
       :show-text="false"
@@ -85,34 +94,34 @@ const remaining = computed(() => {
     <div v-if="data.options.length" class="training-list">
       <article v-for="option in data.options" :key="option.id">
         <div class="training-name">
-          <h3>{{ option.name }}</h3>
-          <p v-if="option.description">{{ option.description }}</p>
+          <h3 class="pixel-title"><PixelIcon kind="training" />{{ t(option.name) }}</h3>
+          <p v-if="option.description">{{ t(option.description) }}</p>
         </div>
         <dl>
           <template v-if="option.level"
-            ><dt>等级</dt>
-            <dd>{{ option.level }}</dd></template
+            ><dt>{{ t('等级') }}</dt>
+            <dd>{{ t(option.level) }}</dd></template
           >
           <template v-if="option.cost"
-            ><dt>费用</dt>
-            <dd>{{ option.cost }}</dd></template
+            ><dt>{{ t('费用') }}</dt>
+            <dd>{{ t(option.cost) }}</dd></template
           >
           <template v-if="option.duration"
-            ><dt>耗时</dt>
-            <dd>{{ option.duration }}</dd></template
+            ><dt>{{ t('耗时') }}</dt>
+            <dd>{{ t(option.duration) }}</dd></template
           >
         </dl>
-        <el-button
-          type="primary"
+        <ActionButton
+          variant="default"
           :disabled="!option.canStart"
           :loading="loading"
           @click="emit('start', option.id)"
         >
-          {{ option.canStart ? '开始训练' : option.unavailableReason || '暂不可训练' }}
-        </el-button>
+          {{ t(option.canStart ? t('开始训练') : option.unavailableReason || t('暂不可训练')) }}
+        </ActionButton>
       </article>
     </div>
-    <el-empty v-else-if="!active" description="当前没有可用训练项目" />
+    <EmptyState v-else-if="!active" :description="t('当前没有可用训练项目')" />
   </section>
 </template>
 
@@ -124,7 +133,7 @@ const remaining = computed(() => {
 
 .training-idle {
   margin: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .training-progress,
@@ -137,12 +146,12 @@ const remaining = computed(() => {
 .training-progress {
   grid-template-columns: minmax(0, 1fr) auto auto;
   padding: 16px 0;
-  border-top: 1px solid var(--el-border-color-lighter);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .training-progress span {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
@@ -156,18 +165,18 @@ const remaining = computed(() => {
 .training-progress p,
 .training-name p {
   margin: 5px 0 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   line-height: 1.5;
 }
 
 .training-list {
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
 }
 
 .training-list article {
   grid-template-columns: minmax(220px, 1fr) minmax(220px, auto) auto;
   padding: 14px 2px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .training-list dl {
@@ -179,7 +188,7 @@ const remaining = computed(() => {
 }
 
 .training-list dt {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .training-list dd {

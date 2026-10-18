@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-label="EViewer">
+  <rect width="512" height="512" fill="#fafafa"/>
+  <!-- A drawn italic serif E and the wordmark's blue full stop. No font dependency. -->
+  <g transform="translate(256 256) scale(1.08) translate(-256 -256)">
+    <path fill="#292f31" d="M187 134h177l-13 57h-12c1-28-8-39-39-39h-40l-22 91h31c26 0 34-8 43-28h12l-19 79h-12c2-23-3-32-30-32h-30l-23 98h46c38 0 51-15 67-44h13l-23 64H128l3-13c26-1 32-5 37-25l39-167c4-19 0-23-24-26z"/>
+    <circle cx="373" cy="363" r="17" fill="#285f8c"/>
+  </g>
+</svg>

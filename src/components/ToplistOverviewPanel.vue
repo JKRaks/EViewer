@@ -1,6 +1,15 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import SectionTabs from '@/components/primitives/SectionTabs'
+import SectionTab from '@/components/primitives/SectionTab.vue'
+import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
+import Notice from '@/components/primitives/Notice.vue'
+import IconFrame from '@/components/primitives/IconFrame.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
 import { computed, onMounted, ref } from 'vue'
-import { ArrowRight, Refresh, Warning } from '@element-plus/icons-vue'
+import { ArrowRight, RefreshCw as Refresh, TriangleAlert as Warning } from '@lucide/vue'
 import { RouterLink, useRouter } from 'vue-router'
 import { toplistBusi } from '@/core/books/toplistBusi'
 import {
@@ -42,10 +51,10 @@ async function fetchOverview() {
       sections.value = result.data ?? []
       return
     }
-    errorMessage.value = result.msg || '获取排行总览失败'
+    errorMessage.value = result.msg || t('获取排行总览失败')
   } catch (error) {
     if (version === requestVersion) {
-      errorMessage.value = error instanceof Error ? error.message : '获取排行总览失败'
+      errorMessage.value = error instanceof Error ? error.message : t('获取排行总览失败')
     }
   } finally {
     if (version === requestVersion) loading.value = false
@@ -66,51 +75,54 @@ onMounted(() => void fetchOverview())
 <template>
   <div class="overview-panel">
     <header class="overview-header">
-      <slot name="navigation" />
       <div>
-        <h1>排行总览</h1>
-        <p>七个榜单分区的前十名汇总。</p>
+        <h1>{{ t('排行总览') }}</h1>
+        <p>{{ t('七个榜单分区的前十名汇总。') }}</p>
       </div>
-      <el-button
-        circle
+      <ActionButton
+        size="icon"
         :icon="Refresh"
         :loading="loading"
-        aria-label="刷新排行总览"
+        :aria-label="t('刷新排行总览')"
         @click="fetchOverview"
       />
     </header>
 
-    <el-tabs v-model="activePeriod" class="period-tabs" stretch>
-      <el-tab-pane
+    <slot name="navigation" />
+
+    <SectionTabs v-model="activePeriod" class="period-tabs">
+      <SectionTab
         v-for="period in toplistPeriodOptions"
         :key="period.value"
-        :label="period.label"
+        :label="t(period.label)"
         :name="period.value"
       />
-    </el-tabs>
+    </SectionTabs>
 
-    <el-skeleton v-if="loading && sections.length === 0" :rows="12" animated />
-    <el-alert v-else-if="errorMessage && sections.length === 0" type="error" :closable="false">
+    <SkeletonBlock v-if="loading && sections.length === 0" :rows="12" />
+    <Notice v-else-if="errorMessage && sections.length === 0" tone="error" :closable="false">
       <template #title
-        ><el-icon><Warning /></el-icon> {{ errorMessage }}</template
+        ><IconFrame><Warning /></IconFrame> {{ t(errorMessage) }}</template
       >
-      <el-button size="small" :icon="Refresh" @click="fetchOverview">重新加载</el-button>
-    </el-alert>
-    <el-empty v-else-if="visibleSections.length === 0" description="暂无排行总览数据" />
+      <ActionButton size="sm" :icon="Refresh" @click="fetchOverview">{{
+        t('重新加载')
+      }}</ActionButton>
+    </Notice>
+    <EmptyState v-else-if="visibleSections.length === 0" :description="t('暂无排行总览数据')" />
 
-    <div v-else class="section-grid" v-loading="loading">
+    <div v-else class="section-grid" v-busy="loading">
       <section v-for="section in visibleSections" :key="section.tl" class="ranking-section">
         <header class="section-header">
           <div>
-            <h2>{{ categoryNames.get(section.category) }}</h2>
-            <span>Top 10</span>
+            <h2>{{ t(categoryNames.get(section.category)) }}</h2>
+            <span>{{ t('前十名') }}</span>
           </div>
           <RouterLink
             class="view-more-link"
             :to="{ name: 'toplists', query: { tl: section.tl, p: 0 } }"
           >
-            <span>查看更多</span>
-            <el-icon><ArrowRight /></el-icon>
+            <span>{{ t('查看更多') }}</span>
+            <IconFrame><ArrowRight /></IconFrame>
           </RouterLink>
         </header>
         <button
@@ -153,7 +165,7 @@ onMounted(() => void fetchOverview())
 }
 .overview-header p {
   margin: 6px 0 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
 }
 .period-tabs {
@@ -166,8 +178,8 @@ onMounted(() => void fetchOverview())
 }
 .ranking-section {
   min-width: 0;
-  border-top: 2px solid var(--el-color-primary-light-5);
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-top: 2px solid var(--accent-ring);
+  border-bottom: 1px solid var(--border-soft);
 }
 .section-header {
   display: flex;
@@ -187,7 +199,7 @@ onMounted(() => void fetchOverview())
   font-size: 17px;
 }
 .section-header span {
-  color: var(--el-text-color-placeholder);
+  color: var(--placeholder);
   font-size: 11px;
 }
 .view-more-link {
@@ -195,14 +207,14 @@ onMounted(() => void fetchOverview())
   align-items: center;
   gap: 4px;
   flex-shrink: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
   text-decoration: none;
   transition: color 0.15s ease;
 }
 .view-more-link:hover,
 .view-more-link:focus-visible {
-  color: var(--el-color-primary);
+  color: var(--accent);
 }
 .ranking-row {
   display: grid;
@@ -211,19 +223,19 @@ onMounted(() => void fetchOverview())
   width: 100%;
   min-height: 38px;
   padding: 7px 5px;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
   background: transparent;
   border: 0;
-  border-top: 1px solid var(--el-border-color-extra-light);
+  border-top: 1px solid var(--border-soft);
   cursor: pointer;
   text-align: left;
 }
 .ranking-row:hover {
-  background-color: var(--el-fill-color-light);
-  color: var(--el-color-primary);
+  background-color: var(--muted);
+  color: var(--accent);
 }
 .rank {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 700;
 }
@@ -247,7 +259,7 @@ onMounted(() => void fetchOverview())
     grid-template-columns: 1fr;
     gap: 18px;
   }
-  .period-tabs :deep(.el-tabs__item) {
+  .period-tabs :deep(.ui-tabs__item) {
     padding: 0 8px;
     font-size: 13px;
   }

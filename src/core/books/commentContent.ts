@@ -1,3 +1,5 @@
+import { t } from '@/i18n'
+
 /** 只接受普通网页地址；相对地址以源站为基准。 */
 export function resolveCommentLink(value: string): { url: string; bookId?: string } | undefined {
   try {
@@ -84,7 +86,7 @@ export function renderCommentHtml(html: string | undefined, plainText: string): 
           if (link && node.getAttribute('src')) {
             const anchor = document.createElement('a')
             anchor.href = link.url
-            anchor.textContent = node.getAttribute('alt') || '[图片链接]'
+            anchor.textContent = node.getAttribute('alt') || t('[图片链接]')
             target.appendChild(anchor)
           }
           continue

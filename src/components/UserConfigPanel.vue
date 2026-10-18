@@ -1,12 +1,27 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import Field from '@/components/primitives/Field.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
+import StatusPanel from '@/components/primitives/StatusPanel.vue'
+import SelectField from '@/components/primitives/SelectField.vue'
+import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
+import RadioChoice from '@/components/primitives/RadioChoice.vue'
+import TextField from '@/components/primitives/TextField.vue'
+import Notice from '@/components/primitives/Notice.vue'
+import CheckField from '@/components/primitives/CheckField.vue'
+import ToggleField from '@/components/primitives/ToggleField.vue'
 import { computed, onMounted, ref } from 'vue'
-import { Delete, Edit, Plus, RefreshRight, Star } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import 'element-plus/es/components/message/style/css'
-import 'element-plus/es/components/message-box/style/css'
+import { Trash2 as Delete, Pencil as Edit, Plus, RotateCw as RefreshRight, Star } from '@lucide/vue'
+import { notify, dialogs } from '@/components/primitives/feedback'
 import { userInfoBusi } from '@/core/auth/userInfoBusi'
 import { useAuthState } from '@/core/auth/authState'
-import { getUserConfigWithCache, updateUserConfigCache } from '@/core/auth/userConfigCache'
+import {
+  getUserConfigWithCache,
+  rebuildUserConfigCache,
+  updateUserConfigCache,
+} from '@/core/auth/userConfigCache'
 import {
   userConfigInput,
   userConfigProfileInput,
@@ -29,6 +44,8 @@ interface SelectOption {
 
 const infoBusi = new userInfoBusi()
 const authState = useAuthState()
+const memberId = authState.memberId
+const accountIsCurrent = computed(() => authState.loggedIn && authState.memberId === memberId)
 const config = ref<userConfigData>()
 const baseline = ref<userConfigData>()
 const loading = ref(false)
@@ -140,21 +157,26 @@ onMounted(() => {
 
 async function loadConfig(confirmDiscard = false) {
   if (confirmDiscard && !(await allowDiscardChanges())) return
+  if (!accountIsCurrent.value) return
   loading.value = true
   error.value = ''
   try {
-    const result = await getUserConfigWithCache(authState.memberId, confirmDiscard)
-    if (!result.isSuccess || !result.data) throw new Error(result.msg || '用户配置获取失败')
+    const result = confirmDiscard
+      ? await rebuildUserConfigCache(memberId)
+      : await getUserConfigWithCache(memberId)
+    if (!accountIsCurrent.value) return
+    if (!result.isSuccess || !result.data) throw new Error(result.msg || t('用户配置获取失败'))
     applyConfig(result.data)
   } catch (loadError) {
-    error.value = loadError instanceof Error ? loadError.message : '用户配置获取失败'
+    if (!accountIsCurrent.value) return
+    error.value = loadError instanceof Error ? loadError.message : t('用户配置获取失败')
   } finally {
     loading.value = false
   }
 }
 
 async function saveConfig() {
-  if (!config.value || !baseline.value) return
+  if (!config.value || !baseline.value || !accountIsCurrent.value) return
   saving.value = true
   try {
     const edited = cloneConfig(config.value)
@@ -164,10 +186,11 @@ async function saveConfig() {
       (profile) => profile.slot === expectedSlot,
     )?.name
     const latestResult = await infoBusi.getUserConfig(new userConfigInput())
+    if (!accountIsCurrent.value) return
     if (!latestResult.isSuccess || !latestResult.data) {
-      throw new Error(latestResult.msg || '保存前校验 Profile 失败')
+      throw new Error(latestResult.msg || t('保存前校验 Profile 失败'))
     }
-    updateUserConfigCache(authState.memberId, latestResult.data)
+    updateUserConfigCache(memberId, latestResult.data)
     const latestProfile = latestResult.data.profiles.find(
       (profile) => profile.slot === latestResult.data?.selectedProfileSlot,
     )
@@ -176,7 +199,7 @@ async function saveConfig() {
       latestProfile?.name !== expectedName
     ) {
       applyConfig(latestResult.data)
-      throw new Error('当前 Profile 已发生变化，已刷新配置，请重新修改后保存')
+      throw new Error(t('当前 Profile 已发生变化，已刷新配置，请重新修改后保存'))
     }
 
     const payload = cloneConfig(latestResult.data)
@@ -189,12 +212,14 @@ async function saveConfig() {
       ),
     )
     const result = await infoBusi.updateUserConfig(new userConfigUpdateInput(payload))
-    if (!result.isSuccess || !result.data) throw new Error(result.msg || '用户配置保存失败')
-    updateUserConfigCache(authState.memberId, result.data)
+    if (!accountIsCurrent.value) return
+    if (!result.isSuccess || !result.data) throw new Error(result.msg || t('用户配置保存失败'))
+    updateUserConfigCache(memberId, result.data)
     applyConfig(result.data)
-    ElMessage.success('用户配置已保存')
+    notify.success(t('用户配置已保存'))
   } catch (saveError) {
-    ElMessage.error(saveError instanceof Error ? saveError.message : '用户配置保存失败')
+    if (!accountIsCurrent.value) return
+    notify.error(saveError instanceof Error ? saveError.message : t('用户配置保存失败'))
   } finally {
     saving.value = false
   }
@@ -208,25 +233,25 @@ async function switchProfile(slot: string) {
     config.value.selectedProfileSlot = previousSlot
     return
   }
-  await runProfileAction('switch', slot, '', 'Profile 已切换', previousSlot)
+  await runProfileAction('switch', slot, '', t('Profile 已切换'), previousSlot)
 }
 
 async function renameProfile() {
   if (!config.value || !selectedProfile.value) return
   if (!(await allowDiscardChanges())) return
   try {
-    const { value } = await ElMessageBox.prompt('输入新的 Profile 名称', '重命名 Profile', {
+    const { value } = await dialogs.prompt(t('输入新的 Profile 名称'), t('重命名 Profile'), {
       inputValue: selectedProfile.value.name,
       inputPattern: /\S/,
-      inputErrorMessage: 'Profile 名称不能为空',
-      confirmButtonText: '保存',
-      cancelButtonText: '取消',
+      inputErrorMessage: t('Profile 名称不能为空'),
+      confirmButtonText: t('保存'),
+      cancelButtonText: t('取消'),
     })
     await runProfileAction(
       'rename',
       config.value.selectedProfileSlot,
       value.trim(),
-      'Profile 已重命名',
+      t('Profile 已重命名'),
     )
   } catch (promptError) {
     if (promptError !== 'cancel' && promptError !== 'close') throw promptError
@@ -237,17 +262,17 @@ async function createProfile() {
   if (!config.value) return
   if (!(await allowDiscardChanges())) return
   try {
-    const { value } = await ElMessageBox.prompt('输入新 Profile 名称', '创建 Profile', {
+    const { value } = await dialogs.prompt(t('输入新 Profile 名称'), t('创建 Profile'), {
       inputPattern: /\S/,
-      inputErrorMessage: 'Profile 名称不能为空',
-      confirmButtonText: '创建',
-      cancelButtonText: '取消',
+      inputErrorMessage: t('Profile 名称不能为空'),
+      confirmButtonText: t('创建'),
+      cancelButtonText: t('取消'),
     })
     await runProfileAction(
       'create',
       config.value.selectedProfileSlot,
       value.trim(),
-      'Profile 已创建',
+      t('Profile 已创建'),
     )
   } catch (promptError) {
     if (promptError !== 'cancel' && promptError !== 'close') throw promptError
@@ -257,12 +282,19 @@ async function createProfile() {
 async function setDefaultProfile() {
   if (!config.value || !(await allowDiscardChanges())) return
   try {
-    await ElMessageBox.confirm(
-      `将“${selectedProfile.value?.name ?? ''}”设为默认 Profile？槽位顺序可能随之变化。`,
-      '设置默认 Profile',
-      { confirmButtonText: '设为默认', cancelButtonText: '取消' },
+    await dialogs.confirm(
+      t('将“{p0}”设为默认 Profile？槽位顺序可能随之变化。', {
+        p0: selectedProfile.value?.name ?? '',
+      }),
+      t('设置默认 Profile'),
+      { confirmButtonText: t('设为默认'), cancelButtonText: t('取消') },
     )
-    await runProfileAction('default', config.value.selectedProfileSlot, '', '默认 Profile 已更新')
+    await runProfileAction(
+      'default',
+      config.value.selectedProfileSlot,
+      '',
+      t('默认 Profile 已更新'),
+    )
   } catch (confirmError) {
     if (confirmError !== 'cancel' && confirmError !== 'close') throw confirmError
   }
@@ -271,17 +303,17 @@ async function setDefaultProfile() {
 async function deleteProfile() {
   if (!config.value || !(await allowDiscardChanges())) return
   try {
-    await ElMessageBox.confirm(
-      `确定删除“${selectedProfile.value?.name ?? ''}”吗？此操作无法撤销。`,
-      '删除 Profile',
+    await dialogs.confirm(
+      t('确定删除“{p0}”吗？此操作无法撤销。', { p0: selectedProfile.value?.name ?? '' }),
+      t('删除 Profile'),
       {
         type: 'warning',
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
-        confirmButtonClass: 'el-button--danger',
+        confirmButtonText: t('删除'),
+        cancelButtonText: t('取消'),
+        confirmButtonClass: 'ui-button--danger',
       },
     )
-    await runProfileAction('delete', config.value.selectedProfileSlot, '', 'Profile 已删除')
+    await runProfileAction('delete', config.value.selectedProfileSlot, '', t('Profile 已删除'))
   } catch (confirmError) {
     if (confirmError !== 'cancel' && confirmError !== 'close') throw confirmError
   }
@@ -294,33 +326,36 @@ async function runProfileAction(
   successMessage: string,
   restoreSlot?: string,
 ) {
-  if (!config.value) return
+  if (!config.value || !accountIsCurrent.value) return
   profileBusy.value = true
   try {
     const result = await infoBusi.updateUserConfigProfile(
       new userConfigProfileInput(action, slot, name),
     )
-    if (!result.isSuccess || !result.data) throw new Error(result.msg || 'Profile 操作失败')
-    updateUserConfigCache(authState.memberId, result.data)
+    if (!accountIsCurrent.value) return
+    if (!result.isSuccess || !result.data) throw new Error(result.msg || t('Profile 操作失败'))
+    updateUserConfigCache(memberId, result.data)
     applyConfig(result.data)
-    ElMessage.success(successMessage)
+    notify.success(successMessage)
   } catch (actionError) {
+    if (!accountIsCurrent.value) return
     if (restoreSlot && config.value) config.value.selectedProfileSlot = restoreSlot
-    ElMessage.error(actionError instanceof Error ? actionError.message : 'Profile 操作失败')
+    notify.error(actionError instanceof Error ? actionError.message : t('Profile 操作失败'))
   } finally {
     profileBusy.value = false
   }
 }
 
 async function allowDiscardChanges(): Promise<boolean> {
+  if (!accountIsCurrent.value) return false
   if (!isDirty.value) return true
   try {
-    await ElMessageBox.confirm('当前修改尚未保存，继续将放弃这些修改。', '放弃修改？', {
+    await dialogs.confirm(t('当前修改尚未保存，继续将放弃这些修改。'), t('放弃修改？'), {
       type: 'warning',
-      confirmButtonText: '继续',
-      cancelButtonText: '取消',
+      confirmButtonText: t('继续'),
+      cancelButtonText: t('取消'),
     })
-    return true
+    return accountIsCurrent.value
   } catch {
     return false
   }
@@ -390,340 +425,345 @@ function isOptionDisabled(field: string, value: string): boolean {
   <section class="user-config-panel">
     <header class="config-header">
       <div>
-        <h2>用户配置</h2>
-        <p>查看和修改 E-Hentai 当前账户的原站设置</p>
+        <h2>{{ t('用户配置') }}</h2>
+        <p>{{ t('查看和修改 E-Hentai 当前账户的原站设置') }}</p>
       </div>
-      <el-button
-        circle
-        text
+      <ActionButton
+        size="icon"
+        variant="ghost"
         :icon="RefreshRight"
         :loading="loading"
-        aria-label="刷新用户配置"
-        title="刷新用户配置"
+        :disabled="saving || profileBusy"
+        :aria-label="t('刷新用户配置')"
+        :title="t('刷新用户配置')"
         @click="loadConfig(true)"
       />
     </header>
 
     <div v-if="loading && !config" class="config-loading">
-      <el-skeleton :rows="9" animated />
+      <SkeletonBlock :rows="9" />
     </div>
-    <el-result
+    <StatusPanel
       v-else-if="error && !config"
       icon="error"
-      title="用户配置获取失败"
-      :sub-title="error"
+      :title="t('用户配置获取失败')"
+      :sub-title="t(error)"
     >
       <template #extra>
-        <el-button type="primary" :icon="RefreshRight" @click="loadConfig()">重试</el-button>
+        <ActionButton variant="default" :icon="RefreshRight" @click="loadConfig()">{{
+          t('重试')
+        }}</ActionButton>
       </template>
-    </el-result>
-
+    </StatusPanel>
     <template v-else-if="config">
+      <Notice v-if="error" :title="t(error)" tone="error" :closable="false">
+        <template #default>
+          <ActionButton variant="ghost" :loading="loading" @click="loadConfig(true)">{{
+            t('重试')
+          }}</ActionButton>
+        </template>
+      </Notice>
       <section class="profile-bar" aria-labelledby="profile-title">
         <div class="profile-select-wrap">
-          <label id="profile-title">Profile</label>
-          <el-select
+          <label id="profile-title">{{ t('配置档案') }}</label>
+          <SelectField
             v-model="config.selectedProfileSlot"
+            :aria-label="t('配置档案')"
             :disabled="profileBusy || saving"
             @change="switchProfile"
           >
-            <el-option
+            <option
               v-for="profile in config.profiles"
               :key="profile.slot"
-              :label="profile.displayName"
+              :label="t(profile.displayName)"
               :value="profile.slot"
-            />
-          </el-select>
+            ></option>
+          </SelectField>
         </div>
         <div class="profile-actions">
-          <el-button
+          <ActionButton
             :icon="Edit"
             :disabled="!config.profileCapabilities.canRename || profileBusy || saving"
             @click="renameProfile"
+            >{{ t('重命名') }}</ActionButton
           >
-            重命名
-          </el-button>
-          <el-button
+          <ActionButton
             :icon="Plus"
             :disabled="!config.profileCapabilities.canCreate || profileBusy || saving"
             @click="createProfile"
+            >{{ t('新建') }}</ActionButton
           >
-            新建
-          </el-button>
-          <el-button
+          <ActionButton
             :icon="Star"
             :disabled="!config.profileCapabilities.canSetDefault || profileBusy || saving"
             @click="setDefaultProfile"
+            >{{ t('设为默认') }}</ActionButton
           >
-            设为默认
-          </el-button>
-          <el-button
-            type="danger"
-            plain
+          <ActionButton
+            variant="destructive"
             :icon="Delete"
             :disabled="!config.profileCapabilities.canDelete || profileBusy || saving"
             @click="deleteProfile"
+            >{{ t('删除') }}</ActionButton
           >
-            删除
-          </el-button>
         </div>
       </section>
 
-      <el-form class="config-form" label-position="top" @submit.prevent="saveConfig">
+      <form class="config-form" @submit.prevent="saveConfig">
         <section class="config-group">
           <header>
-            <h3>图片加载</h3>
-            <p>控制原站在线浏览时使用的图片来源和请求版本</p>
+            <h3>{{ t('图片加载') }}</h3>
+            <p>{{ t('控制原站在线浏览时使用的图片来源和请求版本') }}</p>
           </header>
           <div class="config-grid">
-            <el-form-item label="Hentai@Home 网络">
-              <el-select v-model="config.imageLoad.hathMode">
-                <el-option
+            <Field :label="t('Hentai@Home 网络')">
+              <SelectField v-model="config.imageLoad.hathMode">
+                <option
                   v-for="option in hathOptions"
                   :key="option.value"
-                  :label="option.label"
+                  :label="t(option.label)"
                   :value="option.value"
                   :disabled="isOptionDisabled('uh', option.value)"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="H@H 区域">
-              <el-select v-model="config.imageLoad.region" placeholder="自动检测">
-                <el-option
+                ></option>
+              </SelectField>
+            </Field>
+            <Field :label="t('H@H 区域')">
+              <SelectField v-model="config.imageLoad.region" :placeholder="t('自动检测')">
+                <option
                   v-for="option in regionOptions"
                   :key="option.value"
-                  :label="option.label"
+                  :label="t(option.label)"
                   :value="option.value"
                   :disabled="isOptionDisabled('co', option.value)"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="请求分辨率">
-              <el-select v-model="config.imageSize.resolution">
-                <el-option
+                ></option>
+              </SelectField>
+            </Field>
+            <Field :label="t('请求分辨率')">
+              <SelectField v-model="config.imageSize.resolution">
+                <option
                   v-for="option in resolutionOptions"
                   :key="option.value"
-                  :label="option.label"
+                  :label="t(option.label)"
                   :value="option.value"
                   :disabled="isOptionDisabled('xr', option.value)"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="图片版本">
-              <el-radio-group v-model="config.imageSize.originalMode">
-                <el-radio value="0">优先重采样图</el-radio>
-                <el-radio value="1" :disabled="isOptionDisabled('oi', '1')"> 优先原图 </el-radio>
-              </el-radio-group>
-            </el-form-item>
+                ></option>
+              </SelectField>
+            </Field>
+            <Field :label="t('图片版本')">
+              <ChoiceGroup v-model="config.imageSize.originalMode">
+                <RadioChoice value="0">{{ t('优先重采样图') }}</RadioChoice>
+                <RadioChoice value="1" :disabled="isOptionDisabled('oi', '1')">{{
+                  t('优先原图')
+                }}</RadioChoice>
+              </ChoiceGroup>
+            </Field>
           </div>
           <div class="config-grid size-limit-grid">
-            <el-form-item label="原站显示最大宽度">
-              <el-input v-model="config.imageSize.maxWidth" inputmode="numeric">
+            <Field :label="t('原站显示最大宽度')">
+              <TextField v-model="config.imageSize.maxWidth" inputmode="numeric">
                 <template #append>px</template>
-              </el-input>
-            </el-form-item>
-            <el-form-item label="原站显示最大高度">
-              <el-input v-model="config.imageSize.maxHeight" inputmode="numeric">
+              </TextField>
+            </Field>
+            <Field :label="t('原站显示最大高度')">
+              <TextField v-model="config.imageSize.maxHeight" inputmode="numeric">
                 <template #append>px</template>
-              </el-input>
-            </el-form-item>
+              </TextField>
+            </Field>
           </div>
-          <el-alert
-            title="宽高仅限制 E-Hentai 原站页面中的浏览器显示尺寸，0 表示不限制，不会改变 EViewer 阅读器。"
-            type="info"
+          <Notice
+            :title="
+              t(
+                '宽高仅限制 E-Hentai 原站页面中的浏览器显示尺寸，0 表示不限制，不会改变 EViewer 阅读器。',
+              )
+            "
+            tone="info"
             :closable="false"
-            show-icon
           />
         </section>
 
         <section class="config-group">
           <header>
-            <h3>搜索与列表</h3>
-            <p>设置首页和搜索结果中显示的分类与列表形式</p>
+            <h3>{{ t('搜索与列表') }}</h3>
+            <p>{{ t('设置首页和搜索结果中显示的分类与列表形式') }}</p>
           </header>
-          <el-form-item label="显示分类">
+          <Field :label="t('显示分类')">
             <div class="category-grid">
-              <el-checkbox
+              <CheckField
                 v-for="definition in userConfigCategoryDefinitions"
                 :key="definition.key"
                 v-model="config.search.categories[definition.key]"
               >
-                {{ categoryLabels[definition.key] }}
-              </el-checkbox>
+                {{ t(categoryLabels[definition.key]) }}
+              </CheckField>
             </div>
-          </el-form-item>
+          </Field>
           <div class="config-grid">
-            <el-form-item label="显示模式">
-              <el-select v-model="config.search.displayMode">
-                <el-option
+            <Field :label="t('显示模式')">
+              <SelectField v-model="config.search.displayMode">
+                <option
                   v-for="option in displayModeOptions"
                   :key="option.value"
-                  :label="option.label"
+                  :label="t(option.label)"
                   :value="option.value"
                   :disabled="isOptionDisabled('dm', option.value)"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="搜索范围指示器">
-              <el-radio-group v-model="config.search.rangeIndicator">
-                <el-radio value="0">正常显示</el-radio>
-                <el-radio value="1">关闭</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item label="每页结果数">
-              <el-select v-model="config.search.resultCount">
-                <el-option
+                ></option>
+              </SelectField>
+            </Field>
+            <Field :label="t('搜索范围指示器')">
+              <ChoiceGroup v-model="config.search.rangeIndicator">
+                <RadioChoice value="0">{{ t('正常显示') }}</RadioChoice>
+                <RadioChoice value="1">{{ t('关闭') }}</RadioChoice>
+              </ChoiceGroup>
+            </Field>
+            <Field :label="t('每页结果数')">
+              <SelectField v-model="config.search.resultCount">
+                <option
                   v-for="option in resultCountOptions"
                   :key="option.value"
-                  :label="option.label"
+                  :label="t(option.label)"
                   :value="option.value"
                   :disabled="isOptionDisabled('rc', option.value)"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="画廊缩略图选择器">
-              <el-switch
-                v-model="config.search.thumbnailSelectorEnabled"
-                inline-prompt
-                active-text="开启"
-                inactive-text="关闭"
-              />
-            </el-form-item>
+                ></option>
+              </SelectField>
+            </Field>
+            <Field :label="t('画廊缩略图选择器')">
+              <ToggleField v-model="config.search.thumbnailSelectorEnabled" :label="t('开启')" />
+            </Field>
           </div>
         </section>
 
         <section class="config-group">
           <header>
-            <h3>收藏分类</h3>
-            <p>分类名称最多 20 个字符</p>
+            <h3>{{ t('收藏分类') }}</h3>
+            <p>{{ t('分类名称最多 20 个字符') }}</p>
           </header>
           <div class="favorite-grid">
-            <el-form-item
+            <Field
               v-for="(_, index) in config.favorites.names"
               :key="index"
-              :label="`收藏 ${index}`"
+              :label="t('收藏 {p0}', { p0: index })"
             >
-              <el-input v-model="config.favorites.names[index]" maxlength="20" show-word-limit />
-            </el-form-item>
+              <TextField v-model="config.favorites.names[index]" maxlength="20" show-word-limit />
+            </Field>
           </div>
-          <el-form-item label="收藏排序">
-            <el-radio-group v-model="config.favorites.sortMode">
-              <el-radio value="0">按画廊最后更新时间</el-radio>
-              <el-radio value="1">按加入收藏时间</el-radio>
-            </el-radio-group>
-          </el-form-item>
+          <Field :label="t('收藏排序')">
+            <ChoiceGroup v-model="config.favorites.sortMode">
+              <RadioChoice value="0">{{ t('按画廊最后更新时间') }}</RadioChoice>
+              <RadioChoice value="1">{{ t('按加入收藏时间') }}</RadioChoice>
+            </ChoiceGroup>
+          </Field>
         </section>
 
         <section class="config-group">
           <header>
-            <h3>缩略图</h3>
-            <p>控制原站列表的缩略图加载时机、尺寸和行数</p>
+            <h3>{{ t('缩略图') }}</h3>
+            <p>{{ t('控制原站列表的缩略图加载时机、尺寸和行数') }}</p>
           </header>
           <div class="config-grid">
-            <el-form-item label="加载时机">
-              <el-radio-group v-model="config.thumbnails.loadMode">
-                <el-radio value="0">鼠标移入时</el-radio>
-                <el-radio value="1">页面加载时</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item label="缩略图尺寸">
-              <el-radio-group v-model="config.thumbnails.sizeMode">
-                <el-radio value="0">自动</el-radio>
-                <el-radio value="2">小</el-radio>
-                <el-radio value="1">正常</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item label="显示行数">
-              <el-select v-model="config.thumbnails.rows">
-                <el-option
+            <Field :label="t('加载时机')">
+              <ChoiceGroup v-model="config.thumbnails.loadMode">
+                <RadioChoice value="0">{{ t('鼠标移入时') }}</RadioChoice>
+                <RadioChoice value="1">{{ t('页面加载时') }}</RadioChoice>
+              </ChoiceGroup>
+            </Field>
+            <Field :label="t('缩略图尺寸')">
+              <ChoiceGroup v-model="config.thumbnails.sizeMode">
+                <RadioChoice value="0">{{ t('自动') }}</RadioChoice>
+                <RadioChoice value="2">{{ t('小') }}</RadioChoice>
+                <RadioChoice value="1">{{ t('正常') }}</RadioChoice>
+              </ChoiceGroup>
+            </Field>
+            <Field :label="t('显示行数')">
+              <SelectField v-model="config.thumbnails.rows">
+                <option
                   v-for="option in thumbnailRowOptions"
                   :key="option.value"
-                  :label="option.label"
+                  :label="t(option.label)"
                   :value="option.value"
                   :disabled="isOptionDisabled('tr', option.value)"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="封面缩放">
-              <el-input
+                ></option>
+              </SelectField>
+            </Field>
+            <Field :label="t('封面缩放')">
+              <TextField
                 v-model="config.thumbnails.coverScale"
                 inputmode="numeric"
-                placeholder="默认 100"
+                :placeholder="t('默认 100')"
               >
                 <template #append>%</template>
-              </el-input>
-              <div class="field-tip">可留空；填写时范围为 75–150</div>
-            </el-form-item>
+              </TextField>
+              <div class="field-tip">{{ t('可留空；填写时范围为 75–150') }}</div>
+            </Field>
           </div>
         </section>
 
         <section class="config-group">
           <header>
-            <h3>过滤</h3>
-            <p>设置评分颜色、标签阈值及语言和上传者排除项</p>
+            <h3>{{ t('过滤') }}</h3>
+            <p>{{ t('设置评分颜色、标签阈值及语言和上传者排除项') }}</p>
           </header>
           <div class="config-grid">
-            <el-form-item label="评分颜色">
-              <el-input
+            <Field :label="t('评分颜色')">
+              <TextField
                 v-model="config.filters.ratingColors"
                 maxlength="5"
-                placeholder="默认 RRGGB"
+                :placeholder="t('默认 RRGGB')"
                 @input="config.filters.ratingColors = config.filters.ratingColors.toUpperCase()"
               />
-              <div class="field-tip">可留空；支持 R、G、B、Y，需正好 5 位</div>
-            </el-form-item>
-            <el-form-item label="关注标签阈值">
-              <el-input v-model="config.filters.watchedThreshold" inputmode="numeric" />
-              <div class="field-tip">范围 0–9999</div>
-            </el-form-item>
-            <el-form-item label="软过滤阈值">
-              <el-input v-model="config.filters.filteringThreshold" inputmode="numeric" />
-              <div class="field-tip">范围 -9999–0</div>
-            </el-form-item>
-            <el-form-item label="显示被过滤数量">
-              <el-radio-group v-model="config.filters.showFilteredCount">
-                <el-radio value="0">显示</el-radio>
-                <el-radio value="1">隐藏</el-radio>
-              </el-radio-group>
-            </el-form-item>
+              <div class="field-tip">{{ t('可留空；支持 R、G、B、Y，需正好 5 位') }}</div>
+            </Field>
+            <Field :label="t('关注标签阈值')">
+              <TextField v-model="config.filters.watchedThreshold" inputmode="numeric" />
+              <div class="field-tip">{{ t('范围 0–9999') }}</div>
+            </Field>
+            <Field :label="t('软过滤阈值')">
+              <TextField v-model="config.filters.filteringThreshold" inputmode="numeric" />
+              <div class="field-tip">{{ t('范围 -9999–0') }}</div>
+            </Field>
+            <Field :label="t('显示被过滤数量')">
+              <ChoiceGroup v-model="config.filters.showFilteredCount">
+                <RadioChoice value="0">{{ t('显示') }}</RadioChoice>
+                <RadioChoice value="1">{{ t('隐藏') }}</RadioChoice>
+              </ChoiceGroup>
+            </Field>
           </div>
 
           <div class="language-section">
             <div class="language-heading">
-              <strong>排除语言</strong>
-              <span>勾选后隐藏对应版本</span>
+              <strong>{{ t('排除语言') }}</strong>
+              <span>{{ t('勾选后隐藏对应版本') }}</span>
             </div>
             <div class="language-table-wrap">
               <table class="language-table">
                 <thead>
                   <tr>
-                    <th>语言</th>
-                    <th>原文</th>
-                    <th>翻译</th>
-                    <th>改写</th>
+                    <th>{{ t('语言') }}</th>
+                    <th>{{ t('原文') }}</th>
+                    <th>{{ t('翻译') }}</th>
+                    <th>{{ t('改写') }}</th>
                   </tr>
                 </thead>
                 <tbody>
                   <tr v-for="language in config.filters.excludedLanguages" :key="language.key">
-                    <td>{{ languageLabels[language.key] ?? language.sourceName }}</td>
+                    <td>{{ t(languageLabels[language.key] ?? language.sourceName) }}</td>
                     <td>
-                      <el-checkbox
+                      <CheckField
                         v-if="language.originalAvailable"
                         v-model="language.original"
-                        :aria-label="`${language.sourceName} 原文`"
+                        :aria-label="t('{p0} 原文', { p0: language.sourceName })"
                       />
                       <span v-else>--</span>
                     </td>
                     <td>
-                      <el-checkbox
+                      <CheckField
                         v-model="language.translated"
-                        :aria-label="`${language.sourceName} 翻译`"
+                        :aria-label="t('{p0} 翻译', { p0: language.sourceName })"
                       />
                     </td>
                     <td>
-                      <el-checkbox
+                      <CheckField
                         v-model="language.rewrite"
-                        :aria-label="`${language.sourceName} 改写`"
+                        :aria-label="t('{p0} 改写', { p0: language.sourceName })"
                       />
                     </td>
                   </tr>
@@ -732,90 +772,95 @@ function isOptionDisabled(field: string, value: string): boolean {
             </div>
           </div>
 
-          <el-form-item class="uploader-field" label="排除上传者">
-            <el-input
+          <Field class="uploader-field" :label="t('排除上传者')">
+            <TextField
               v-model="config.filters.excludedUploaders"
               type="textarea"
               :rows="6"
               resize="vertical"
-              placeholder="每行一个用户名"
+              :placeholder="t('每行一个用户名')"
             />
             <div class="field-tip">
-              已填写 {{ uploaderCount }} / {{ config.filters.maxUploaderExclusions || '--' }} 个
+              {{
+                t('已填写 {p0} / {p1} 个', {
+                  p0: uploaderCount,
+                  p1: config.filters.maxUploaderExclusions || '--',
+                })
+              }}
             </div>
-          </el-form-item>
+          </Field>
         </section>
 
         <section class="config-group">
           <header>
-            <h3>画廊页面</h3>
-            <p>设置原站画廊标题、评论、标签和存档行为</p>
+            <h3>{{ t('画廊页面') }}</h3>
+            <p>{{ t('设置原站画廊标题、评论、标签和存档行为') }}</p>
           </header>
           <div class="config-grid">
-            <el-form-item label="默认标题">
-              <el-radio-group v-model="config.gallery.titleMode">
-                <el-radio value="0">默认标题</el-radio>
-                <el-radio value="1">日文标题（如有）</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item label="存档下载行为">
-              <el-select v-model="config.gallery.archiverMode">
-                <el-option
+            <Field :label="t('默认标题')">
+              <ChoiceGroup v-model="config.gallery.titleMode">
+                <RadioChoice value="0">{{ t('默认标题') }}</RadioChoice>
+                <RadioChoice value="1">{{ t('日文标题（如有）') }}</RadioChoice>
+              </ChoiceGroup>
+            </Field>
+            <Field :label="t('存档下载行为')">
+              <SelectField v-model="config.gallery.archiverMode">
+                <option
                   v-for="option in archiverOptions"
                   :key="option.value"
-                  :label="option.label"
+                  :label="t(option.label)"
                   :value="option.value"
                   :disabled="isOptionDisabled('ar', option.value)"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="评论排序">
-              <el-select v-model="config.gallery.commentSort">
-                <el-option label="最早评论优先" value="0" />
-                <el-option label="最新评论优先" value="1" />
-                <el-option label="最高评分优先" value="2" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="评论评分显示">
-              <el-radio-group v-model="config.gallery.commentVotes">
-                <el-radio value="0">悬停或点击时</el-radio>
-                <el-radio value="1">始终显示</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item label="标签排序">
-              <el-radio-group v-model="config.gallery.tagSort">
-                <el-radio value="0">按字母</el-radio>
-                <el-radio value="1">按标签权重</el-radio>
-              </el-radio-group>
-            </el-form-item>
-            <el-form-item label="缩略图标注">
-              <el-select v-model="config.gallery.thumbnailLabel">
-                <el-option label="无" value="0" />
-                <el-option label="仅页码" value="1" />
-                <el-option label="页码和名称" value="2" />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="移动端虚拟宽度">
-              <el-input
+                ></option>
+              </SelectField>
+            </Field>
+            <Field :label="t('评论排序')">
+              <SelectField v-model="config.gallery.commentSort">
+                <option :label="t('最早评论优先')" value="0"></option>
+                <option :label="t('最新评论优先')" value="1"></option>
+                <option :label="t('最高评分优先')" value="2"></option>
+              </SelectField>
+            </Field>
+            <Field :label="t('评论评分显示')">
+              <ChoiceGroup v-model="config.gallery.commentVotes">
+                <RadioChoice value="0">{{ t('悬停或点击时') }}</RadioChoice>
+                <RadioChoice value="1">{{ t('始终显示') }}</RadioChoice>
+              </ChoiceGroup>
+            </Field>
+            <Field :label="t('标签排序')">
+              <ChoiceGroup v-model="config.gallery.tagSort">
+                <RadioChoice value="0">{{ t('按字母') }}</RadioChoice>
+                <RadioChoice value="1">{{ t('按标签权重') }}</RadioChoice>
+              </ChoiceGroup>
+            </Field>
+            <Field :label="t('缩略图标注')">
+              <SelectField v-model="config.gallery.thumbnailLabel">
+                <option :label="t('无')" value="0"></option>
+                <option :label="t('仅页码')" value="1"></option>
+                <option :label="t('页码和名称')" value="2"></option>
+              </SelectField>
+            </Field>
+            <Field :label="t('移动端虚拟宽度')">
+              <TextField
                 v-model="config.appearance.viewportOverride"
                 inputmode="numeric"
-                placeholder="自动"
+                :placeholder="t('自动')"
               >
                 <template #append>px</template>
-              </el-input>
-              <div class="field-tip">可留空；原站建议范围为 640–1400</div>
-            </el-form-item>
+              </TextField>
+              <div class="field-tip">{{ t('可留空；原站建议范围为 640–1400') }}</div>
+            </Field>
           </div>
         </section>
 
         <footer class="config-actions">
-          <span v-if="isDirty">有尚未保存的修改</span>
-          <span v-else>当前配置已同步</span>
-          <el-button type="primary" native-type="submit" :loading="saving" :disabled="profileBusy">
-            保存配置
-          </el-button>
+          <span v-if="isDirty">{{ t('有尚未保存的修改') }}</span>
+          <span v-else>{{ t('当前配置已同步') }}</span>
+          <ActionButton variant="default" type="submit" :loading="saving" :disabled="profileBusy">{{
+            t('保存配置')
+          }}</ActionButton>
         </footer>
-      </el-form>
+      </form>
     </template>
   </section>
 </template>
@@ -854,7 +899,7 @@ function isOptionDisabled(field: string, value: string): boolean {
 .language-heading span,
 .field-tip,
 .config-actions span {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .config-header p,
@@ -870,8 +915,8 @@ function isOptionDisabled(field: string, value: string): boolean {
 .profile-bar {
   align-items: flex-end;
   padding: 16px;
-  background: var(--el-fill-color-light);
-  border: 1px solid var(--el-border-color-lighter);
+  background: var(--muted);
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
 }
 
@@ -882,7 +927,7 @@ function isOptionDisabled(field: string, value: string): boolean {
 }
 
 .profile-select-wrap label {
-  color: var(--el-text-color-regular);
+  color: var(--text);
   font-size: 13px;
   font-weight: 600;
 }
@@ -894,7 +939,7 @@ function isOptionDisabled(field: string, value: string): boolean {
   gap: 8px;
 }
 
-.profile-actions :deep(.el-button + .el-button) {
+.profile-actions :deep(.ui-button + .ui-button) {
   margin-left: 0;
 }
 
@@ -904,7 +949,7 @@ function isOptionDisabled(field: string, value: string): boolean {
 
 .config-group {
   padding: 28px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .config-group h3 {
@@ -922,12 +967,12 @@ function isOptionDisabled(field: string, value: string): boolean {
   gap: 2px 24px;
 }
 
-.config-grid :deep(.el-select),
-.profile-select-wrap :deep(.el-select) {
+.config-grid :deep(.ui-select),
+.profile-select-wrap :deep(.ui-select) {
   width: 100%;
 }
 
-.config-grid :deep(.el-radio-group) {
+.config-grid :deep(.ui-radio-group) {
   min-height: 32px;
 }
 
@@ -938,12 +983,12 @@ function isOptionDisabled(field: string, value: string): boolean {
   gap: 8px 16px;
 }
 
-.category-grid :deep(.el-checkbox) {
+.category-grid :deep(.ui-checkbox) {
   min-width: 0;
   margin-right: 0;
 }
 
-.favorite-grid :deep(.el-form-item) {
+.favorite-grid :deep(.ui-form-item) {
   margin-bottom: 16px;
 }
 
@@ -969,7 +1014,7 @@ function isOptionDisabled(field: string, value: string): boolean {
 
 .language-table-wrap {
   overflow-x: auto;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
 }
 
@@ -983,13 +1028,13 @@ function isOptionDisabled(field: string, value: string): boolean {
 .language-table th,
 .language-table td {
   padding: 9px 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
   text-align: center;
 }
 
 .language-table th {
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
+  color: var(--muted-foreground);
+  background: var(--muted);
   font-size: 12px;
   font-weight: 600;
 }
@@ -1004,7 +1049,7 @@ function isOptionDisabled(field: string, value: string): boolean {
   border-bottom: 0;
 }
 
-.language-table :deep(.el-checkbox) {
+.language-table :deep(.ui-checkbox) {
   height: 20px;
   margin-right: 0;
 }
@@ -1032,7 +1077,7 @@ function isOptionDisabled(field: string, value: string): boolean {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
-  .profile-actions :deep(.el-button) {
+  .profile-actions :deep(.ui-button) {
     width: 100%;
   }
 
@@ -1060,7 +1105,7 @@ function isOptionDisabled(field: string, value: string): boolean {
     flex-direction: column;
   }
 
-  .config-actions :deep(.el-button) {
+  .config-actions :deep(.ui-button) {
     width: 100%;
   }
 }

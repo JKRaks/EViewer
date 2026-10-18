@@ -31,6 +31,8 @@ export class bookItem {
    * 缩略图
    */
   thumbnailUrl: string = ''
+  /** 源站声明的缩略图比例；老缓存缺失时由图片加载补齐。 */
+  thumbnailAspectRatio: number | undefined = undefined
   /**
    * 标签列表
    */

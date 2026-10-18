@@ -1,4 +1,5 @@
-import QRCode from 'qrcode'
+import { t } from '@/i18n'
+import { loadInterfaceFonts } from '@/lib/interfaceFonts'
 import type { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { getCategoryDisplayName } from '@/core/common/category'
 import { resolveTagDisplayInfos } from '@/core/common/tagTranslations'
@@ -40,12 +41,13 @@ interface CoverDrawable {
 
 const CARD_WIDTH = 1280
 const CARD_HEIGHT = 680
-const CARD_FONT = '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif'
-const CARD_PRIMARY = '#409eff'
-const CARD_PRIMARY_DARK = '#337ecc'
-const CARD_TEXT = '#2c3e50'
-const CARD_MUTED = '#6b7280'
-const CARD_LINE = '#d9e2ef'
+const CARD_FONT = '"Alibaba PuHuiTi 3", "PingFang SC", "PingFang TC", "Microsoft YaHei", sans-serif'
+const CARD_DISPLAY_FONT = '"Smiley Sans", "Alibaba PuHuiTi 3", "PingFang SC", sans-serif'
+const CARD_PRIMARY = '#285f8c'
+const CARD_PRIMARY_DARK = '#1e4c72'
+const CARD_TEXT = '#292f31'
+const CARD_MUTED = '#697477'
+const CARD_LINE = '#dde2e3'
 const COVER_CACHE_NAME = 'eviewer-share-covers-v1'
 const MAX_CACHED_COVERS = 60
 
@@ -58,15 +60,42 @@ export async function generateBookShareCard(
   const qrCanvas = document.createElement('canvas')
   const [cover] = await Promise.all([
     loadCoverImage(data.coverUrl, pageCover),
-    QRCode.toCanvas(qrCanvas, data.targetUrl, {
-      width: 190,
-      margin: 1,
-      color: { dark: '#26384f', light: '#ffffff' },
-      errorCorrectionLevel: 'M',
-    }),
+    import('qrcode').then(({ default: QRCode }) =>
+      QRCode.toCanvas(qrCanvas, data.targetUrl, {
+        width: 190,
+        margin: 1,
+        color: { dark: '#26384f', light: '#ffffff' },
+        errorCorrectionLevel: 'M',
+      }),
+    ),
+    loadInterfaceFonts().catch(() => undefined),
   ])
 
   try {
+    const bodyText = [
+      data.title,
+      data.category,
+      data.language,
+      ...data.tags.map((tag) => tag.text),
+      t('语言'),
+      t('收藏'),
+      t('封面暂不可用'),
+      t('{p0} 张', { p0: data.imageCount }),
+      t('评分 {p0}', { p0: data.rating }),
+      t('画册通行证'),
+      t('标签'),
+      t('由 EViewer 提供'),
+      '0123456789',
+    ].join(' ')
+    // Canvas export has no later font swap, so explicitly load the glyphs it will draw.
+    if (document.fonts) {
+      await Promise.allSettled([
+        document.fonts.load('400 40px "Smiley Sans"', `${data.title} EVIEWER 0123456789`),
+        document.fonts.load('400 18px "Alibaba PuHuiTi 3"', bodyText),
+        document.fonts.load('500 17px "Alibaba PuHuiTi 3"', bodyText),
+      ])
+    }
+    await document.fonts?.ready
     const canvas = document.createElement('canvas')
     canvas.width = CARD_WIDTH
     canvas.height = CARD_HEIGHT
@@ -109,7 +138,7 @@ async function buildShareCardData(
     .sort((left, right) => Number(right.official) - Number(left.official))
 
   return {
-    title: book.bookName || '未命名画册',
+    title: book.bookName || t('未命名画册'),
     coverUrl: book.coverImage,
     imageCount: book.imageCount,
     category: getCategoryDisplayName(book.category),
@@ -272,7 +301,7 @@ function drawShareCard(
   context.clearRect(0, 0, CARD_WIDTH, CARD_HEIGHT)
 
   context.save()
-  context.shadowColor = 'rgba(64, 158, 255, 0.18)'
+  context.shadowColor = 'rgba(27, 52, 68, 0.12)'
   context.shadowBlur = 20
   context.shadowOffsetY = 8
   roundedRect(context, 20, 20, 1240, 640, 18)
@@ -289,11 +318,11 @@ function drawShareCard(
     context.fillStyle = '#eef3f9'
     context.fillRect(42, 42, 420, 596)
     context.fillStyle = CARD_PRIMARY
-    context.font = `600 28px ${CARD_FONT}`
+    context.font = `400 28px ${CARD_DISPLAY_FONT}`
     context.textAlign = 'center'
     context.fillText('EViewer', 252, 324)
     context.font = `18px ${CARD_FONT}`
-    context.fillText('封面暂不可用', 252, 360)
+    context.fillText(t('封面暂不可用'), 252, 360)
   }
   context.restore()
 
@@ -321,25 +350,25 @@ function drawShareCard(
   context.setLineDash([])
 
   context.fillStyle = CARD_PRIMARY
-  context.font = `700 22px ${CARD_FONT}`
+  context.font = `400 22px ${CARD_DISPLAY_FONT}`
   context.textAlign = 'left'
   context.fillText('EVIEWER', 530, 76)
   context.fillStyle = CARD_MUTED
-  context.font = `600 14px ${CARD_FONT}`
-  context.fillText('GALLERY PASS', 644, 75)
+  context.font = `500 14px ${CARD_FONT}`
+  context.fillText(t('画册通行证'), 644, 75)
 
   context.fillStyle = CARD_TEXT
-  context.font = `700 40px ${CARD_FONT}`
+  context.font = `400 40px ${CARD_DISPLAY_FONT}`
   drawWrappedText(context, data.title, 530, 120, 690, 50, 2)
 
   const metaY = 238
   const metadata = [
-    `${data.imageCount.toLocaleString()} 张`,
-    data.category || '未分类',
-    `评分 ${data.rating}`,
+    t('{p0} 张', { p0: data.imageCount.toLocaleString() }),
+    t(data.category || '未分类'),
+    t('评分 {p0}', { p0: data.rating }),
   ]
   let metaX = 530
-  context.font = `600 18px ${CARD_FONT}`
+  context.font = `500 18px ${CARD_FONT}`
   for (const item of metadata) {
     const width = Math.min(context.measureText(item).width + 30, 190)
     roundedRect(context, metaX, metaY, width, 40, 7)
@@ -351,8 +380,8 @@ function drawShareCard(
   }
 
   context.fillStyle = CARD_MUTED
-  context.font = `600 15px ${CARD_FONT}`
-  context.fillText('TAGS', 530, 316)
+  context.font = `500 15px ${CARD_FONT}`
+  context.fillText(t('标签'), 530, 316)
   const shownTags = data.tags.slice(0, data.tags.length > 6 ? 5 : 6)
   let tagX = 530
   let tagY = 334
@@ -392,11 +421,12 @@ function drawShareCard(
 
   context.fillStyle = CARD_MUTED
   context.font = `500 15px ${CARD_FONT}`
-  context.fillText('语言', 530, 528)
-  context.fillText('收藏', 760, 528)
+  context.fillText(t('语言'), 530, 528)
+  context.fillText(t('收藏'), 760, 528)
   context.fillStyle = CARD_TEXT
-  context.font = `600 20px ${CARD_FONT}`
-  context.fillText(trimToWidth(context, data.language, 190), 530, 556)
+  context.font = `500 20px ${CARD_FONT}`
+  context.fillText(trimToWidth(context, t(data.language), 190), 530, 556)
+  context.font = `400 24px ${CARD_DISPLAY_FONT}`
   context.fillText(data.favorited.toLocaleString(), 760, 556)
 
   context.drawImage(qrCanvas, 1040, 394, 190, 190)
@@ -410,7 +440,7 @@ function drawShareCard(
   context.textAlign = 'left'
   context.fillStyle = CARD_MUTED
   context.font = `500 14px ${CARD_FONT}`
-  context.fillText('Powered By EViewer · @JKRaks', 530, 630)
+  context.fillText(`${t('由 EViewer 提供')} · @JKRaks`, 530, 630)
 }
 
 function drawWrappedText(

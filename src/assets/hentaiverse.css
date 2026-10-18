@@ -1,0 +1,174 @@
+.hv-view.hv-theme {
+  background: var(--background);
+}
+.hv-view.hv-theme h1 {
+  font-family: var(--font-display);
+  letter-spacing: -0.7px;
+}
+.hv-view.hv-theme .hv-page-header {
+  padding: 8px 0 22px;
+  border-bottom: 0;
+}
+.hv-view.hv-theme .hv-page-header h1 {
+  font-size: 26px;
+}
+.hv-view.hv-theme .hv-module-description {
+  font-size: 13px;
+}
+.hv-view.hv-theme .hv-navigation {
+  border: 0;
+  border-right: 1px solid var(--border-soft);
+  background: transparent;
+  border-radius: 0;
+  padding-left: 0;
+}
+.hv-view.hv-theme .hv-navigation button {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border-radius: 4px;
+}
+.hv-view.hv-theme .hv-navigation button.active {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+.hv-view.hv-theme .hv-navigation > strong {
+  font-family: var(--font-display);
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 1.5;
+  font-synthesis: none;
+  color: var(--muted-foreground);
+}
+.hv-view.hv-theme .metric-band {
+  gap: 0;
+  border-block: 1px solid var(--border-soft);
+}
+.hv-view.hv-theme .metric-item {
+  background: transparent;
+  border: 0;
+  border-radius: 0;
+  padding: 16px;
+}
+.hv-view.hv-theme .metric-item strong {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+  font-size: 18px;
+}
+.hv-view.hv-theme .attribute-row strong,
+.hv-view.hv-theme .hv-content-heading h2,
+.hv-view.hv-theme .section-heading h2,
+.hv-view.hv-theme .hv-panel-heading h2,
+.battle-panel.hv-theme .battle-header h2 {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+}
+.hv-view.hv-theme .character-section,
+.hv-view.hv-theme .hv-form-group,
+.hv-view.hv-theme .training-item,
+.hv-view.hv-theme .challenge-item,
+.hv-view.hv-theme .equipment-item {
+  border-radius: 4px;
+  box-shadow: none;
+}
+.hv-view.hv-theme .section-heading h2 {
+  font-size: 17px;
+}
+.hv-view.hv-theme .attribute-row,
+.hv-view.hv-theme .stat-group {
+  border-color: var(--border-soft);
+  background: transparent;
+  border-radius: 4px;
+}
+.hv-view.hv-theme .ui-button {
+  border-radius: 5px;
+}
+.hv-view.hv-theme .pixel-title,
+.hv-view.hv-theme .equipment-slot-label,
+.hv-view.hv-theme .candidate-name {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+}
+.hv-view.hv-theme .pixel-icon {
+  color: var(--accent);
+}
+.hv-view.hv-theme .ui-button:active {
+  transform: translateY(1px);
+}
+.battle-panel.hv-theme .battle-log {
+  border: 0;
+  border-block: 1px solid var(--border-soft);
+  background: transparent;
+  border-radius: 0;
+  font-size: 14px;
+  line-height: 1.8;
+}
+.battle-panel.hv-theme .battle-log p:first-child {
+  animation: log-arrive var(--motion-panel) ease-out;
+}
+.battle-panel.hv-theme .battle-vitals {
+  gap: 12px;
+}
+.battle-panel.hv-theme .battle-monsters button {
+  border-radius: 4px;
+  background: var(--muted-soft);
+  box-shadow: none;
+}
+.battle-panel.hv-theme .battle-monsters button.active {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  box-shadow: none;
+}
+.battle-panel.hv-theme .monster-gauge {
+  min-width: 0;
+  width: 100%;
+}
+.battle-panel.hv-theme .monster-gauges {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  width: 100%;
+}
+.battle-panel.hv-theme .battle-queue-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  width: 100%;
+}
+.battle-panel.hv-theme .battle-queue-controls > .ui-button {
+  flex: 0 1 auto;
+  width: auto;
+}
+.battle-panel.hv-theme .battle-panel-header h2 {
+  font-family: var(--font-display);
+}
+@keyframes log-arrive {
+  from {
+    opacity: 0.25;
+    transform: translateY(-3px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (max-width: 767px) {
+  .battle-panel.hv-theme .battle-vital-label {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  .battle-panel.hv-theme .battle-vital-label span {
+    max-width: none;
+  }
+  .battle-panel.hv-theme .battle-vital-label strong {
+    white-space: nowrap;
+    font-size: 11px;
+  }
+}
