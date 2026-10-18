@@ -1,19 +1,37 @@
 <script setup lang="ts">
-import { computed, onActivated, onDeactivated, onMounted, onUnmounted, ref, watch } from 'vue'
-import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
-import { ElMessage } from 'element-plus'
+import { t, locale } from '@/i18n'
+
+import TextField from '@/components/primitives/TextField.vue'
+import IconFrame from '@/components/primitives/IconFrame.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import Hint from '@/components/primitives/Hint.vue'
+import TagChip from '@/components/primitives/TagChip.vue'
+import CheckField from '@/components/primitives/CheckField.vue'
+import ModalPanel from '@/components/primitives/ModalPanel.vue'
+import ProgressMeter from '@/components/primitives/ProgressMeter.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
+import BackToTop from '@/components/primitives/BackToTop.vue'
 import {
-  ArrowDown,
-  ArrowUp,
-  Close,
+  computed,
+  nextTick,
+  onActivated,
+  onDeactivated,
+  onMounted,
+  onUnmounted,
+  ref,
+  watch,
+} from 'vue'
+import { onBeforeRouteLeave, useRoute, useRouter } from 'vue-router'
+import { notify } from '@/components/primitives/feedback'
+import {
+  X as Close,
   Filter,
-  Loading,
-  Picture,
-  Plus,
-  RefreshLeft,
+  LoaderCircle as Loading,
+  Image as Picture,
+  RotateCcw as RefreshLeft,
   Search,
   Upload,
-} from '@element-plus/icons-vue'
+} from '@lucide/vue'
 import { bookListBusi } from '@/core/books/bookListBusi'
 import { galleryFileSearchBusi } from '@/core/books/galleryFileSearchBusi'
 import {
@@ -31,9 +49,10 @@ import {
 } from '@/core/model/book/gallerySearchCriteria'
 import { bookInput } from '@/core/model/book/bookInput'
 import { bookOutput, bookItem } from '@/core/model/book/bookOutput'
-import { categoryEnum } from '@/core/common/enum/categoryEnum'
 import BookItem from '@/components/BookItem.vue'
-import SearchTagPicker from '@/components/SearchTagPicker.vue'
+import GalleryFilters from '@/components/GalleryFilters.vue'
+import Notice from '@/components/primitives/Notice.vue'
+import { cloneGalleryCriteria, galleryTagKey } from '@/core/books/gallerySearchState'
 import { useLayoutMainScrollMemory } from '@/composables/useLayoutMainScrollMemory'
 
 defineOptions({ name: 'BookList' })
@@ -41,59 +60,63 @@ defineOptions({ name: 'BookList' })
 const route = useRoute()
 const router = useRouter()
 const criteria = ref<gallerySearchCriteria>(createGallerySearchCriteria())
-const titleText = ref('')
+const appliedCriteria = ref(createGallerySearchCriteria())
+const filterDraft = ref(createGallerySearchCriteria())
+const filterError = ref('')
+const searchError = ref('')
+const resultsStale = ref(false)
+const isMobile = ref(window.matchMedia('(max-width: 767px)').matches)
+const mobileQuery = window.matchMedia('(max-width: 767px)')
+const syncViewport = () => {
+  isMobile.value = mobileQuery.matches
+}
+const activeSummary = computed(() => {
+  const value = appliedCriteria.value
+  return [
+    value.titleTerms.length ? t('标题限定') : '',
+    value.uploader || value.uploaderUid ? t('上传者限定') : '',
+    value.categories.length ? value.categories.length + t(' 个分类') : '',
+    value.minRating !== undefined ? value.minRating + t(' 星及以上') : '',
+    value.minPages !== undefined || value.maxPages !== undefined
+      ? (value.minPages ?? 0) + '–' + (value.maxPages ?? t('不限')) + t(' 页')
+      : '',
+    value.requireTorrent ? t('存在种子') : '',
+    value.browseExpunged ? t('包含已移除') : '',
+    Object.values(value.disableCustomFilters).some(Boolean) ? t('已调整账户过滤') : '',
+  ]
+    .filter(Boolean)
+    .join(' · ')
+})
 const activeInput = ref<bookInput>(new bookInput())
 const bookOutputs = ref<bookOutput>()
 const allBooks = ref<bookItem[]>([])
 const showAdvanced = ref(false)
-const tagPickerVisible = ref(false)
 const imageSearchVisible = ref(false)
 const loading = ref(false)
 const loadingMore = ref(false)
+const moreError = ref('')
 const hasSearched = ref(false)
 const loadMoreTrigger = ref<HTMLElement | null>(null)
 const fileInput = ref<HTMLInputElement | null>(null)
 const imageFile = ref<File>()
 const imagePreviewUrl = ref('')
 const imageSearchLoading = ref(false)
+const imageSearchError = ref('')
 const imageUploadProgress = ref(0)
 const onlyCovers = ref(false)
 let observer: IntersectionObserver | null = null
 let requestController: AbortController | undefined
 let requestVersion = 0
 let appliedRouteCriteria = ''
+let resumeStructuredSearch = false
 
-const categoryOptions = [
-  { label: '同人志', value: categoryEnum.Doujinshi },
-  { label: '漫画', value: categoryEnum.Manga },
-  { label: '艺术家CG', value: categoryEnum.ArtistCG },
-  { label: '游戏CG', value: categoryEnum.GameCG },
-  { label: '西方', value: categoryEnum.Western },
-  { label: '非H', value: categoryEnum.NonH },
-  { label: '图像集', value: categoryEnum.ImageSet },
-  { label: 'Cosplay', value: categoryEnum.Cosplay },
-  { label: '亚洲色情', value: categoryEnum.AsianPorn },
-  { label: '杂项', value: categoryEnum.Misc },
-]
-const ratingOptions = [
-  { label: '2 星及以上', value: 2 },
-  { label: '3 星及以上', value: 3 },
-  { label: '4 星及以上', value: 4 },
-  { label: '5 星', value: 5 },
-]
-const allCategoriesSelected = computed({
-  get: () => criteria.value.categories.length === 0,
-  set: (selected: boolean) => {
-    if (selected) criteria.value.categories = []
-  },
-})
 const canClearSearch = computed(() => {
   const value = criteria.value
   return Boolean(
     hasSearched.value ||
       imageFile.value ||
       value.freeText.trim() ||
-      titleText.value.trim() ||
+      value.titleTerms.length ||
       value.uploader.trim() ||
       value.uploaderUid.trim() ||
       value.includeTags.length ||
@@ -120,12 +143,18 @@ watch(
     if (signature === appliedRouteCriteria) return
     appliedRouteCriteria = signature
     criteria.value = nextCriteria
-    titleText.value = nextCriteria.titleTerms.join(' ')
+    appliedCriteria.value = cloneGalleryCriteria(nextCriteria)
     const routeHasSearch = [serialized, keyword, uploader].some((value) =>
       Array.isArray(value) ? Boolean(value[0]) : Boolean(value),
     )
     if (!routeHasSearch) {
       requestController?.abort()
+      requestVersion++
+      loading.value = false
+      loadingMore.value = false
+      searchError.value = ''
+      moreError.value = ''
+      resultsStale.value = false
       bookOutputs.value = undefined
       allBooks.value = []
       hasSearched.value = false
@@ -137,7 +166,15 @@ watch(
 )
 
 async function submitSearch() {
-  criteria.value.titleTerms = titleText.value.trim() ? [titleText.value.trim()] : []
+  try {
+    compileGallerySearch(criteria.value)
+  } catch (error) {
+    filterError.value = error instanceof Error ? error.message : t('请检查筛选条件')
+    showSearchError(error)
+    return
+  }
+  appliedCriteria.value = cloneGalleryCriteria(criteria.value)
+
   const serialized = serializeGallerySearchCriteria(criteria.value)
   if (serialized === appliedRouteCriteria) {
     await executeStructuredSearch(false)
@@ -150,7 +187,11 @@ async function clearSearchConditions() {
   requestController?.abort()
   requestVersion++
   criteria.value = createGallerySearchCriteria()
-  titleText.value = ''
+  appliedCriteria.value = createGallerySearchCriteria()
+  cancelFilters()
+  searchError.value = ''
+  moreError.value = ''
+  resultsStale.value = false
   activeInput.value = new bookInput()
   bookOutputs.value = undefined
   allBooks.value = []
@@ -182,26 +223,41 @@ async function executeStructuredSearch(resetScroll: boolean) {
       signal: requestController?.signal,
     })
     if (version !== requestVersion) return
+    hasSearched.value = true
+    if (!result.isSuccess) throw new Error(result.msg || t('搜索失败，请重试'))
     bookOutputs.value = result
     allBooks.value = result.data ?? []
-    hasSearched.value = true
-    if (!result.isSuccess && result.msg) ElMessage.error(result.msg)
+    searchError.value = ''
+    resultsStale.value = false
     if (resetScroll) applyScrollTop(0)
+  } catch (error) {
+    if (
+      version === requestVersion &&
+      !(error instanceof DOMException && error.name === 'AbortError')
+    ) {
+      searchError.value = error instanceof Error ? error.message : t('搜索失败，请重试')
+      resultsStale.value = allBooks.value.length > 0
+      hasSearched.value = true
+    }
   } finally {
     if (version === requestVersion) loading.value = false
   }
 }
 
-async function loadMore() {
+async function loadMore(retry = false) {
   if (
     loadingMore.value ||
     loading.value ||
     imageSearchLoading.value ||
+    resultsStale.value ||
+    Boolean(searchError.value) ||
+    (!retry && Boolean(moreError.value)) ||
     !bookOutputs.value?.nxtPage
   ) {
     return
   }
   loadingMore.value = true
+  moreError.value = ''
   const version = requestVersion
   try {
     const nextInput = cloneBookInput(activeInput.value)
@@ -211,35 +267,50 @@ async function loadMore() {
       signal: requestController?.signal,
     })
     if (version !== requestVersion) return
-    if (result.isSuccess && result.data) {
-      allBooks.value.push(...result.data)
-      bookOutputs.value = result
-      activeInput.value = nextInput
-    } else if (result.msg) {
-      ElMessage.error(result.msg)
+    if (!result.isSuccess) throw new Error(result.msg || t('后续画册加载失败'))
+    const knownIds = new Set(allBooks.value.map((book) => book.bookId))
+    allBooks.value.push(...(result.data ?? []).filter((book) => !knownIds.has(book.bookId)))
+    bookOutputs.value = result
+    activeInput.value = nextInput
+  } catch (error) {
+    if (version === requestVersion) {
+      moreError.value = error instanceof Error ? error.message : t('后续画册加载失败')
     }
   } finally {
-    loadingMore.value = false
+    if (version === requestVersion) loadingMore.value = false
   }
 }
 
-function updateIncludeTags(tags: selectedGalleryTag[]) {
-  criteria.value.includeTags = tags
+function openFilters() {
+  filterDraft.value = cloneGalleryCriteria(appliedCriteria.value)
+  filterError.value = ''
+  showAdvanced.value = true
 }
-
-function updateExcludeTags(tags: selectedGalleryTag[]) {
-  criteria.value.excludeTags = tags
+function cancelFilters() {
+  showAdvanced.value = false
+  filterError.value = ''
+  filterDraft.value = cloneGalleryCriteria(appliedCriteria.value)
 }
-
-function removeTag(type: 'include' | 'exclude', tag: selectedGalleryTag) {
-  const target = type === 'include' ? criteria.value.includeTags : criteria.value.excludeTags
-  const filtered = target.filter(
-    (item) => item.namespace !== tag.namespace || item.master !== tag.master,
-  )
-  if (type === 'include') criteria.value.includeTags = filtered
-  else criteria.value.excludeTags = filtered
+async function applyFilters() {
+  try {
+    compileGallerySearch(filterDraft.value)
+  } catch (error) {
+    filterError.value = error instanceof Error ? error.message : t('请检查筛选条件')
+    await nextTick()
+    document.querySelector<HTMLElement>('.gallery-filters .field-error')?.focus()
+    return
+  }
+  criteria.value = cloneGalleryCriteria(filterDraft.value)
+  await submitSearch()
+  showAdvanced.value = false
 }
-
+async function removeAppliedTag(mode: 'include' | 'exclude', tag: selectedGalleryTag) {
+  const next = cloneGalleryCriteria(appliedCriteria.value)
+  const property = mode === 'include' ? 'includeTags' : 'excludeTags'
+  next[property] = next[property].filter((item) => galleryTagKey(item) !== galleryTagKey(tag))
+  criteria.value = next
+  await submitSearch()
+}
 function chooseImage() {
   fileInput.value?.click()
 }
@@ -257,7 +328,7 @@ function handleImageDrop(event: DragEvent) {
 
 function setImageFile(file: File) {
   if (!file.type.startsWith('image/')) {
-    ElMessage.warning('请选择图片文件')
+    notify.warning(t('请选择图片文件'))
     return
   }
   clearImagePreview()
@@ -270,16 +341,18 @@ function clearImagePreview() {
   imagePreviewUrl.value = ''
   imageFile.value = undefined
   imageUploadProgress.value = 0
+  imageSearchError.value = ''
   if (fileInput.value) fileInput.value.value = ''
 }
 
 async function searchByImage(mode: 'exact' | 'similar') {
   if (!imageFile.value) {
-    ElMessage.warning('请先选择图片')
+    notify.warning(t('请先选择图片'))
     return
   }
   const version = beginRequest()
   imageSearchLoading.value = true
+  imageSearchError.value = ''
   imageUploadProgress.value = 0
   try {
     const busi = new galleryFileSearchBusi()
@@ -297,22 +370,35 @@ async function searchByImage(mode: 'exact' | 'similar') {
             },
           )
     if (version !== requestVersion) return
+    if (!result.isSuccess) throw new Error(result.msg || t('图片搜索失败，请重试'))
     bookOutputs.value = result
     bookOutputs.value.nxtPage = undefined
     allBooks.value = result.data ?? []
     activeInput.value = new bookInput()
     hasSearched.value = true
-    if (!result.isSuccess && result.msg) ElMessage.error(result.msg)
+    searchError.value = ''
+    resultsStale.value = false
+    criteria.value = createGallerySearchCriteria()
+    appliedCriteria.value = cloneGalleryCriteria(criteria.value)
+    appliedRouteCriteria = serializeGallerySearchCriteria(criteria.value)
+    await router.replace({ name: 'booklist' })
     applyScrollTop(0)
-    if (result.isSuccess) imageSearchVisible.value = false
+    imageSearchVisible.value = false
   } catch (error) {
-    if (version === requestVersion) showSearchError(error)
+    if (version === requestVersion) {
+      imageSearchError.value = error instanceof Error ? error.message : t('图片搜索失败，请重试')
+    }
   } finally {
     if (version === requestVersion) imageSearchLoading.value = false
   }
 }
 
 function beginRequest() {
+  resumeStructuredSearch = false
+  moreError.value = ''
+  loadingMore.value = false
+  loading.value = false
+  imageSearchLoading.value = false
   requestController?.abort()
   requestController = new AbortController()
   return ++requestVersion
@@ -320,9 +406,9 @@ function beginRequest() {
 
 function showSearchError(error: unknown) {
   if (error instanceof gallerySearchValidationError) {
-    ElMessage.warning(error.messages.join('；'))
+    notify.warning(error.messages.join('；'))
   } else {
-    ElMessage.error(error instanceof Error ? error.message : '搜索失败')
+    notify.error(error instanceof Error ? error.message : t('搜索失败'))
   }
 }
 
@@ -338,10 +424,12 @@ function setupObserver() {
 }
 
 onMounted(() => {
+  mobileQuery.addEventListener('change', syncViewport)
   bindScrollListener()
   setupObserver()
 })
 onUnmounted(() => {
+  mobileQuery.removeEventListener('change', syncViewport)
   requestController?.abort()
   clearImagePreview()
   unbindScrollListener()
@@ -350,185 +438,128 @@ onUnmounted(() => {
 onActivated(() => {
   bindScrollListener()
   setupObserver()
+  if (resumeStructuredSearch) {
+    resumeStructuredSearch = false
+    void executeStructuredSearch(false)
+  }
 })
 onBeforeRouteLeave(() => persistScrollPosition())
 onDeactivated(() => {
+  resumeStructuredSearch = loading.value && !imageSearchLoading.value
+  requestController?.abort()
+  requestVersion++
+  loading.value = false
+  loadingMore.value = false
+  imageSearchLoading.value = false
+  imageSearchVisible.value = false
+  cancelFilters()
   persistScrollPosition()
   unbindScrollListener()
   observer?.disconnect()
 })
 </script>
-
 <template>
   <div class="booklist-view">
+    <header class="search-heading">
+      <p>{{ t('寻找下一本画册') }}</p>
+      <h1>{{ t('搜索画册') }}</h1>
+    </header>
     <section class="search-surface">
-      <div class="search-basic">
-        <el-input
+      <form class="search-basic" role="search" @submit.prevent="submitSearch">
+        <TextField
           v-model="criteria.freeText"
-          placeholder="标题、标签或关键词"
+          :placeholder="t('标题、标签或关键词')"
+          :aria-label="t('搜索画册')"
           clearable
-          @keyup.enter="submitSearch"
-        >
-          <template #prefix
-            ><el-icon><Search /></el-icon
-          ></template>
-        </el-input>
-        <el-button type="primary" :loading="loading" :icon="Search" @click="submitSearch"
-          >搜索</el-button
-        >
-        <el-tooltip content="图片搜索" placement="top" :disabled="imageSearchVisible">
-          <el-button
-            class="search-icon-action image-search-trigger"
-            circle
-            plain
+          :disabled="showAdvanced"
+          ><template #prefix><Search :size="18" /></template></TextField
+        ><ActionButton
+          type="submit"
+          variant="default"
+          :loading="loading"
+          :disabled="showAdvanced"
+          :icon="Search"
+          >{{ t('搜索') }}</ActionButton
+        ><Hint :content="t('图片搜索')"
+          ><ActionButton
+            size="icon"
             :icon="Picture"
-            aria-label="图片搜索"
-            @click="imageSearchVisible = true"
-          />
-        </el-tooltip>
-        <el-tooltip content="清除搜索条件" placement="top">
-          <el-button
-            class="search-icon-action clear-search-trigger"
-            circle
-            plain
+            :aria-label="t('图片搜索')"
+            :disabled="showAdvanced"
+            @click="imageSearchVisible = true" /></Hint
+        ><Hint :content="t('清空搜索')"
+          ><ActionButton
+            size="icon"
             :icon="RefreshLeft"
+            :aria-label="t('清空搜索')"
             :disabled="!canClearSearch"
-            aria-label="清除搜索条件"
-            @click="clearSearchConditions"
-          />
-        </el-tooltip>
-        <el-button
-          text
-          :icon="showAdvanced ? ArrowUp : ArrowDown"
-          @click="showAdvanced = !showAdvanced"
+            @click="clearSearchConditions" /></Hint
+        ><ActionButton
+          :icon="Filter"
+          :aria-expanded="showAdvanced"
+          @click="showAdvanced ? cancelFilters() : openFilters()"
+          >{{ t('筛选') }}</ActionButton
         >
-          {{ showAdvanced ? '收起' : '筛选' }}
-        </el-button>
+      </form>
+      <div
+        v-if="
+          appliedCriteria.includeTags.length || appliedCriteria.excludeTags.length || activeSummary
+        "
+        class="query-summary"
+      >
+        <span v-if="appliedCriteria.includeTags.length">{{
+          t('包含{p0}', { p0: appliedCriteria.tagMode === 'all' ? t('全部') : t('任意') })
+        }}</span
+        ><TagChip
+          v-for="tag in appliedCriteria.includeTags"
+          :key="'include-' + galleryTagKey(tag)"
+          closable
+          @close="removeAppliedTag('include', tag)"
+          >{{ locale === 'en' ? tag.master : tag.displayName }}
+          <small>{{ tag.namespace }}</small></TagChip
+        ><span v-if="appliedCriteria.excludeTags.length">{{ t('排除') }}</span
+        ><TagChip
+          v-for="tag in appliedCriteria.excludeTags"
+          :key="'exclude-' + galleryTagKey(tag)"
+          tone="danger"
+          closable
+          @close="removeAppliedTag('exclude', tag)"
+          >{{ locale === 'en' ? tag.master : tag.displayName }}
+          <small>{{ tag.namespace }}</small></TagChip
+        ><small v-if="activeSummary">{{ activeSummary }}</small>
       </div>
-
-      <el-collapse-transition>
-        <div v-show="showAdvanced" class="advanced-search">
-          <div class="filter-section tag-filter-section">
-            <div class="section-heading">
-              <strong>标签</strong>
-              <el-segmented
-                v-model="criteria.tagMode"
-                :options="[
-                  { label: '全部匹配', value: 'all' },
-                  { label: '任意匹配', value: 'any' },
-                ]"
-              />
-            </div>
-            <div class="selected-tags">
-              <el-tag
-                v-for="tag in criteria.includeTags"
-                :key="`include-${tag.namespace}-${tag.master}`"
-                closable
-                type="success"
-                @close="removeTag('include', tag)"
-                >{{ tag.displayName }} <small>{{ tag.namespace }}</small></el-tag
-              >
-              <el-tag
-                v-for="tag in criteria.excludeTags"
-                :key="`exclude-${tag.namespace}-${tag.master}`"
-                closable
-                type="danger"
-                @close="removeTag('exclude', tag)"
-                >{{ tag.displayName }} <small>{{ tag.namespace }}</small></el-tag
-              >
-              <el-button
-                circle
-                plain
-                :icon="Plus"
-                title="选择标签"
-                @click="tagPickerVisible = true"
-              />
-            </div>
-          </div>
-
-          <el-form label-position="top" class="advanced-form">
-            <el-form-item label="标题"><el-input v-model="titleText" clearable /></el-form-item>
-            <el-form-item label="上传者"
-              ><el-input v-model="criteria.uploader" clearable
-            /></el-form-item>
-            <el-form-item label="上传者 UID"
-              ><el-input v-model="criteria.uploaderUid" inputmode="numeric" clearable
-            /></el-form-item>
-            <el-form-item label="最低评分">
-              <el-select v-model="criteria.minRating" clearable placeholder="不限">
-                <el-option
-                  v-for="item in ratingOptions"
-                  :key="item.label"
-                  :label="item.label"
-                  :value="item.value"
-                />
-              </el-select>
-            </el-form-item>
-            <el-form-item label="页数范围" class="page-range-item">
-              <div class="page-range">
-                <el-input-number
-                  v-model="criteria.minPages"
-                  :min="0"
-                  :controls="false"
-                  placeholder="最少"
-                />
-                <span>至</span>
-                <el-input-number
-                  v-model="criteria.maxPages"
-                  :min="0"
-                  :controls="false"
-                  placeholder="最多"
-                />
-              </div>
-            </el-form-item>
-          </el-form>
-
-          <div class="filter-section categories-section">
-            <strong>分类</strong>
-            <div class="category-options">
-              <el-checkbox v-model="allCategoriesSelected">全部</el-checkbox>
-              <el-checkbox-group v-model="criteria.categories">
-                <el-checkbox
-                  v-for="item in categoryOptions"
-                  :key="item.value"
-                  :value="item.value"
-                  >{{ item.label }}</el-checkbox
-                >
-              </el-checkbox-group>
-            </div>
-          </div>
-
-          <div class="switch-options">
-            <el-switch v-model="criteria.requireTorrent" active-text="存在种子" />
-            <el-switch v-model="criteria.browseExpunged" active-text="显示已移除" />
-            <el-switch
-              v-model="criteria.disableCustomFilters.language"
-              active-text="忽略语言过滤"
-            />
-            <el-switch
-              v-model="criteria.disableCustomFilters.uploader"
-              active-text="忽略上传者过滤"
-            />
-            <el-switch v-model="criteria.disableCustomFilters.tags" active-text="忽略标签过滤" />
-          </div>
-        </div>
-      </el-collapse-transition>
+      <Transition name="disclosure"
+        ><section
+          v-if="showAdvanced && !isMobile"
+          class="advanced-search"
+          @keydown.esc="cancelFilters"
+        >
+          <GalleryFilters
+            v-model="filterDraft"
+            :error="filterError"
+            @apply="applyFilters"
+            @cancel="cancelFilters"
+          /></section
+      ></Transition>
     </section>
-
-    <SearchTagPicker
-      v-model="tagPickerVisible"
-      :include-tags="criteria.includeTags"
-      :exclude-tags="criteria.excludeTags"
-      @update:include-tags="updateIncludeTags"
-      @update:exclude-tags="updateExcludeTags"
-    />
-
-    <el-dialog
+    <ModalPanel
+      :model-value="showAdvanced && isMobile"
+      :title="t('筛选画册')"
+      sheet
+      width="100%"
+      @update:model-value="!$event && cancelFilters()"
+      ><GalleryFilters
+        v-if="showAdvanced && isMobile"
+        v-model="filterDraft"
+        :error="filterError"
+        @apply="applyFilters"
+        @cancel="cancelFilters"
+    /></ModalPanel>
+    <ModalPanel
       v-model="imageSearchVisible"
-      title="图片搜索"
+      :title="t('图片搜索')"
       width="min(620px, calc(100vw - 32px))"
-      append-to-body
-      :close-on-click-modal="!imageSearchLoading"
+      :outside-dismissible="!imageSearchLoading"
       class="image-search-dialog"
     >
       <input
@@ -546,164 +577,175 @@ onDeactivated(() => {
           @dragover.prevent
           @drop.prevent="handleImageDrop"
         >
-          <img v-if="imagePreviewUrl" :src="imagePreviewUrl" alt="待搜索图片" />
-          <el-icon v-else><Upload /></el-icon>
-          <span>{{ imageFile?.name ?? '选择图片' }}</span>
+          <img v-if="imagePreviewUrl" :src="imagePreviewUrl" :alt="t('待搜索图片')" />
+          <IconFrame v-else><Upload /></IconFrame>
+          <span>{{ imageFile?.name ?? t('选择图片') }}</span>
         </button>
-        <el-button
+        <ActionButton
           v-if="imageFile"
           class="remove-image-button"
-          circle
+          size="icon"
           :icon="Close"
-          title="移除图片"
+          :title="t('移除图片')"
           @click.stop="clearImagePreview"
         />
       </div>
       <div class="image-search-options">
-        <el-checkbox v-model="onlyCovers">仅封面</el-checkbox>
+        <CheckField v-model="onlyCovers">{{ t('仅封面') }}</CheckField>
       </div>
+      <Notice v-if="imageSearchError" tone="error" :title="t(imageSearchError)" />
       <div class="image-search-actions">
-        <el-button :icon="Picture" :loading="imageSearchLoading" @click="searchByImage('exact')"
-          >精确匹配</el-button
+        <ActionButton
+          :icon="Picture"
+          :loading="imageSearchLoading"
+          @click="searchByImage('exact')"
+          >{{ t('精确匹配') }}</ActionButton
         >
-        <el-button
-          type="primary"
+        <ActionButton
+          variant="default"
           :icon="Search"
           :loading="imageSearchLoading"
           @click="searchByImage('similar')"
-          >近似搜索</el-button
+          >{{ t('近似搜索') }}</ActionButton
         >
       </div>
-      <el-progress
+      <ProgressMeter
         v-if="imageSearchLoading && imageUploadProgress"
         class="image-search-progress"
         :percentage="imageUploadProgress"
         :stroke-width="4"
       />
-    </el-dialog>
-
+    </ModalPanel>
+    <Notice v-if="searchError" tone="error" :title="t(searchError)"
+      ><p v-if="resultsStale">{{ t('下方保留的是上次搜索结果。') }}</p>
+      <ActionButton size="sm" @click="submitSearch">{{ t('重试') }}</ActionButton></Notice
+    >
     <div v-if="hasSearched" class="result-info">
-      <el-icon><Filter /></el-icon>
-      <span
-        >找到 {{ bookOutputs?.totalCount ?? allBooks.length }} 个结果，已加载
-        {{ allBooks.length }} 条</span
-      >
+      <span>{{ resultsStale ? t('上次结果') : t('搜索结果') }}</span
+      ><small>{{
+        !resultsStale && bookOutputs?.totalCount !== undefined
+          ? t('共 {p0} 条 · 已加载 {p1} 条', { p0: bookOutputs.totalCount, p1: allBooks.length })
+          : t('已加载 {p0} 条', { p0: allBooks.length })
+      }}</small>
     </div>
-
-    <div class="book-list" v-loading="loading || imageSearchLoading">
-      <BookItem v-for="book in allBooks" :key="book.bookId" :book="book" class="book-item" />
-      <div ref="loadMoreTrigger" class="load-more-trigger"></div>
+    <div class="book-list gallery-masonry" v-busy="loading || imageSearchLoading">
+      <BookItem v-for="book in allBooks" :key="book.bookId" :book="book" />
+      <div ref="loadMoreTrigger" class="load-more-trigger" />
       <div v-if="loadingMore" class="loading-more">
-        <el-icon class="is-loading"><Loading /></el-icon><span>加载中...</span>
+        <IconFrame class="is-loading"><Loading /></IconFrame><span>{{ t('再翻一页…') }}</span>
       </div>
-      <div v-else-if="allBooks.length > 0 && !bookOutputs?.nxtPage" class="no-more">
-        没有更多数据了
+      <div v-else-if="allBooks.length && !bookOutputs?.nxtPage" class="no-more">
+        {{ t('已经到底了') }}
       </div>
     </div>
-
-    <el-empty
-      v-if="hasSearched && !loading && !imageSearchLoading && allBooks.length === 0"
-      description="暂无数据"
-    />
-    <el-backtop :bottom="100" />
+    <Notice
+      v-if="moreError"
+      :title="t('后续画册加载失败')"
+      :description="t(moreError)"
+      tone="error"
+    >
+      <ActionButton size="sm" :loading="loadingMore" @click="loadMore(true)">{{
+        t('重试加载')
+      }}</ActionButton>
+    </Notice>
+    <EmptyState
+      v-if="!hasSearched && !loading"
+      :description="t('输入关键词，或用筛选缩小范围')"
+    /><EmptyState
+      v-else-if="hasSearched && !loading && !imageSearchLoading && !searchError && !allBooks.length"
+      :description="t('没有找到匹配内容，试试减少筛选条件')"
+    /><BackToTop />
   </div>
 </template>
-
 <style scoped>
 .booklist-view {
-  width: 100%;
   max-width: 1400px;
-  margin: 0 auto;
+  margin: auto;
+}
+.search-heading {
+  padding: 4px 0 22px;
+}
+.search-heading p {
+  font:
+    10px/1.5 Georgia,
+    serif;
+  letter-spacing: 2px;
+  color: var(--muted-foreground);
+  margin: 0 0 10px;
+}
+.search-heading h1 {
+  font-size: 23px;
+  font-weight: 400;
+  line-height: 1.5;
+  margin: 0;
 }
 .search-surface {
-  padding: 16px;
-  margin-bottom: 20px;
-  border-radius: 8px;
-  background: var(--el-bg-color);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  margin-bottom: 24px;
 }
 .search-basic {
   display: flex;
+  gap: 10px;
   align-items: center;
-  gap: 12px;
+  padding-bottom: 15px;
+  border-bottom: 1px solid var(--border);
 }
-.search-basic .el-input {
+.search-basic :deep(.ui-input) {
   flex: 1;
-  max-width: 680px;
+  border: 0;
+  background: transparent;
+  padding-left: 0;
+  box-shadow: none;
 }
-.search-basic .el-button + .el-button {
-  margin-left: 0;
+.query-summary {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border-soft);
+  font-size: 12px;
+  color: var(--muted-foreground);
 }
-.search-icon-action {
-  flex: none;
+.query-summary small {
+  font-size: 11px;
 }
 .advanced-search {
-  margin-top: 16px;
-  padding-top: 16px;
-  border-top: 1px solid var(--el-border-color-light);
+  margin: 18px 0 24px;
+  padding: 22px;
+  background: var(--surface);
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
 }
-.filter-section + .filter-section,
-.advanced-form + .filter-section {
-  margin-top: 18px;
-}
-.section-heading {
-  min-height: 34px;
+.result-info {
   display: flex;
-  align-items: center;
   justify-content: space-between;
-  gap: 12px;
+  align-items: center;
+  font-size: 13px;
+  padding: 6px 0 18px;
 }
-.selected-tags {
+.result-info small {
+  color: var(--muted-foreground);
+}
+.book-list {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 28px 22px;
+  min-height: 1px;
+}
+.load-more-trigger,
+.loading-more,
+.no-more {
+  grid-column: 1/-1;
+}
+.loading-more,
+.no-more {
   display: flex;
-  flex-wrap: wrap;
+  justify-content: center;
   align-items: center;
   gap: 8px;
-  min-height: 36px;
-}
-.selected-tags small {
-  margin-left: 4px;
-  opacity: 0.7;
-}
-.advanced-form {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(160px, 1fr));
-  gap: 12px 16px;
-  margin-top: 16px;
-}
-.advanced-form :deep(.el-form-item) {
-  margin-bottom: 0;
-}
-.advanced-form :deep(.el-select) {
-  width: 100%;
-}
-.page-range-item {
-  grid-column: span 2;
-}
-.page-range {
-  width: 100%;
-  display: grid;
-  grid-template-columns: minmax(100px, 1fr) auto minmax(100px, 1fr);
-  align-items: center;
-  gap: 8px;
-}
-.page-range :deep(.el-input-number) {
-  width: 100%;
-}
-.categories-section > strong {
-  display: block;
-  margin-bottom: 8px;
-}
-.category-options,
-.category-options .el-checkbox-group {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 18px;
-}
-.switch-options {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px 28px;
-  margin-top: 18px;
+  padding: 22px;
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 .native-file-input {
   display: none;
@@ -713,150 +755,61 @@ onDeactivated(() => {
 }
 .image-drop-zone {
   width: 100%;
-  height: 210px;
+  min-height: 180px;
   display: flex;
+  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 10px;
-  overflow: hidden;
-  padding: 8px 14px;
-  border: 1px dashed var(--el-border-color);
-  border-radius: 6px;
-  color: var(--el-text-color-regular);
-  background: var(--el-fill-color-lighter);
-  cursor: pointer;
+  gap: 12px;
+  border: 1px dashed var(--accent-ring);
+  background: var(--muted-soft);
+  border-radius: 10px;
+  color: var(--text);
 }
 .image-drop-zone img {
-  width: min(180px, 45%);
-  height: 184px;
+  max-width: 100%;
+  max-height: 260px;
   object-fit: contain;
-  flex: none;
-}
-.image-drop-zone span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.image-drop-zone .el-icon {
-  font-size: 32px;
-  color: var(--el-color-primary);
 }
 .remove-image-button {
   position: absolute;
-  top: 10px;
-  right: 10px;
+  top: 8px;
+  right: 8px;
 }
 .image-search-options {
-  min-height: 42px;
-  display: flex;
-  align-items: center;
-  margin-top: 10px;
-}
-.image-search-actions {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-.image-search-actions .el-button {
-  width: 100%;
-  height: 42px;
-  margin: 0;
-}
-.image-search-progress {
   margin-top: 14px;
 }
-.result-info {
+.image-search-actions {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  margin-bottom: 16px;
-  border-radius: 6px;
-  color: var(--el-text-color-regular);
-  background: var(--el-fill-color-light);
-  font-size: 14px;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 16px;
 }
-.result-info .el-icon {
-  color: var(--el-color-primary);
+.image-search-progress {
+  margin-top: 16px;
 }
-.book-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-.book-item {
-  transition: all 0.3s;
-}
-.load-more-trigger {
-  width: 100%;
-  height: 1px;
-  visibility: hidden;
-}
-.loading-more,
-.no-more {
-  padding: 20px;
-  text-align: center;
-  color: var(--el-text-color-secondary);
-}
-.loading-more {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--el-color-primary);
-}
-html.dark .search-surface {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-}
-
-@media (max-width: 900px) {
-  .advanced-form {
-    grid-template-columns: repeat(2, minmax(160px, 1fr));
+@media (max-width: 1050px) {
+  .book-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
-
 @media (max-width: 767px) {
-  .search-surface {
-    padding: 12px;
-    margin-bottom: 16px;
+  .book-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 14px;
   }
   .search-basic {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) 40px 40px;
-    gap: 10px;
+    flex-wrap: wrap;
+    gap: 8px;
   }
-  .search-basic .el-input {
-    grid-column: 1 / -1;
-    max-width: none;
+  .search-basic :deep(.ui-input) {
+    min-width: calc(100% - 90px);
   }
-  .search-basic > .el-button:last-child {
-    grid-column: 2;
-    grid-row: 2;
+  .search-basic :deep(button) {
+    font-size: 12px;
   }
-  .search-basic > .image-search-trigger {
-    grid-column: 3;
-  }
-  .search-basic > .clear-search-trigger {
-    grid-column: 4;
-  }
-  .advanced-form {
-    grid-template-columns: 1fr;
-  }
-  .page-range-item {
-    grid-column: auto;
-  }
-  .section-heading {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-  .image-drop-zone {
-    height: 180px;
-  }
-  .image-drop-zone img {
-    height: 154px;
-  }
-  .book-list {
-    gap: 10px;
+  .search-heading h1 {
+    font-size: 23px;
   }
 }
 </style>

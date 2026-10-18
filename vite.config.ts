@@ -5,13 +5,17 @@ import { promisify } from 'node:util'
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import { VitePWA } from 'vite-plugin-pwa'
-import Components from 'unplugin-vue-components/vite'
-import { ElementPlusResolver } from 'unplugin-vue-components/resolvers'
+import tailwindcss from '@tailwindcss/vite'
 
 // https://vite.dev/config/
 export default defineConfig({
+  define: {
+    __VUE_I18N_FULL_INSTALL__: false,
+    __VUE_I18N_LEGACY_API__: false,
+    __INTLIFY_PROD_DEVTOOLS__: false,
+  },
   build: {
-    sourcemap: true,
+    sourcemap: false,
   },
   server: {
     sourcemapIgnoreList: false,
@@ -42,45 +46,61 @@ export default defineConfig({
       },
     },
     vue(),
-    Components({
-      resolvers: [ElementPlusResolver()],
-    }),
+    tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'auto',
-      includeAssets: ['favicon.ico'],
+      includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png'],
       manifest: {
+        id: '/',
         name: 'EViewer',
         short_name: 'EViewer',
-        description: 'EH Photo Viewer',
-        theme_color: '#2b5ca8',
-        background_color: '#ffffff',
+        description: 'EViewer gallery reader',
+        theme_color: '#fafafa',
+        background_color: '#fafafa',
         display: 'standalone',
         start_url: '/',
         scope: '/',
         icons: [
           {
-            src: '/pwa-192.svg',
+            src: '/icons/icon-192.png',
             sizes: '192x192',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any',
           },
           {
-            src: '/pwa-512.svg',
+            src: '/icons/icon-512.png',
             sizes: '512x512',
-            type: 'image/svg+xml',
+            type: 'image/png',
             purpose: 'any',
+          },
+          {
+            src: '/icons/icon-maskable-512.png',
+            sizes: '512x512',
+            type: 'image/png',
+            purpose: 'maskable',
           },
         ],
       },
       workbox: {
+        sourcemap: false,
         globPatterns: ['**/*.{js,css,html,svg,ico,png,webp,json}'],
         globIgnores: [
           'deployment.json',
           '**/tagTranslation.worker-*.js',
           '**/unofficialTagTranslations-*.js',
+          '**/interface-fonts-*.css',
         ],
         runtimeCaching: [
+          {
+            urlPattern:
+              /\/assets\/(?:(?:SmileySans-|AlibabaPuHuiTi3-)[^/]+\.woff2|interface-fonts-[^/]+\.css)$/,
+            handler: 'CacheFirst',
+            options: {
+              cacheName: 'interface-font',
+              expiration: { maxEntries: 28, maxAgeSeconds: 365 * 24 * 60 * 60 },
+            },
+          },
           {
             urlPattern: /\/assets\/(?:tagTranslation\.worker|unofficialTagTranslations)-[^/]+\.js$/,
             handler: 'CacheFirst',

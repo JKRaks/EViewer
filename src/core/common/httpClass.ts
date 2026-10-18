@@ -1,3 +1,4 @@
+import { formatSystemMessage } from '@/i18n'
 import { P } from '../model/P'
 import axios, {
   type AxiosInstance,
@@ -26,7 +27,7 @@ export class httpClass {
     validateStatus: () => true,
     // 添加这个配置，明确告诉 axios 不要跟随重定向
     beforeRedirect: () => {
-      throw new Error('Should not auto-redirect')
+      throw new Error('不允许自动重定向')
     },
   })
 
@@ -89,7 +90,12 @@ export class httpClass {
               : 'UnknownError',
         )
       }
-      result.msg = (error as Error).message
+      result.msg =
+        axios.isAxiosError(error) && ['ECONNABORTED', 'ETIMEDOUT'].includes(error.code || '')
+          ? '请求超时，请稍后重试'
+          : axios.isAxiosError(error) && error.code === 'ERR_NETWORK'
+            ? '网络连接失败，请检查网络后重试'
+            : (error as Error).message
     }
     return result
   }
@@ -189,7 +195,12 @@ export class httpClass {
       // 检查状态码是否成功
       if (response.status >= 400) {
         console.error('请求失败，状态码:', response.status)
-        throw new Error(`请求失败: ${response.status} ${response.statusText}`)
+        throw new Error(
+          formatSystemMessage('请求失败: {p0} {p1}', {
+            p0: response.status,
+            p1: response.statusText,
+          }),
+        )
       }
 
       // 不是重定向，返回最终响应
@@ -198,7 +209,7 @@ export class httpClass {
       return response
     }
 
-    throw new Error(`超过最大重定向次数 (${maxRedirects})`)
+    throw new Error(formatSystemMessage('超过最大重定向次数 ({p0})', { p0: maxRedirects }))
   }
 
   // 解析 Set-Cookie 头，提取 cookie 键值对

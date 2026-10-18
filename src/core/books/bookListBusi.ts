@@ -101,6 +101,19 @@ export class bookListBusi {
     const urlParts = item.bookUrl.match(/\/g\/(.+)$/)
     item.bookId = (urlParts ? urlParts[1] || '' : '').replace('/', '-')
     item.thumbnailUrl = this.getThumbnailUrl(element)
+    const thumbnail = element.getElementBySelector(['td.gl1e', 'div', 'img'])
+    const thumbnailStyle = thumbnail.attribute('style') || ''
+    const width = Number.parseFloat(
+      thumbnail.attribute('width') ||
+        thumbnailStyle.match(/(?:^|;)\s*width:\s*([\d.]+)px/i)?.[1] ||
+        '',
+    )
+    const height = Number.parseFloat(
+      thumbnail.attribute('height') ||
+        thumbnailStyle.match(/(?:^|;)\s*height:\s*([\d.]+)px/i)?.[1] ||
+        '',
+    )
+    if (width > 0 && height > 0) item.thumbnailAspectRatio = width / height
     item.category = this.getCategory(element)
     item.downloadUrl = this.getDownloadUrl(element)
     item.imgCount = this.getPicCount(element)

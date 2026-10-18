@@ -1,16 +1,18 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
 import type { HentaiVerseStatGroup } from '@/core/hentaiverse/model/hentaiVerse'
 defineProps<{ groups: HentaiVerseStatGroup[] }>()
 </script>
 
 <template>
-  <section class="stat-groups" aria-label="角色详细属性">
+  <section class="stat-groups" :aria-label="t('角色详细属性')">
     <details v-for="group in groups" :key="group.title" open>
-      <summary>{{ group.title }}</summary>
+      <summary>{{ t(group.title) }}</summary>
       <dl>
         <template v-for="metric in group.metrics" :key="metric.label">
-          <dt>{{ metric.label }}</dt>
-          <dd>{{ metric.value }}</dd>
+          <dt>{{ t(metric.label) }}</dt>
+          <dd>{{ t(metric.value) }}</dd>
         </template>
       </dl>
     </details>
@@ -28,7 +30,7 @@ details {
   margin-bottom: 16px;
   min-width: 0;
   padding: 14px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--border);
   border-radius: 10px;
 }
 summary {
@@ -48,7 +50,7 @@ dl {
   font-size: 13px;
 }
 dt {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
 dd {

@@ -1,23 +1,29 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import FeedbackHost from '@/components/primitives/FeedbackHost.vue'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import SiteHeader from '@/components/SiteHeader.vue'
+import IconFrame from '@/components/primitives/IconFrame.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { RouterView, useRoute, useRouter } from 'vue-router'
 import {
   ArrowLeft,
-  Loading,
+  LoaderCircle as Loading,
   Menu as IconMenu,
   Search,
-  UserFilled,
+  UserRound as UserFilled,
   House,
   Moon,
-  Sunny,
-  MoonNight,
-  Setting,
-  StarFilled,
-  Lightning,
+  Sun as Sunny,
+  Monitor as MoonNight,
+  Settings as Setting,
+  Star as StarFilled,
+  Zap as Lightning,
   Clock,
-} from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import 'element-plus/es/components/message/style/css'
+} from '@lucide/vue'
+import { notify } from '@/components/primitives/feedback'
 import type { Component } from 'vue'
 import {
   getLayoutScrollElement,
@@ -88,7 +94,10 @@ const themeModeMeta = {
 }
 
 const activeMenu = computed(() => route.path)
-const activeThemeMode = ref<(typeof themeModeList)[number]>('auto')
+const storedTheme = localStorage.getItem('eviewer-theme')
+const activeThemeMode = ref<(typeof themeModeList)[number]>(
+  storedTheme === 'dark' || storedTheme === 'light' ? storedTheme : 'auto',
+)
 const visiblePageActions = computed(() => {
   return pageFloatingActions.value
     .filter((item) => item.show !== false && item.placement !== 'menu')
@@ -109,12 +118,12 @@ const menuItems = computed<FloatingMenuItem[]>(() => [
       className: item.className,
     })),
   ...(cacheSettings.enabled && cacheSettings.cacheReadingHistory
-    ? [{ key: 'reading-history', path: '/history', label: '浏览历史', icon: Clock }]
+    ? [{ key: 'reading-history', path: '/history', label: t('浏览历史'), icon: Clock }]
     : []),
   {
     key: 'favorites',
     path: '/favorites',
-    label: '个人收藏',
+    label: t('个人收藏'),
     icon: StarFilled,
     requiresAuth: true,
   },
@@ -135,13 +144,13 @@ const menuItems = computed<FloatingMenuItem[]>(() => [
   {
     key: 'login',
     path: '/login',
-    label: '账号信息',
+    label: t('账号信息'),
     icon: UserFilled,
   },
   {
     key: 'settings',
     path: '/settings',
-    label: '系统设置',
+    label: t('系统设置'),
     icon: Setting,
   },
 ])
@@ -207,6 +216,7 @@ const toggleMenu = () => {
 }
 
 const applyThemeMode = () => {
+  localStorage.setItem('eviewer-theme', activeThemeMode.value)
   const isDark =
     activeThemeMode.value === 'dark' ||
     (activeThemeMode.value === 'auto' && systemThemeMedia?.matches === true)
@@ -230,7 +240,7 @@ const goMenuItem = (item: (typeof menuItems.value)[number]) => {
   menuExpanded.value = false
 
   if (item.requiresAuth && !authState.loggedIn) {
-    ElMessage.warning('请先维护认证信息后再查看个人收藏')
+    notify.warning(t('请先维护认证信息后再查看个人收藏'))
     if (route.path !== '/login') void router.push('/login')
     return
   }
@@ -323,9 +333,14 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <el-config-provider size="small" :z-index="3000">
-    <el-container class="layout-container" :class="{ 'is-mobile': isMobile }">
-      <el-main class="layout-main">
+  <TooltipProvider :delay-duration="350">
+    <div
+      class="layout-container"
+      :class="{ 'is-mobile': isMobile, 'hv-theme': route.path === '/hentaiverse' }"
+    >
+      <div class="layout-safe-area" aria-hidden="true" />
+      <main class="layout-main">
+        <SiteHeader v-if="route.path !== '/viewer'" />
         <Suspense>
           <template #default>
             <RouterView v-slot="{ Component, route }">
@@ -336,77 +351,89 @@ onUnmounted(() => {
           </template>
           <template #fallback>
             <div class="loading-container">
-              <el-icon class="is-loading" :size="40">
+              <IconFrame class="is-loading" :size="40">
                 <Loading />
-              </el-icon>
-              <p>加载中...</p>
+              </IconFrame>
+              <p>{{ t('加载中...') }}</p>
             </div>
           </template>
         </Suspense>
-      </el-main>
+      </main>
 
       <div class="floating-actions" :class="{ 'is-hidden': !showFloatingButtons }">
-        <el-button
+        <ActionButton
           v-if="showBackButton"
           class="floating-btn"
           :icon="ArrowLeft"
-          circle
+          size="icon"
+          :aria-label="t('返回上一页')"
           @click="handleBack"
         />
-        <el-button
+        <ActionButton
           class="floating-btn"
           :class="{ 'is-active': activeMenu === '/' }"
           :icon="House"
-          circle
+          size="icon"
+          :aria-label="t('首页')"
           @click="goHome"
         />
-        <el-button
+        <ActionButton
           class="floating-btn"
           :class="{ 'is-active': activeMenu === '/booklist' }"
           :icon="Search"
-          circle
+          size="icon"
+          :aria-label="t('搜索画册')"
           @click="goBookList"
         />
-        <el-button
+        <ActionButton
           v-for="action in visiblePageActions"
           :key="action.key"
           class="floating-btn"
           :class="[{ 'is-active': action.active }, action.className]"
-          circle
+          size="icon"
+          :aria-label="t(action.label || action.key)"
           @click="action.onClick"
         >
-          <el-icon>
+          <IconFrame>
             <component :is="action.icon" />
-          </el-icon>
-        </el-button>
+          </IconFrame>
+        </ActionButton>
 
         <div class="floating-menu-wrapper">
-          <div class="floating-menu" :class="{ 'is-expanded': menuExpanded }">
-            <el-button
+          <div
+            class="floating-menu"
+            :class="{ 'is-expanded': menuExpanded }"
+            :inert="!menuExpanded"
+            @keydown.esc="menuExpanded = false"
+          >
+            <ActionButton
               v-for="item in menuItems"
               :key="item.key"
               class="floating-btn floating-sub-btn"
               :class="[{ 'is-active': item.active || activeMenu === item.path }, item.className]"
               @click="goMenuItem(item)"
             >
-              <el-icon>
+              <IconFrame>
                 <component :is="item.icon" />
-              </el-icon>
-              <span class="floating-sub-label">{{ item.label }}</span>
-            </el-button>
+              </IconFrame>
+              <span class="floating-sub-label">{{ t(item.label) }}</span>
+            </ActionButton>
           </div>
 
-          <el-button
+          <ActionButton
             class="floating-btn floating-menu-toggle"
             :class="{ 'is-active': menuExpanded }"
             :icon="IconMenu"
-            circle
+            size="icon"
+            :aria-label="t('更多操作')"
+            :aria-expanded="menuExpanded"
             @click="toggleMenu"
           />
         </div>
       </div>
       <EncounterPrompt v-if="hentaiVerseState.encounter" />
       <BattleFloatingPanel v-if="hentaiVerseState.battle" />
-    </el-container>
-  </el-config-provider>
+    </div>
+    <FeedbackHost />
+  </TooltipProvider>
 </template>

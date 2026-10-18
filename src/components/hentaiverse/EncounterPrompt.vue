@@ -1,6 +1,10 @@
 <script setup lang="ts">
-import { Lightning } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
+import { t } from '@/i18n'
+
+import IconFrame from '@/components/primitives/IconFrame.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import { Zap as Lightning } from '@lucide/vue'
+import { notify } from '@/components/primitives/feedback'
 import {
   dismissHentaiVerseEncounter,
   enterHentaiVerseBattle,
@@ -11,7 +15,7 @@ async function enterBattle() {
   try {
     await enterHentaiVerseBattle()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '进入随机遭遇失败')
+    notify.error(error instanceof Error ? error.message : t('进入随机遭遇失败'))
   }
 }
 </script>
@@ -19,13 +23,20 @@ async function enterBattle() {
 <template>
   <Transition name="encounter">
     <aside v-if="hentaiVerseState.encounter" class="encounter-prompt" role="alert">
-      <el-icon :size="22"><Lightning /></el-icon>
+      <IconFrame :size="22"><Lightning /></IconFrame>
       <div>
-        <strong>发现随机遭遇</strong>
-        <span>怪物正在等待你的回应</span>
+        <strong>{{ t('发现随机遭遇') }}</strong>
+        <span>{{ t('怪物正在等待你的回应') }}</span>
       </div>
-      <el-button type="primary" :loading="hentaiVerseState.battleLoading" @click="enterBattle">进入战斗</el-button>
-      <el-button text @click="dismissHentaiVerseEncounter">忽略</el-button>
+      <ActionButton
+        variant="default"
+        :loading="hentaiVerseState.battleLoading"
+        @click="enterBattle"
+        >{{ t('进入战斗') }}</ActionButton
+      >
+      <ActionButton variant="ghost" @click="dismissHentaiVerseEncounter">{{
+        t('忽略')
+      }}</ActionButton>
     </aside>
   </Transition>
 </template>
@@ -41,11 +52,11 @@ async function enterBattle() {
   gap: 12px;
   width: min(560px, calc(100vw - 32px));
   padding: 12px 14px;
-  border: 1px solid var(--el-color-warning-light-5);
+  border: 1px solid var(--warning-soft);
   border-radius: 8px;
-  color: var(--el-text-color-primary);
-  background: var(--el-bg-color-overlay);
-  box-shadow: var(--el-box-shadow-dark);
+  color: var(--foreground);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-strong);
   transform: translateX(-50%);
 }
 
@@ -57,13 +68,15 @@ async function enterBattle() {
 }
 
 .encounter-prompt span {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
 .encounter-enter-active,
 .encounter-leave-active {
-  transition: opacity 0.2s ease, transform 0.2s ease;
+  transition:
+    opacity 0.2s ease,
+    transform 0.2s ease;
 }
 
 .encounter-enter-from,

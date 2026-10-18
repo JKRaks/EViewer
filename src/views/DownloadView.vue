@@ -1,8 +1,16 @@
 <script setup lang="ts">
+import { t, getDisplayLocale } from '@/i18n'
+
+import SectionTabs from '@/components/primitives/SectionTabs'
+import SectionTab from '@/components/primitives/SectionTab.vue'
+import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
+import StatusPanel from '@/components/primitives/StatusPanel.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import { Button } from '@/components/ui/button'
+import EmptyState from '@/components/primitives/EmptyState.vue'
 import { onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Download, RefreshRight } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import 'element-plus/es/components/message/style/css'
+import { Download, RotateCw as RefreshRight } from '@lucide/vue'
+import { notify } from '@/components/primitives/feedback'
 import { useRoute } from 'vue-router'
 import { bookFileBusi } from '@/core/books/bookFileBusi'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
@@ -39,13 +47,16 @@ onBeforeUnmount(() => {
 async function loadTorrentList() {
   const currentRequest = ++requestVersion
   const bookId = typeof route.query.bookId === 'string' ? route.query.bookId : ''
-  const [gallery, token] = bookId.replace('-', '/').replace(/^\/+|\/+$/g, '').split('/')
+  const [gallery, token] = bookId
+    .replace('-', '/')
+    .replace(/^\/+|\/+$/g, '')
+    .split('/')
 
   torrentItems.value = []
   bookName.value = ''
   errorMessage.value = ''
   if (!gallery || !token) {
-    errorMessage.value = '画册参数不完整，无法获取下载列表'
+    errorMessage.value = t('画册参数不完整，无法获取下载列表')
     return
   }
 
@@ -58,23 +69,23 @@ async function loadTorrentList() {
     if (currentRequest !== requestVersion) return
 
     if (!result.isSuccess) {
-      throw new Error(result.msg || '下载列表获取失败')
+      throw new Error(result.msg || t('下载列表获取失败'))
     }
     bookName.value = result.bookName
     torrentItems.value = result.data ?? []
   } catch (error) {
     if (currentRequest !== requestVersion) return
-    console.error('获取画册下载列表失败:', error)
-    errorMessage.value = error instanceof Error ? error.message : '下载列表获取失败'
+    console.error(t('获取画册下载列表失败:'), error)
+    errorMessage.value = error instanceof Error ? error.message : t('下载列表获取失败')
   } finally {
     if (currentRequest === requestVersion) loading.value = false
   }
 }
 
 function formatDate(date?: Date) {
-  if (!date) return '未知时间'
+  if (!date) return t('未知时间')
   const parsed = new Date(date)
-  return Number.isNaN(parsed.getTime()) ? '未知时间' : parsed.toLocaleString('zh-CN')
+  return Number.isNaN(parsed.getTime()) ? t('未知时间') : parsed.toLocaleString(getDisplayLocale())
 }
 
 function resolveDownloadUrl(url: string) {
@@ -94,22 +105,22 @@ async function handleTorrentDownload(event: MouseEvent, item: galleryTorrentItem
   if (navigator.share) {
     try {
       await navigator.share({
-        title: item.fileName || '画册种子下载',
+        title: item.fileName || t('画册种子下载'),
         url,
       })
       return
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return
-      console.warn('iOS 系统分享调起失败，改为复制下载链接:', error)
+      console.warn(t('iOS 系统分享调起失败，改为复制下载链接:'), error)
     }
   }
 
   try {
     await copyDownloadUrl(url)
-    ElMessage.success('下载链接已复制，请在 Safari 中打开')
+    notify.success(t('下载链接已复制，请在 Safari 中打开'))
   } catch (error) {
-    console.error('复制下载链接失败:', error)
-    ElMessage.error('无法打开下载链接，请长按下载按钮复制链接')
+    console.error(t('复制下载链接失败:'), error)
+    notify.error(t('无法打开下载链接，请长按下载按钮复制链接'))
   }
 }
 
@@ -131,7 +142,7 @@ async function copyDownloadUrl(url: string) {
   textarea.setSelectionRange(0, url.length)
   const copied = document.execCommand('copy')
   textarea.remove()
-  if (!copied) throw new Error('浏览器拒绝复制下载链接')
+  if (!copied) throw new Error(t('浏览器拒绝复制下载链接'))
 }
 
 function isAppleStandaloneWebApp() {
@@ -148,74 +159,72 @@ function isAppleStandaloneWebApp() {
 <template>
   <main class="download-view">
     <header class="download-header">
-      <h1>画册下载</h1>
+      <h1>{{ t('画册下载') }}</h1>
       <p v-if="bookName">{{ bookName }}</p>
     </header>
 
-    <el-tabs v-model="activeDownloadType" class="download-tabs">
-      <el-tab-pane label="磁力链接下载" name="torrent">
+    <SectionTabs v-model="activeDownloadType" class="download-tabs">
+      <SectionTab :label="t('磁力链接下载')" name="torrent">
         <div v-if="loading" class="download-loading">
-          <el-skeleton :rows="7" animated />
+          <SkeletonBlock :rows="7" />
         </div>
 
-        <el-result
+        <StatusPanel
           v-else-if="errorMessage"
           icon="error"
-          title="下载列表获取失败"
-          :sub-title="errorMessage"
+          :title="t('下载列表获取失败')"
+          :sub-title="t(errorMessage)"
         >
           <template #extra>
-            <el-button type="primary" :icon="RefreshRight" @click="loadTorrentList">
-              重新获取
-            </el-button>
+            <ActionButton variant="default" :icon="RefreshRight" @click="loadTorrentList">{{
+              t('重新获取')
+            }}</ActionButton>
           </template>
-        </el-result>
+        </StatusPanel>
 
-        <el-empty v-else-if="torrentItems.length === 0" description="暂无可用的下载资源" />
+        <EmptyState v-else-if="torrentItems.length === 0" :description="t('暂无可用的下载资源')" />
 
         <div v-else class="torrent-list">
           <article v-for="item in torrentItems" :key="item.gtid" class="torrent-item">
             <div class="torrent-main">
-              <h2>{{ item.fileName || '未命名种子文件' }}</h2>
+              <h2>{{ item.fileName || t('未命名种子文件') }}</h2>
               <dl class="torrent-meta">
                 <div>
-                  <dt>文件大小</dt>
+                  <dt>{{ t('文件大小') }}</dt>
                   <dd>{{ item.size || '--' }}</dd>
                 </div>
                 <div>
-                  <dt>发布时间</dt>
+                  <dt>{{ t('发布时间') }}</dt>
                   <dd>{{ formatDate(item.posted) }}</dd>
                 </div>
                 <div>
-                  <dt>上传者</dt>
+                  <dt>{{ t('上传者') }}</dt>
                   <dd>{{ item.uploader || '--' }}</dd>
                 </div>
                 <div>
-                  <dt>做种 / 下载</dt>
+                  <dt>{{ t('做种 / 下载') }}</dt>
                   <dd>{{ item.seeds }} / {{ item.downloads }}</dd>
                 </div>
               </dl>
             </div>
-            <el-button
-              class="torrent-download"
-              type="primary"
-              :icon="Download"
-              tag="a"
-              :href="resolveDownloadUrl(item.downloadUrl)"
-              :target="useAppleWebAppDownload ? '_self' : '_blank'"
-              rel="noopener noreferrer"
-              @click="handleTorrentDownload($event, item)"
-            >
-              下载
-            </el-button>
+            <Button class="ui-button torrent-download" variant="default" as-child>
+              <a
+                :href="resolveDownloadUrl(item.downloadUrl)"
+                :target="useAppleWebAppDownload ? '_self' : '_blank'"
+                rel="noopener noreferrer"
+                @click="handleTorrentDownload($event, item)"
+              >
+                <Download :size="16" />{{ t('下载') }}</a
+              >
+            </Button>
           </article>
         </div>
-      </el-tab-pane>
+      </SectionTab>
 
-      <el-tab-pane label="源站下载" name="source">
-        <el-empty description="源站下载暂不支持" />
-      </el-tab-pane>
-    </el-tabs>
+      <SectionTab :label="t('源站下载')" name="source">
+        <EmptyState :description="t('源站下载暂不支持')" />
+      </SectionTab>
+    </SectionTabs>
   </main>
 </template>
 
@@ -224,12 +233,12 @@ function isAppleStandaloneWebApp() {
   width: min(100%, 960px);
   margin: 0 auto;
   padding: 28px 20px 96px;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
 }
 
 .download-header {
   padding-bottom: 18px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .download-header h1 {
@@ -241,7 +250,7 @@ function isAppleStandaloneWebApp() {
 .download-header p {
   margin: 8px 0 0;
   overflow: hidden;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 14px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -268,9 +277,9 @@ function isAppleStandaloneWebApp() {
   justify-content: space-between;
   gap: 24px;
   padding: 18px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
-  background: var(--el-bg-color);
+  background: var(--surface);
 }
 
 .torrent-main {
@@ -300,12 +309,12 @@ function isAppleStandaloneWebApp() {
 }
 
 .torrent-meta dt {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .torrent-meta dd {
   margin: 0;
-  color: var(--el-text-color-regular);
+  color: var(--text);
 }
 
 .torrent-download {

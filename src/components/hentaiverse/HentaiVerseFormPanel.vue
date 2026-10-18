@@ -1,4 +1,13 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import SelectField from '@/components/primitives/SelectField.vue'
+import TextField from '@/components/primitives/TextField.vue'
+import NumberField from '@/components/primitives/NumberField.vue'
+import CheckField from '@/components/primitives/CheckField.vue'
+import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
+import RadioChoice from '@/components/primitives/RadioChoice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import type {
   HentaiVerseFormAction,
@@ -109,15 +118,14 @@ function submit(action?: HentaiVerseFormAction) {
   <section class="hv-form-panel">
     <header class="hv-panel-heading">
       <div>
-        <h2>{{ form.title }}</h2>
-        <p v-if="form.description">{{ form.description }}</p>
+        <h2>{{ t(form.title) }}</h2>
+        <p v-if="form.description">{{ t(form.description) }}</p>
       </div>
-      <el-button
+      <ActionButton
         v-if="controlGroups.length > 1"
-        text
-        type="primary"
+        variant="ghost"
         @click="expandedGroups = allExpanded ? [] : controlGroups.map((group) => group.key)"
-        >{{ allExpanded ? '全部收起' : '全部展开' }}</el-button
+        >{{ t(allExpanded ? t('全部收起') : t('全部展开')) }}</ActionButton
       >
     </header>
 
@@ -135,108 +143,109 @@ function submit(action?: HentaiVerseFormAction) {
         @click.prevent="toggleGroup(group.key)"
       >
         <span class="group-title"
-          >{{ group.title }}
-          <small>{{ group.controls.length + group.radioGroups.length }} 项</small>
+          >{{ t(group.title) }}
+          <small>{{
+            t('{p0} 项', { p0: group.controls.length + group.radioGroups.length })
+          }}</small>
         </span>
-        <p v-if="group.description">{{ group.description }}</p>
+        <p v-if="group.description">{{ t(group.description) }}</p>
       </summary>
 
       <div class="hv-form-grid">
         <template v-for="control in group.controls" :key="`${control.name}:${control.value}`">
           <label v-if="control.type !== 'checkbox'" class="hv-field-label">{{
-            control.label
+            t(control.label)
           }}</label>
-          <el-select
+          <SelectField
             v-if="control.type === 'select'"
             v-model="values[control.name]"
-            :aria-label="control.label"
+            :aria-label="t(control.label)"
             :disabled="loading || control.disabled"
           >
-            <el-option
+            <option
               v-for="option in control.options"
               :key="option.value"
-              :label="option.label"
+              :label="t(option.label)"
               :value="option.value"
-            />
-          </el-select>
-          <el-input
+            ></option>
+          </SelectField>
+          <TextField
             v-else-if="control.type === 'textarea'"
             v-model="values[control.name] as string"
-            :aria-label="control.label"
+            :aria-label="t(control.label)"
             type="textarea"
             :rows="3"
             :disabled="loading || control.disabled"
           />
-          <el-input-number
+          <NumberField
             v-else-if="control.type === 'number'"
             v-model="values[control.name] as string"
-            :aria-label="control.label"
+            :aria-label="t(control.label)"
             :min="control.min"
             :max="control.max"
             :step="control.step || 1"
-            controls-position="right"
             :disabled="loading || control.disabled"
           />
-          <el-checkbox
+          <CheckField
             v-else-if="control.type === 'checkbox'"
             v-model="values[control.name] as boolean"
             class="hv-checkbox"
             :disabled="loading || control.disabled"
           >
-            {{ control.label }}
-          </el-checkbox>
-          <el-input
+            {{ t(control.label) }}
+          </CheckField>
+          <TextField
             v-else
             v-model="values[control.name] as string"
             :type="control.type === 'password' ? 'password' : 'text'"
             :disabled="loading || control.disabled"
-            :aria-label="control.label"
+            :aria-label="t(control.label)"
           />
         </template>
 
         <template v-for="radioGroup in group.radioGroups" :key="radioGroup.name">
           <label class="hv-field-label">{{
-            radioGroup.controls[0]?.groupLabel || radioGroup.controls[0]?.label
+            t(radioGroup.controls[0]?.groupLabel || radioGroup.controls[0]?.label)
           }}</label>
-          <el-radio-group v-model="values[radioGroup.name]" class="hv-radio-group">
-            <el-radio
+          <ChoiceGroup v-model="values[radioGroup.name]" class="hv-radio-group">
+            <RadioChoice
               v-for="control in radioGroup.controls"
               :key="control.value"
               :value="control.value"
               :disabled="loading || control.disabled"
             >
-              {{ control.label }}
-              <small v-if="control.help" class="control-help"> · {{ control.help }}</small>
-            </el-radio>
-          </el-radio-group>
+              {{ t(control.label) }}
+              <small v-if="control.help" class="control-help"> · {{ t(control.help) }}</small>
+            </RadioChoice>
+          </ChoiceGroup>
         </template>
       </div>
     </component>
 
     <footer class="hv-form-actions">
-      <el-button
+      <ActionButton
         v-for="action in form.actions"
         :key="`${action.name}:${action.value}`"
-        :type="action.danger ? 'danger' : 'primary'"
+        :variant="action.danger ? 'destructive' : 'default'"
         :plain="action.danger"
         :loading="loading"
         :disabled="action.disabled"
         @click="submit(action)"
       >
-        {{ action.label }}
-      </el-button>
+        {{ t(action.label) }}
+      </ActionButton>
     </footer>
   </section>
 </template>
 
 <style scoped>
 .control-help {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 .hv-form-panel {
   padding: 18px 0;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
 }
 
 .hv-panel-heading {
@@ -247,7 +256,7 @@ function submit(action?: HentaiVerseFormAction) {
   margin-bottom: 16px;
 }
 
-.hv-panel-heading .el-button {
+.hv-panel-heading .ui-button {
   flex-shrink: 0;
 }
 
@@ -259,22 +268,22 @@ function submit(action?: HentaiVerseFormAction) {
 
 .hv-panel-heading p {
   margin: 6px 0 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   line-height: 1.55;
 }
 
 .hv-form-group {
   min-width: 0;
   padding: 18px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .hv-form-group.is-grouped {
   padding: 16px;
   margin-bottom: 10px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 10px;
-  background: var(--el-bg-color);
+  background: var(--surface);
 }
 
 .hv-form-group-heading {
@@ -288,7 +297,7 @@ function submit(action?: HentaiVerseFormAction) {
   margin-left: 8px;
   font-weight: 400;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 .hv-form-group-heading p {
   padding-left: 16px;
@@ -296,7 +305,7 @@ function submit(action?: HentaiVerseFormAction) {
 
 .hv-form-group-heading p {
   margin: 5px 0 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -314,11 +323,10 @@ function submit(action?: HentaiVerseFormAction) {
   min-width: 0;
 }
 
-.hv-form-grid :deep(.el-input),
-.hv-form-grid :deep(.el-input-number),
-.hv-form-grid :deep(.el-select),
-.hv-form-grid :deep(.el-textarea),
-.hv-form-grid :deep(.el-radio-group) {
+.hv-form-grid :deep(.ui-input),
+.hv-form-grid :deep(.ui-input-number),
+.hv-form-grid :deep(.ui-select),
+.hv-form-grid :deep(.ui-radio-group) {
   width: 100%;
   max-width: 100%;
 }
@@ -329,7 +337,7 @@ function submit(action?: HentaiVerseFormAction) {
   gap: 8px 18px;
 }
 
-.hv-radio-group :deep(.el-radio) {
+.hv-radio-group :deep(.ui-radio) {
   height: auto;
   min-height: 32px;
   margin-right: 0;
@@ -337,7 +345,7 @@ function submit(action?: HentaiVerseFormAction) {
 }
 
 .hv-field-label {
-  color: var(--el-text-color-regular);
+  color: var(--text);
   font-weight: 600;
 }
 
@@ -345,11 +353,6 @@ function submit(action?: HentaiVerseFormAction) {
   grid-column: 1 / -1;
   height: auto;
   white-space: normal;
-}
-
-.hv-checkbox :deep(.el-checkbox__label) {
-  line-height: 1.6;
-  overflow-wrap: anywhere;
 }
 
 .hv-form-actions {
@@ -360,7 +363,7 @@ function submit(action?: HentaiVerseFormAction) {
   margin-top: 18px;
 }
 
-.hv-form-actions :deep(.el-button + .el-button) {
+.hv-form-actions :deep(.ui-button + .ui-button) {
   margin-left: 0;
 }
 
@@ -374,7 +377,7 @@ function submit(action?: HentaiVerseFormAction) {
     margin-top: 8px;
   }
 
-  .hv-form-actions .el-button {
+  .hv-form-actions .ui-button {
     flex: 1 1 120px;
     min-height: 40px;
   }

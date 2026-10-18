@@ -1,6 +1,15 @@
 <script setup lang="ts">
+import { t, getDisplayLocale } from '@/i18n'
+
+import IconFrame from '@/components/primitives/IconFrame.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import SelectField from '@/components/primitives/SelectField.vue'
+import Notice from '@/components/primitives/Notice.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
+import PageNavigation from '@/components/primitives/PageNavigation.vue'
+import BackToTop from '@/components/primitives/BackToTop.vue'
 import { computed, ref, watch } from 'vue'
-import { Refresh, Trophy, Warning } from '@element-plus/icons-vue'
+import { RefreshCw as Refresh, Trophy, TriangleAlert as Warning } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 import BookItem from '@/components/BookItem.vue'
 import { toplistBusi } from '@/core/books/toplistBusi'
@@ -35,8 +44,11 @@ const activeCategory = computed(() =>
 const activePeriod = computed(() =>
   toplistPeriodOptions.find((item) => item.value === period.value),
 )
-const title = computed(
-  () => `${activeCategory.value?.label ?? '画册'} · ${activePeriod.value?.label ?? '昨日'}`,
+const title = computed(() =>
+  t('{p0} · {p1}', {
+    p0: t(activeCategory.value?.label ?? '画册'),
+    p1: t(activePeriod.value?.label ?? '昨日'),
+  }),
 )
 
 function normalizeRoute() {
@@ -68,12 +80,12 @@ async function fetchToplist() {
     contributorEntries.value = (result.data ?? []).filter(
       (entry): entry is contributorToplistEntry => entry.kind === 'contributor',
     )
-    if (!result.isSuccess) errorMessage.value = result.msg || '获取排行榜失败'
+    if (!result.isSuccess) errorMessage.value = result.msg || t('获取排行榜失败')
   } catch (error) {
     if (version === requestVersion) {
       galleryEntries.value = []
       contributorEntries.value = []
-      errorMessage.value = error instanceof Error ? error.message : '获取排行榜失败'
+      errorMessage.value = error instanceof Error ? error.message : t('获取排行榜失败')
     }
   } finally {
     if (version === requestVersion) loading.value = false
@@ -117,17 +129,17 @@ watch(
     <header class="page-header">
       <div class="title-block">
         <div class="title-kicker">
-          <el-icon><Trophy /></el-icon> EHG Toplists
+          <IconFrame><Trophy /></IconFrame> {{ t('EHG 排行榜') }}
         </div>
-        <h1>{{ title }}</h1>
-        <p>{{ kind === 'gallery' ? '画册榜单每页 50 项' : '贡献者榜单每页 100 项' }}</p>
+        <h1>{{ t(title) }}</h1>
+        <p>{{ kind === 'gallery' ? t('画册榜单每页 50 项') : t('贡献者榜单每页 100 项') }}</p>
       </div>
       <div class="header-actions">
-        <el-button
-          circle
+        <ActionButton
+          size="icon"
           :icon="Refresh"
           :loading="loading"
-          aria-label="刷新排行榜"
+          :aria-label="t('刷新排行榜')"
           @click="fetchToplist"
         />
       </div>
@@ -135,38 +147,40 @@ watch(
 
     <section class="ranking-controls">
       <label>
-        <span>排行分区</span>
-        <el-select :model-value="category" @change="handleCategoryChange">
-          <el-option
+        <span>{{ t('排行分区') }}</span>
+        <SelectField :model-value="category" @change="handleCategoryChange">
+          <option
             v-for="item in toplistCategoryOptions"
             :key="item.value"
-            :label="item.label"
+            :label="t(item.label)"
             :value="item.value"
-          />
-        </el-select>
+          ></option>
+        </SelectField>
       </label>
       <label>
-        <span>统计周期</span>
-        <el-select :model-value="period" @change="handlePeriodChange">
-          <el-option
+        <span>{{ t('统计周期') }}</span>
+        <SelectField :model-value="period" @change="handlePeriodChange">
+          <option
             v-for="item in toplistPeriodOptions"
             :key="item.value"
-            :label="item.label"
+            :label="t(item.label)"
             :value="item.value"
-          />
-        </el-select>
+          ></option>
+        </SelectField>
       </label>
     </section>
 
-    <el-alert v-if="errorMessage && !loading" type="error" :closable="false" class="state-alert">
+    <Notice v-if="errorMessage && !loading" tone="error" :closable="false" class="state-alert">
       <template #title
-        ><el-icon><Warning /></el-icon> {{ errorMessage }}</template
+        ><IconFrame><Warning /></IconFrame> {{ t(errorMessage) }}</template
       >
-      <el-button size="small" :icon="Refresh" @click="fetchToplist">重新加载</el-button>
-    </el-alert>
+      <ActionButton size="sm" :icon="Refresh" @click="fetchToplist">{{
+        t('重新加载')
+      }}</ActionButton>
+    </Notice>
 
-    <div class="ranking-content" v-loading="loading">
-      <div v-if="kind === 'gallery' && galleryEntries.length" class="gallery-grid">
+    <div class="ranking-content" v-busy="loading">
+      <div v-if="kind === 'gallery' && galleryEntries.length" class="gallery-grid gallery-masonry">
         <BookItem
           v-for="entry in galleryEntries"
           :key="entry.book.bookId"
@@ -186,24 +200,25 @@ watch(
         >
           <span class="contributor-rank">#{{ entry.rank }}</span>
           <span class="contributor-name">{{ entry.username }}</span>
-          <span class="contributor-score">{{ entry.score?.toLocaleString('zh-CN') }}</span>
+          <span class="contributor-score">{{
+            entry.score?.toLocaleString(getDisplayLocale())
+          }}</span>
         </button>
       </div>
 
-      <el-empty v-else-if="!loading && !errorMessage" description="当前榜单暂无数据" />
+      <EmptyState v-else-if="!loading && !errorMessage" :description="t('当前榜单暂无数据')" />
     </div>
 
-    <el-pagination
+    <PageNavigation
       v-if="totalPages > 1"
       class="ranking-pagination"
-      background
       layout="prev, pager, next"
       :current-page="currentPage"
       :page-count="totalPages"
       :pager-count="5"
       @current-change="handlePageChange"
     />
-    <el-backtop :bottom="100" />
+    <BackToTop :bottom="100" />
   </div>
 </template>
 
@@ -219,13 +234,13 @@ watch(
   justify-content: space-between;
   gap: 20px;
   padding: 16px 2px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 .title-kicker {
   display: flex;
   align-items: center;
   gap: 7px;
-  color: var(--el-color-primary);
+  color: var(--accent);
   font-size: 13px;
   font-weight: 600;
 }
@@ -235,7 +250,7 @@ watch(
 }
 .page-header p {
   margin: 5px 0 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 .header-actions {
@@ -251,10 +266,10 @@ watch(
   display: flex;
   align-items: center;
   gap: 8px;
-  color: var(--el-text-color-regular);
+  color: var(--text);
   font-size: 13px;
 }
-.ranking-controls .el-select {
+.ranking-controls .ui-select {
   width: 170px;
 }
 .state-alert {
@@ -277,7 +292,7 @@ watch(
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 1px 24px;
-  border-top: 1px solid var(--el-border-color-light);
+  border-top: 1px solid var(--border-soft);
 }
 .contributor-row {
   display: grid;
@@ -286,19 +301,19 @@ watch(
   gap: 10px;
   min-height: 46px;
   padding: 8px 6px;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
   background: transparent;
   border: 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
   cursor: pointer;
   text-align: left;
 }
 .contributor-row:hover {
-  color: var(--el-color-primary);
-  background-color: var(--el-fill-color-light);
+  color: var(--accent);
+  background-color: var(--muted);
 }
 .contributor-rank {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 700;
 }
@@ -309,7 +324,7 @@ watch(
   white-space: nowrap;
 }
 .contributor-score {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-variant-numeric: tabular-nums;
   font-size: 12px;
 }
@@ -336,7 +351,7 @@ watch(
     align-items: stretch;
     gap: 5px;
   }
-  .ranking-controls .el-select {
+  .ranking-controls .ui-select {
     width: 100%;
   }
   .gallery-grid {
@@ -348,6 +363,32 @@ watch(
   }
   .contributor-row {
     grid-template-columns: 48px minmax(0, 1fr) auto;
+  }
+}
+.gallery-grid {
+  display: grid;
+  columns: auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 26px 22px;
+}
+.gallery-grid > :deep(.book-item) {
+  margin: 0;
+}
+.gallery-grid > .ui-empty,
+.gallery-grid > .load-more-trigger,
+.gallery-grid > .loading-more,
+.gallery-grid > .no-more {
+  grid-column: 1/-1;
+}
+@media (max-width: 1050px) {
+  .gallery-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 767px) {
+  .gallery-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 14px;
   }
 }
 </style>

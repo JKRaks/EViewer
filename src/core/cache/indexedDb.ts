@@ -1,3 +1,4 @@
+import { formatSystemMessage } from '@/i18n'
 import { deleteDB, openDB, type DBSchema, type IDBPDatabase } from 'idb'
 
 const databaseName = 'eviewer-cache'
@@ -207,13 +208,20 @@ export async function validateIndexedDbEnvironment(): Promise<IndexedDbEnvironme
     return {
       supported: true,
       usable: false,
-      message: `IndexedDB 无法使用：${error instanceof Error ? error.message : String(error)}`,
+      message: formatSystemMessage('IndexedDB 无法使用：{p0}', {
+        p0: error instanceof Error ? error.message : String(error),
+      }),
     }
   }
 }
 
 export async function clearCacheStore(
-  storeName: 'tagTranslations' | 'galleryDetails' | 'galleryImagePages' | 'galleryImageUrls' | 'readingHistory',
+  storeName:
+    | 'tagTranslations'
+    | 'galleryDetails'
+    | 'galleryImagePages'
+    | 'galleryImageUrls'
+    | 'readingHistory',
 ) {
   const database = await openCacheDatabase()
   await database.clear(storeName)

@@ -1,7 +1,10 @@
 <script setup lang="ts">
+import { t, locale } from '@/i18n'
+
+import ActionButton from '@/components/primitives/ActionButton.vue'
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox } from 'element-plus'
+import { notify, dialogs } from '@/components/primitives/feedback'
 import type { userComment } from '@/core/model/book/bookInfoOutput'
 import { renderCommentHtml, resolveCommentLink } from '@/core/books/commentContent'
 
@@ -11,7 +14,10 @@ const root = ref<HTMLElement>()
 const body = ref<HTMLElement>()
 const expanded = ref(false)
 const overflowing = ref(false)
-const html = computed(() => renderCommentHtml(props.comment.contentHtml, props.comment.comment))
+const html = computed(() => {
+  void locale.value
+  return renderCommentHtml(props.comment.contentHtml, props.comment.comment)
+})
 let observer: ResizeObserver | undefined
 
 function measure() {
@@ -40,14 +46,16 @@ async function handleLink(event: MouseEvent) {
   }
   try {
     await navigator.clipboard.writeText(link.url)
-    ElMessage.success('链接已复制，请在浏览器中打开')
+    notify.success(t('链接已复制，请在浏览器中打开'))
   } catch {
-    await ElMessageBox.prompt('自动复制失败，请手动复制下方链接', '复制链接', {
-      inputValue: link.url,
-      inputType: 'textarea',
-      confirmButtonText: '关闭',
-      showCancelButton: false,
-    }).catch(() => undefined)
+    await dialogs
+      .prompt(t('自动复制失败，请手动复制下方链接'), t('复制链接'), {
+        inputValue: link.url,
+        inputType: 'textarea',
+        confirmButtonText: t('关闭'),
+        showCancelButton: false,
+      })
+      .catch(() => undefined)
   }
 }
 
@@ -77,9 +85,9 @@ onBeforeUnmount(() => observer?.disconnect())
         v-html="html"
       />
     </div>
-    <el-button v-if="overflowing" link type="primary" :aria-expanded="expanded" @click="toggle">
-      {{ expanded ? '收起' : '展开全文' }}
-    </el-button>
+    <ActionButton v-if="overflowing" variant="link" :aria-expanded="expanded" @click="toggle">
+      {{ expanded ? t('收起') : t('展开全文') }}
+    </ActionButton>
   </div>
 </template>
 
@@ -99,7 +107,7 @@ onBeforeUnmount(() => observer?.disconnect())
   overflow-wrap: anywhere;
 }
 .comment-rich-text :deep(a) {
-  color: var(--el-color-primary);
+  color: var(--accent);
   text-decoration: underline;
   cursor: pointer;
 }
@@ -109,8 +117,8 @@ onBeforeUnmount(() => observer?.disconnect())
 .comment-rich-text :deep(blockquote) {
   margin: 0.5em 0;
   padding-left: 1em;
-  border-left: 3px solid var(--el-border-color);
-  color: var(--el-text-color-secondary);
+  border-left: 3px solid var(--border);
+  color: var(--muted-foreground);
 }
 .comment-rich-text :deep(pre) {
   white-space: pre-wrap;
@@ -120,7 +128,7 @@ onBeforeUnmount(() => observer?.disconnect())
   padding-left: 1.5em;
   margin: 0.5em 0;
 }
-.comment-body > .el-button {
+.comment-body > .ui-button {
   margin-top: 8px;
 }
 </style>

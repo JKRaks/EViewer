@@ -1,6 +1,14 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import PixelIcon from './PixelIcon.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
+import RadioChoice from '@/components/primitives/RadioChoice.vue'
+import TagChip from '@/components/primitives/TagChip.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
 import { computed, ref, watch } from 'vue'
-import { ArrowLeft } from '@element-plus/icons-vue'
+import { ArrowLeft } from '@lucide/vue'
 import type { HentaiVerseEquipmentPage } from '@/core/hentaiverse/model/hentaiVerse'
 import type { HentaiVerseEquipmentDetail } from '@/core/hentaiverse/model/hentaiVerse'
 import EquipmentDetail from './EquipmentDetail.vue'
@@ -30,17 +38,17 @@ const activeSlotLabel = computed(
     activeSlot.value?.label ||
     (
       {
-        '1': '主武器',
-        '2': '副武器',
-        '9': '副武器',
-        '13': '头部',
-        '11': '身体',
-        '14': '手部',
-        '12': '腿部',
-        '15': '脚部',
+        '1': t('主武器'),
+        '2': t('副武器'),
+        '9': t('副武器'),
+        '13': t('头部'),
+        '11': t('身体'),
+        '14': t('手部'),
+        '12': t('腿部'),
+        '15': t('脚部'),
       } as Record<string, string>
     )[props.data.selectedSlot] ||
-    `部位 ${props.data.selectedSlot}`,
+    t('部位 {p0}', { p0: props.data.selectedSlot }),
 )
 
 watch(
@@ -54,7 +62,7 @@ watch(
 
 <template>
   <section class="equipment-panel">
-    <div v-if="data.sets.length" class="equipment-sets" aria-label="装备套装">
+    <div v-if="data.sets.length" class="equipment-sets" :aria-label="t('装备套装')">
       <button
         v-for="set in data.sets"
         :key="set.id"
@@ -63,14 +71,18 @@ watch(
         :disabled="loading"
         @click="emit('set', set.id, data.postToken)"
       >
-        {{ set.label }}
+        {{ t(set.label) }}
       </button>
     </div>
 
-    <p v-if="detailsLoading" class="equipment-detail-status" role="status">正在加载装备属性…</p>
+    <p v-if="detailsLoading" class="equipment-detail-status" role="status">
+      {{ t('正在加载装备属性…') }}
+    </p>
     <div v-else-if="detailsError" class="equipment-detail-status" role="alert">
-      {{ detailsError }}
-      <el-button link type="primary" @click="emit('retryDetails')">重试加载属性</el-button>
+      {{ t(detailsError) }}
+      <ActionButton variant="link" @click="emit('retryDetails')">{{
+        t('重试加载属性')
+      }}</ActionButton>
     </div>
 
     <div v-if="data.slots.length" class="equipment-slots">
@@ -81,9 +93,11 @@ watch(
         :class="{ active: slot.active || slot.id === data.selectedSlot }"
       >
         <button type="button" :disabled="loading || slot.disabled" @click="emit('slot', slot.id)">
-          <span>{{ slot.label }}</span>
+          <span class="equipment-slot-label"
+            ><PixelIcon kind="equipment" />{{ t(slot.label) }}</span
+          >
           <strong>{{
-            slot.equipmentName || (slot.disabled ? '当前主武器不可用' : '未装备')
+            t(slot.equipmentName || (slot.disabled ? t('当前主武器不可用') : t('未装备')))
           }}</strong>
         </button>
         <EquipmentDetail v-if="details?.[slot.equipmentId]" :data="details[slot.equipmentId]!" />
@@ -93,54 +107,53 @@ watch(
     <div v-if="data.selectedSlot" class="equipment-picker">
       <header>
         <div>
-          <span>当前部位</span>
-          <h3>{{ activeSlotLabel }}</h3>
+          <span>{{ t('当前部位') }}</span>
+          <h3>{{ t(activeSlotLabel) }}</h3>
         </div>
         <div class="equipment-picker-actions">
-          <el-button :icon="ArrowLeft" :disabled="loading" @click="emit('overview')"
-            >返回装备总览</el-button
-          >
-          <el-button
+          <ActionButton :icon="ArrowLeft" :disabled="loading" @click="emit('overview')">{{
+            t('返回装备总览')
+          }}</ActionButton>
+          <ActionButton
             v-if="data.canUnequip"
-            type="danger"
-            plain
+            variant="destructive"
             :disabled="loading || !data.postToken"
             @click="emit('unequip', data.selectedSlot, data.postToken)"
+            >{{ t('卸下') }}</ActionButton
           >
-            卸下
-          </el-button>
         </div>
       </header>
 
-      <el-radio-group v-if="data.candidates.length" v-model="candidateId" class="equipment-list">
+      <ChoiceGroup v-if="data.candidates.length" v-model="candidateId" class="equipment-list">
         <article
           v-for="candidate in data.candidates"
           :key="candidate.id"
           class="equipment-candidate"
           :class="{ selected: candidateId === candidate.id }"
         >
-          <el-radio :value="candidate.id" :disabled="candidate.locked || loading">
-            <span class="candidate-name">{{ candidate.name }}</span>
-            <el-tag v-if="candidate.equipped" size="small" type="info">已装备</el-tag>
-          </el-radio>
+          <RadioChoice :value="candidate.id" :disabled="candidate.locked || loading">
+            <span class="candidate-name"
+              ><PixelIcon kind="equipment" />{{ t(candidate.name) }}</span
+            >
+            <TagChip v-if="candidate.equipped" size="small" tone="info">{{ t('已装备') }}</TagChip>
+          </RadioChoice>
           <EquipmentDetail v-if="details?.[candidate.id]" :data="details[candidate.id]!" />
-          <small v-else-if="candidate.description">{{ candidate.description }}</small>
+          <small v-else-if="candidate.description">{{ t(candidate.description) }}</small>
         </article>
-      </el-radio-group>
-      <el-empty v-else description="该部位没有可用装备" :image-size="70" />
+      </ChoiceGroup>
+      <EmptyState v-else :description="t('该部位没有可用装备')" :image-size="70" />
 
-      <el-button
+      <ActionButton
         v-if="data.candidates.length"
-        type="primary"
+        variant="default"
         :loading="loading"
         :disabled="!candidateId || !data.postToken"
         @click="emit('equip', data.selectedSlot, candidateId, data.postToken)"
+        >{{ t('装备所选物品') }}</ActionButton
       >
-        装备所选物品
-      </el-button>
     </div>
 
-    <el-empty v-else-if="!data.slots.length" description="未能从源站解析装备部位" />
+    <EmptyState v-else-if="!data.slots.length" :description="t('未能从源站解析装备部位')" />
   </section>
 </template>
 
@@ -155,16 +168,16 @@ watch(
   flex-wrap: wrap;
   gap: 6px;
   padding-bottom: 14px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .equipment-sets button,
 .equipment-slot,
 .equipment-candidate {
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--border);
   border-radius: 6px;
-  color: var(--el-text-color-regular);
-  background: var(--el-bg-color);
+  color: var(--text);
+  background: var(--surface);
 }
 
 .equipment-sets button {
@@ -176,9 +189,9 @@ watch(
 .equipment-sets button.active,
 .equipment-slot.active,
 .equipment-candidate.selected {
-  border-color: var(--el-color-primary);
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .equipment-slots {
@@ -207,7 +220,7 @@ watch(
 .equipment-slots span,
 .equipment-picker header span {
   display: block;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
@@ -221,7 +234,7 @@ watch(
   display: grid;
   gap: 16px;
   padding-top: 20px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
 }
 
 .equipment-picker header {
@@ -244,7 +257,7 @@ watch(
   gap: 8px;
 }
 
-.equipment-picker-actions :deep(.el-button + .el-button) {
+.equipment-picker-actions :deep(.ui-button + .ui-button) {
   margin-left: 0;
 }
 
@@ -262,24 +275,16 @@ watch(
 
 .equipment-detail-status {
   margin: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
 }
 
-.equipment-list :deep(.el-radio) {
+.equipment-list :deep(.ui-radio) {
   width: 100%;
   height: auto;
   min-height: 32px;
   margin: 0;
   padding: 4px 0;
-}
-
-.equipment-list :deep(.el-radio__label) {
-  display: flex;
-  align-items: center;
-  min-width: 0;
-  width: 100%;
-  gap: 8px;
 }
 
 .candidate-name {
@@ -291,19 +296,13 @@ watch(
 }
 
 .equipment-list small {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   overflow-wrap: anywhere;
 }
 
 @media (max-width: 767px) {
   .equipment-slots {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .equipment-list :deep(.el-radio__label) {
-    align-items: flex-start;
-    flex-direction: column;
-    gap: 3px;
   }
 
   .equipment-list small {
@@ -315,7 +314,7 @@ watch(
     flex-direction: column;
   }
 
-  .equipment-picker-actions :deep(.el-button) {
+  .equipment-picker-actions :deep(.ui-button) {
     flex: 1 1 140px;
   }
 }

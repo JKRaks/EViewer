@@ -1,3 +1,4 @@
+import { formatSystemMessage, rememberSourceText } from '@/i18n'
 import type { HentaiVerseEquipmentDetail } from './model/hentaiVerse'
 import { translateHentaiVerseText } from './hentaiVerseTranslations'
 
@@ -29,9 +30,10 @@ function text(node: Element | null | undefined) {
 }
 
 function translate(value: string) {
-  return translateHentaiVerseText(value)
+  const translated = translateHentaiVerseText(value)
     .replace(/([\d.]+%)\s+chance/gi, '触发概率 $1')
     .replace(/\((\d+) turns?\)/gi, '（持续 $1 回合）')
+  return rememberSourceText(translated, value)
 }
 
 function metric(node: Element) {
@@ -81,7 +83,7 @@ export function parseEquipmentData(script: string): Record<string, HentaiVerseEq
       .map((node) => {
         const value = translate(text(node))
         const base = node.getAttribute('title')?.match(/\bBase:\s*([+-]?[\d,.]+)/i)?.[1]
-        return base ? `${value}（基础值 ${base}）` : value
+        return base ? formatSystemMessage('{p0}（基础值 {p1}）', { p0: value, p1: base }) : value
       })
       .filter(Boolean)
     result[id] = {

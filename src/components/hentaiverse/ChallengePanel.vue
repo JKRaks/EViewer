@@ -1,4 +1,8 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
 import type {
   HentaiVerseChallenge,
   HentaiVerseFormData,
@@ -14,7 +18,7 @@ const emit = defineEmits<{ start: [data: HentaiVerseFormData] }>()
 
 <template>
   <section class="challenge-panel">
-    <p v-if="tokens !== undefined">鲜血代币：{{ tokens }}</p>
+    <p v-if="tokens !== undefined">{{ t('鲜血代币：{p0}', { p0: tokens }) }}</p>
     <div v-if="challenges.length" class="challenge-grid">
       <article
         v-for="challenge in challenges"
@@ -23,48 +27,50 @@ const emit = defineEmits<{ start: [data: HentaiVerseFormData] }>()
         :class="{ available: challenge.available }"
       >
         <header>
-          <h3>{{ challenge.name }}</h3>
-          <span class="challenge-state">{{ challenge.available ? '可挑战' : '暂不可挑战' }}</span>
+          <h3>{{ t(challenge.name) }}</h3>
+          <span class="challenge-state">{{
+            t(challenge.available ? t('可挑战') : t('暂不可挑战'))
+          }}</span>
         </header>
         <dl>
           <div>
-            <dt>最高通关</dt>
-            <dd>{{ challenge.highestClear || '—' }}</dd>
+            <dt>{{ t('最高通关') }}</dt>
+            <dd>{{ t(challenge.highestClear || '—') }}</dd>
           </div>
           <div>
-            <dt>最低等级</dt>
-            <dd>{{ challenge.minLevel || '—' }}</dd>
+            <dt>{{ t('最低等级') }}</dt>
+            <dd>{{ t(challenge.minLevel || '—') }}</dd>
           </div>
           <div>
-            <dt>轮数</dt>
-            <dd>{{ challenge.rounds || '—' }}</dd>
+            <dt>{{ t('轮数') }}</dt>
+            <dd>{{ t(challenge.rounds || '—') }}</dd>
           </div>
           <div>
-            <dt>经验倍率</dt>
-            <dd>{{ challenge.experienceModifier || '—' }}</dd>
+            <dt>{{ t('经验倍率') }}</dt>
+            <dd>{{ t(challenge.experienceModifier || '—') }}</dd>
           </div>
           <div>
-            <dt>入场费用</dt>
-            <dd>{{ challenge.entryCost || '—' }}</dd>
+            <dt>{{ t('入场费用') }}</dt>
+            <dd>{{ t(challenge.entryCost || '—') }}</dd>
           </div>
           <div>
-            <dt>通关奖励</dt>
-            <dd>{{ challenge.clearBonus || '—' }}</dd>
+            <dt>{{ t('通关奖励') }}</dt>
+            <dd>{{ t(challenge.clearBonus || '—') }}</dd>
           </div>
         </dl>
         <footer>
-          <el-button
+          <ActionButton
             v-if="challenge.available"
-            type="primary"
+            variant="default"
             :disabled="!postToken || loading"
             @click="emit('start', { initid: challenge.id, postoken: postToken })"
-            >开始挑战</el-button
+            >{{ t('开始挑战') }}</ActionButton
           >
-          <p v-else>{{ challenge.unavailableReason || '尚未满足挑战条件' }}</p>
+          <p v-else>{{ t(challenge.unavailableReason || t('尚未满足挑战条件')) }}</p>
         </footer>
       </article>
     </div>
-    <el-empty v-else description="当前等级没有可参加的挑战" />
+    <EmptyState v-else :description="t('当前等级没有可参加的挑战')" />
   </section>
 </template>
 
@@ -82,12 +88,12 @@ const emit = defineEmits<{ start: [data: HentaiVerseFormData] }>()
   flex-direction: column;
   min-width: 0;
   padding: 18px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--border);
   border-radius: 12px;
-  background: var(--el-bg-color);
+  background: var(--surface);
 }
 .challenge-card.available {
-  border-color: var(--el-color-primary-light-5);
+  border-color: var(--accent-ring);
 }
 .challenge-card header {
   display: flex;
@@ -105,12 +111,12 @@ h3 {
   padding: 3px 8px;
   border-radius: 6px;
   font-size: 12px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color);
+  color: var(--muted-foreground);
+  background: var(--muted);
 }
 .available .challenge-state {
-  color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 dl {
   display: grid;
@@ -122,7 +128,7 @@ dl div {
   min-width: 0;
 }
 dt {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 dd {
@@ -134,15 +140,15 @@ dd {
 footer {
   margin-top: auto;
   padding-top: 14px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
 }
-footer .el-button {
+footer .ui-button {
   width: 100%;
   min-height: 40px;
 }
 footer p {
   margin: 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.6;
 }

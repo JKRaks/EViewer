@@ -1,4 +1,12 @@
 <script setup lang="ts">
+import { t, getDisplayLocale } from '@/i18n'
+
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import NumberField from '@/components/primitives/NumberField.vue'
+import SelectField from '@/components/primitives/SelectField.vue'
+import TextField from '@/components/primitives/TextField.vue'
+import Notice from '@/components/primitives/Notice.vue'
+import ProgressMeter from '@/components/primitives/ProgressMeter.vue'
 import { computed, reactive, watch } from 'vue'
 import type { HentaiVersePage } from '@/core/hentaiverse/model/hentaiVerse'
 
@@ -60,104 +68,129 @@ function getTotalExperienceCost(level: number) {
 <template>
   <div class="character-overview">
     <section v-if="page.metrics.length" class="metric-band">
-      <div v-for="metric in page.metrics" :key="metric.label" class="metric-item">
-        <span>{{ metric.label }}</span>
-        <strong>{{ metric.value }}</strong>
+      <div
+        v-for="metric in page.metrics"
+        :key="metric.label"
+        class="metric-item"
+        :class="{ 'metric-item--progress': metric.percent !== undefined }"
+      >
+        <span>{{ t(metric.label) }}</span>
+        <template v-if="metric.percent !== undefined">
+          <ProgressMeter
+            :percentage="metric.percent"
+            :stroke-width="8"
+            :label="t(metric.label)"
+            :value-text="t(metric.value)"
+          />
+          <small class="experience-readout">{{ t(metric.value) }}</small>
+        </template>
+        <strong v-else>{{ t(metric.value) }}</strong>
       </div>
     </section>
 
     <section v-if="page.attributes.length" class="character-section">
       <div class="section-heading">
         <div>
-          <h2>基础属性</h2>
-          <p>分配可用经验后统一应用；减点会降低已分配的属性并返还经验。</p>
+          <h2>{{ t('基础属性') }}</h2>
+          <p>{{ t('分配可用经验后统一应用；减点会降低已分配的属性并返还经验。') }}</p>
         </div>
         <div class="attribute-submit">
-          <span :class="{ danger: insufficientExperience }">
-            预计{{ experienceCost >= 0 ? '消耗' : '返还' }}
-            {{ Math.abs(experienceCost).toLocaleString('zh-CN') }} 经验
-          </span>
-          <el-button
-            type="primary"
+          <span :class="{ danger: insufficientExperience }">{{
+            t('预计{p0} {p1} 经验', {
+              p0: experienceCost >= 0 ? t('消耗') : t('返还'),
+              p1: Math.abs(experienceCost).toLocaleString(getDisplayLocale()),
+            })
+          }}</span>
+          <ActionButton
+            variant="default"
             :disabled="insufficientExperience || experienceCost === 0"
             :loading="loading"
             @click="applyAttributes"
+            >{{ t('应用属性') }}</ActionButton
           >
-            应用属性
-          </el-button>
         </div>
       </div>
       <div class="attribute-grid">
         <div v-for="attribute in page.attributes" :key="attribute.key" class="attribute-row">
           <div>
-            <span>{{ attribute.label }}</span>
-            <strong>{{ attribute.value + (deltas[attribute.key] || 0) }}</strong>
+            <span>{{ t(attribute.label) }}</span>
+            <strong>{{ t(attribute.value + (deltas[attribute.key] || 0)) }}</strong>
           </div>
-          <el-input-number
+          <NumberField
             v-model="deltas[attribute.key]"
+            :aria-label="t('{p0}调整值', { p0: t(attribute.label) })"
             :min="-attribute.value"
             :max="999"
-            controls-position="right"
           />
         </div>
       </div>
     </section>
 
     <details class="character-section persona-section">
-      <summary class="section-heading">
+      <summary
+        class="section-heading"
+        :data-expand-label="t('展开')"
+        :data-collapse-label="t('收起')"
+      >
         <div>
-          <h2>人格</h2>
-          <p>当前人格：{{ page.personaName || '默认人格' }}</p>
+          <h2>{{ t('人格') }}</h2>
+          <p>{{ t('当前人格：{p0}', { p0: page.personaName || t('默认人格') }) }}</p>
           <p v-if="page.personaCapacity">
-            人格槽：{{ page.personaCapacity.used }} / {{ page.personaCapacity.total }}
+            {{
+              t('人格槽：{p0} / {p1}', {
+                p0: page.personaCapacity.used,
+                p1: page.personaCapacity.total,
+              })
+            }}
           </p>
         </div>
       </summary>
       <div class="persona-controls">
-        <el-select
+        <SelectField
           v-if="page.personas.length"
           :model-value="activePersona"
-          aria-label="切换人格"
+          :aria-label="t('切换人格')"
           @change="switchPersona"
         >
-          <el-option
+          <option
             v-for="persona in page.personas"
             :key="persona.id"
-            :label="persona.name"
+            :label="t(persona.name)"
             :value="persona.id"
-          />
-        </el-select>
-        <el-input
+          ></option>
+        </SelectField>
+        <TextField
           v-model="rename.value"
           maxlength="64"
-          placeholder="新的人格名称"
+          :placeholder="t('新的人格名称')"
           @keyup.enter="renamePersona"
         />
-        <el-button :disabled="!rename.value.trim()" :loading="loading" @click="renamePersona"
-          >重命名</el-button
-        >
-        <el-dropdown
-          :disabled="
-            loading ||
-            Boolean(page.personaCapacity && page.personaCapacity.used >= page.personaCapacity.total)
-          "
-          @command="(command: string) => emit('persona', { persona_create: command })"
-        >
-          <el-button>创建人格</el-button>
-          <template #dropdown>
-            <el-dropdown-menu>
-              <el-dropdown-item command="clone">克隆当前人格</el-dropdown-item>
-              <el-dropdown-item command="blank">创建空白人格</el-dropdown-item>
-            </el-dropdown-menu>
-          </template>
-        </el-dropdown>
+        <ActionButton :disabled="!rename.value.trim()" :loading="loading" @click="renamePersona">{{
+          t('重命名')
+        }}</ActionButton>
+        <div class="persona-create">
+          <ActionButton
+            :disabled="
+              loading ||
+              Boolean(
+                page.personaCapacity && page.personaCapacity.used >= page.personaCapacity.total,
+              )
+            "
+            @click="emit('persona', { persona_create: 'clone' })"
+            >{{ t('克隆当前人格') }}</ActionButton
+          ><ActionButton
+            :disabled="
+              loading ||
+              Boolean(
+                page.personaCapacity && page.personaCapacity.used >= page.personaCapacity.total,
+              )
+            "
+            @click="emit('persona', { persona_create: 'blank' })"
+            >{{ t('创建空白人格') }}</ActionButton
+          >
+        </div>
       </div>
-      <el-alert
-        title="新建的人格无法删除，请确认后再创建。"
-        type="warning"
-        :closable="false"
-        show-icon
-      />
+      <Notice :title="t('新建的人格无法删除，请确认后再创建。')" tone="warning" :closable="false" />
     </details>
   </div>
 </template>
@@ -172,18 +205,18 @@ function getTotalExperienceCost(level: number) {
 
 .metric-item {
   flex: 1 1 130px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 10px;
   display: flex;
   flex-direction: column;
   gap: 5px;
   min-width: 0;
   padding: 14px;
-  background: var(--el-bg-color);
+  background: var(--surface);
 }
 
 .metric-item span {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
@@ -193,9 +226,21 @@ function getTotalExperienceCost(level: number) {
   text-overflow: ellipsis;
 }
 
+.metric-item--progress {
+  flex-basis: 280px;
+  justify-content: center;
+}
+
+.experience-readout {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
 .character-section {
   padding: 22px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .section-heading {
@@ -217,7 +262,7 @@ function getTotalExperienceCost(level: number) {
 
 .section-heading p {
   margin-top: 5px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .attribute-grid {
@@ -234,12 +279,12 @@ function getTotalExperienceCost(level: number) {
 }
 
 .attribute-submit span {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
 .attribute-submit span.danger {
-  color: var(--el-color-danger);
+  color: var(--danger);
 }
 
 .attribute-row {
@@ -249,7 +294,7 @@ function getTotalExperienceCost(level: number) {
   gap: 14px;
   min-width: 0;
   padding: 12px;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 10px;
 }
 
@@ -260,7 +305,7 @@ function getTotalExperienceCost(level: number) {
 }
 
 .attribute-row span {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .attribute-row strong {
@@ -272,14 +317,14 @@ function getTotalExperienceCost(level: number) {
 }
 
 .persona-section > summary::after {
-  content: '展开';
+  content: attr(data-expand-label);
   flex-shrink: 0;
-  color: var(--el-color-primary);
+  color: var(--accent);
   font-size: 13px;
 }
 
 .persona-section[open] > summary::after {
-  content: '收起';
+  content: attr(data-collapse-label);
 }
 
 .persona-section:not([open]) > summary {
@@ -290,6 +335,11 @@ function getTotalExperienceCost(level: number) {
   display: inline;
 }
 
+.persona-create {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
 .persona-controls {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) minmax(180px, 1fr) auto auto;

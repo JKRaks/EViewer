@@ -1,4 +1,18 @@
 <script lang="ts" setup>
+import { t, getDisplayLocale } from '@/i18n'
+
+import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
+import SkeletonLine from '@/components/primitives/SkeletonLine.vue'
+import MediaImage from '@/components/primitives/MediaImage.vue'
+import Rating from '@/components/primitives/Rating.vue'
+import IconFrame from '@/components/primitives/IconFrame.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import Hint from '@/components/primitives/Hint.vue'
+import TagChip from '@/components/primitives/TagChip.vue'
+import AvatarMark from '@/components/primitives/AvatarMark.vue'
+import ModalPanel from '@/components/primitives/ModalPanel.vue'
+import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
+import RadioChoice from '@/components/primitives/RadioChoice.vue'
 import {
   computed,
   onActivated,
@@ -9,33 +23,31 @@ import {
   ref,
   watch,
 } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
 import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { getBookInfoWithCache } from '@/core/cache/galleryCache'
 import { getReadingHistory, isReadingHistoryEnabled } from '@/core/cache/readingHistory'
 import type { ReadingHistoryRecord } from '@/core/cache/indexedDb'
 import CategoryTag from '@/components/CategoryTag.vue'
+import GalleryTagPopover from '@/components/GalleryTagPopover.vue'
 import BookShareOverlay from '@/components/BookShareOverlay.vue'
 import CommentContent from '@/components/CommentContent.vue'
 import {
-  Picture,
+  Image as Picture,
   Clock,
   User,
-  Reading,
-  View,
+  BookOpen as Reading,
+  Eye as View,
   Download,
-  ChatLineRound,
+  MessageCircle as ChatLineRound,
   Star,
-  StarFilled,
-  Share,
-} from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import 'element-plus/es/components/message/style/css'
-import 'element-plus/es/components/message-box/style/css'
-import router from '@/router'
+  Star as StarFilled,
+  Share2 as Share,
+} from '@lucide/vue'
+import { notify, dialogs } from '@/components/primitives/feedback'
 import { useLayoutMainScrollMemory } from '@/composables/useLayoutMainScrollMemory'
-import { getTagCollectionDisplayName, getTagDisplayInfo } from '@/core/common/tagTranslations'
+import { getTagCollectionDisplayName } from '@/core/common/tagTranslations'
 import { useAuthState } from '@/core/auth/authState'
 import {
   getFavoriteCategoryOptionsCached,
@@ -51,6 +63,7 @@ import {
 } from '@/core/model/book/favoriteOutput'
 
 const route = useRoute()
+const router = useRouter()
 const funcData = reactive({
   loading: true,
   readMode: false,
@@ -62,14 +75,25 @@ const readingProgress = computed(() => {
   const total = Number(pageData.value.imageCount)
   const record = readingHistory.value
   if (!isReadingHistoryEnabled() || !record || total <= 0 || !Number.isFinite(total)) {
-    return { label: '开始阅读', percent: 0 }
+    return { label: t('开始阅读'), percent: 0 }
   }
-  const count = new Set(record.viewedOrdinals.filter(
-    (ordinal) => Number.isInteger(ordinal) && ordinal > 0 && ordinal <= total,
-  )).size
-  const percent = count / total * 100
+  const count = new Set(
+    record.viewedOrdinals.filter(
+      (ordinal) => Number.isInteger(ordinal) && ordinal > 0 && ordinal <= total,
+    ),
+  ).size
+  const percent = (count / total) * 100
   return {
-    label: count === 0 ? '开始阅读' : count === total ? '已读完' : `${Math.min(99, Math.floor(percent))}% · ${count}/${total} 张`,
+    label:
+      count === 0
+        ? t('开始阅读')
+        : count === total
+          ? t('已读完')
+          : t('{p0}% · {p1}/{p2} 张', {
+              p0: Math.min(99, Math.floor(percent)),
+              p1: count,
+              p2: total,
+            }),
     percent,
   }
 })
@@ -80,7 +104,8 @@ async function refreshReadingProgress() {
   readingHistory.value = undefined
   if (!bookId) return
   const record = await getReadingHistory(bookId)
-  if (version === readingRequestVersion && getRouteBookId() === bookId) readingHistory.value = record
+  if (version === readingRequestVersion && getRouteBookId() === bookId)
+    readingHistory.value = record
 }
 const shareVisible = ref(false)
 const shareCoverElement = ref<HTMLImageElement | null>(null)
@@ -109,9 +134,9 @@ const ratingStars = computed(() => {
 
 const isGalleryFavorited = computed(() => pageData.value.personalFavoriteStatus === 'favorited')
 const favoriteButtonLabel = computed(() => {
-  if (!authState.loggedIn) return '登录后收藏'
-  if (favoriteLoading.value) return '正在读取收藏状态'
-  return isGalleryFavorited.value ? '管理收藏' : '添加收藏'
+  if (!authState.loggedIn) return t('登录后收藏')
+  if (favoriteLoading.value) return t('正在读取收藏状态')
+  return isGalleryFavorited.value ? t('管理收藏') : t('添加收藏')
 })
 
 const tagGroups = computed(() => {
@@ -123,15 +148,14 @@ const tagGroups = computed(() => {
       items: collection.items.map((tag, index) => ({
         key: `${collection.collection}:${tag.name}:${index}`,
         tag,
-        display: getTagDisplayInfo(collection.collection, tag),
       })),
     }))
 })
 
 // 格式化日期
 const formatDate = (date: Date | undefined) => {
-  if (!date) return '未知'
-  return new Date(date).toLocaleDateString('zh-CN', {
+  if (!date) return t('未知')
+  return new Date(date).toLocaleDateString(getDisplayLocale(), {
     year: 'numeric',
     month: 'long',
     day: 'numeric',
@@ -140,7 +164,7 @@ const formatDate = (date: Date | undefined) => {
 
 // 格式化评论日期时间
 const formatCommentDate = (dateStr: string | Date | undefined) => {
-  if (!dateStr) return '未知时间'
+  if (!dateStr) return t('未知时间')
 
   // 使用正则匹配 "Posted on 26 October 2025, 08:31 by:" 格式
   const dateMatch = String(dateStr).match(/(?<=Posted on )\d{1,2} \w+ \d{4}, \d{2}:\d{2}(?= by:)/)
@@ -151,7 +175,7 @@ const formatCommentDate = (dateStr: string | Date | undefined) => {
   // 如果是 Date 对象,使用标准格式化
   const date = new Date(dateStr)
   if (!isNaN(date.getTime())) {
-    return date.toLocaleString('zh-CN')
+    return date.toLocaleString(getDisplayLocale())
   }
 
   return String(dateStr)
@@ -188,7 +212,10 @@ watch(
   },
 )
 
-watch(() => route.query.favorite, () => consumeFavoriteIntent())
+watch(
+  () => route.query.favorite,
+  () => consumeFavoriteIntent(),
+)
 
 watch(
   () => [authState.loggedIn, authState.memberId] as const,
@@ -241,7 +268,7 @@ async function fetchBookInfo() {
       if (authState.loggedIn) void refreshGalleryFavoriteState(routeBookId)
     }
   } catch (error) {
-    console.error('获取书籍信息失败:', error)
+    console.error(t('获取书籍信息失败:'), error)
   } finally {
     if (requestVersion === bookRequestVersion) {
       loadingBookId = ''
@@ -252,7 +279,12 @@ async function fetchBookInfo() {
 }
 
 function consumeFavoriteIntent() {
-  if (route.query.favorite !== '1' || funcData.loading || pageData.value.bookId !== getRouteBookId()) return
+  if (
+    route.query.favorite !== '1' ||
+    funcData.loading ||
+    pageData.value.bookId !== getRouteBookId()
+  )
+    return
   void router.replace({ path: route.path, query: { ...route.query, favorite: undefined } })
   void openFavoriteDialog()
 }
@@ -289,7 +321,7 @@ async function refreshGalleryFavoriteState(bookId: string, showError = false) {
   const requestVersion = ++favoriteRequestVersion
   favoriteLoading.value = true
   const categoryRequest = getFavoriteCategoryOptionsCached(authState.memberId).catch((error) => {
-    console.warn('读取收藏分类缓存失败，使用画册弹窗分类:', error)
+    console.warn(t('读取收藏分类缓存失败，使用画册弹窗分类:'), error)
     return []
   })
   try {
@@ -299,7 +331,7 @@ async function refreshGalleryFavoriteState(bookId: string, showError = false) {
     if (requestVersion !== favoriteRequestVersion || bookId !== getRouteBookId()) return false
     if (result.authenticationRequired) throw new Error(result.msg)
     if (!result.isSuccess || !result.data) {
-      throw new Error(result.msg || '画册收藏状态获取失败')
+      throw new Error(result.msg || t('画册收藏状态获取失败'))
     }
 
     let cachedCategories: FavoriteCategoryOption[] = await categoryRequest
@@ -317,7 +349,7 @@ async function refreshGalleryFavoriteState(bookId: string, showError = false) {
     return true
   } catch (error) {
     if (showError && requestVersion === favoriteRequestVersion) {
-      ElMessage.error(error instanceof Error ? error.message : '画册收藏状态获取失败')
+      notify.error(error instanceof Error ? error.message : t('画册收藏状态获取失败'))
     }
     return false
   } finally {
@@ -327,7 +359,7 @@ async function refreshGalleryFavoriteState(bookId: string, showError = false) {
 
 async function openFavoriteDialog() {
   if (!authState.loggedIn) {
-    ElMessage.warning('请先维护认证信息后再收藏画册')
+    notify.warning(t('请先维护认证信息后再收藏画册'))
     void router.push('/login')
     return
   }
@@ -346,7 +378,7 @@ async function openFavoriteDialog() {
 
 async function saveGalleryFavorite() {
   if (selectedFavoriteCategory.value === undefined) {
-    ElMessage.warning('请选择收藏分类')
+    notify.warning(t('请选择收藏分类'))
     return
   }
   await updateGalleryFavorite(String(selectedFavoriteCategory.value))
@@ -354,14 +386,14 @@ async function saveGalleryFavorite() {
 
 async function removeGalleryFavorite() {
   if (!galleryFavoriteState.value.removeValue) {
-    ElMessage.error('源站未提供取消收藏操作')
+    notify.error(t('源站未提供取消收藏操作'))
     return
   }
   try {
-    await ElMessageBox.confirm('确定取消收藏当前画册吗？', '取消收藏', {
+    await dialogs.confirm(t('确定取消收藏当前画册吗？'), t('取消收藏'), {
       type: 'warning',
-      confirmButtonText: '取消收藏',
-      cancelButtonText: '返回',
+      confirmButtonText: t('取消收藏'),
+      cancelButtonText: t('返回'),
     })
     await updateGalleryFavorite(galleryFavoriteState.value.removeValue)
   } catch (error) {
@@ -385,16 +417,16 @@ async function updateGalleryFavorite(categoryValue: string) {
       ),
     )
     if (requestVersion !== favoriteRequestVersion || bookId !== getRouteBookId()) return
-    if (!result.isSuccess || !result.data) throw new Error(result.msg || '画册收藏更新失败')
+    if (!result.isSuccess || !result.data) throw new Error(result.msg || t('画册收藏更新失败'))
 
     applyGalleryFavoriteState(result.data)
     updateFavoriteCount(previousStatus, result.data.status)
     markFavoriteDataChanged()
     favoriteDialogVisible.value = false
-    ElMessage.success(result.data.status === 'favorited' ? '收藏已更新' : '已取消收藏')
+    notify.success(result.data.status === 'favorited' ? t('收藏已更新') : t('已取消收藏'))
   } catch (error) {
     if (requestVersion === favoriteRequestVersion) {
-      ElMessage.error(error instanceof Error ? error.message : '画册收藏更新失败')
+      notify.error(error instanceof Error ? error.message : t('画册收藏更新失败'))
     }
   } finally {
     if (requestVersion === favoriteRequestVersion) favoriteUpdating.value = false
@@ -434,71 +466,66 @@ function toDownload() {
 }
 </script>
 <template>
-  <el-skeleton animated v-if="funcData.loading">
+  <SkeletonBlock v-if="funcData.loading">
     <template #template>
       <div class="bookinfo-skeleton">
-        <el-card class="info-card" shadow="never">
+        <section class="info-card">
           <div class="header-section">
             <div class="cover-container">
-              <el-skeleton-item variant="image" class="skeleton-cover" />
+              <SkeletonLine variant="image" class="skeleton-cover" />
             </div>
             <div class="info-container">
-              <el-skeleton-item variant="h1" class="skeleton-title" />
-              <el-skeleton-item variant="text" class="skeleton-category" />
-              <el-skeleton-item variant="text" class="skeleton-rating" />
+              <SkeletonLine variant="h1" class="skeleton-title" />
+              <SkeletonLine variant="text" class="skeleton-category" />
+              <SkeletonLine variant="text" class="skeleton-rating" />
 
               <div class="meta-info">
-                <el-space wrap :size="16">
-                  <el-skeleton-item variant="text" class="skeleton-meta-item" />
-                  <el-skeleton-item variant="text" class="skeleton-meta-item" />
-                  <el-skeleton-item variant="text" class="skeleton-meta-item" />
-                  <el-skeleton-item variant="text" class="skeleton-meta-item" />
-                </el-space>
+                <div class="inline-space">
+                  <SkeletonLine variant="text" class="skeleton-meta-item" />
+                  <SkeletonLine variant="text" class="skeleton-meta-item" />
+                  <SkeletonLine variant="text" class="skeleton-meta-item" />
+                  <SkeletonLine variant="text" class="skeleton-meta-item" />
+                </div>
               </div>
 
               <div class="action-buttons">
-                <el-skeleton-item variant="button" class="skeleton-action-btn" />
+                <SkeletonLine variant="button" class="skeleton-action-btn" />
               </div>
             </div>
           </div>
-        </el-card>
+        </section>
 
-        <el-card class="tags-card" shadow="never">
+        <section class="tags-card">
           <div class="card-header">
-            <el-skeleton-item variant="text" class="skeleton-card-title" />
+            <SkeletonLine variant="text" class="skeleton-card-title" />
           </div>
           <div class="tags-container">
-            <el-skeleton-item
-              v-for="i in 6"
-              :key="`tag-${i}`"
-              variant="button"
-              class="skeleton-tag"
-            />
+            <SkeletonLine v-for="i in 6" :key="`tag-${i}`" variant="button" class="skeleton-tag" />
           </div>
-        </el-card>
+        </section>
 
-        <el-card class="comments-card" shadow="never">
+        <section class="comments-card">
           <div class="card-header">
-            <el-skeleton-item variant="text" class="skeleton-card-title" />
+            <SkeletonLine variant="text" class="skeleton-card-title" />
           </div>
           <div class="comments-container">
             <div v-for="i in 2" :key="`comment-${i}`" class="comment-item skeleton-comment-item">
-              <el-skeleton-item variant="text" class="skeleton-comment-user" />
-              <el-skeleton-item variant="p" class="skeleton-comment-content" />
+              <SkeletonLine variant="text" class="skeleton-comment-user" />
+              <SkeletonLine variant="p" class="skeleton-comment-content" />
             </div>
           </div>
-        </el-card>
+        </section>
       </div>
     </template>
-  </el-skeleton>
-  <div class="bookinfo-view" v-loading="funcData.loading">
+  </SkeletonBlock>
+  <div class="bookinfo-view" v-busy="funcData.loading">
     <div class="content-wrapper" v-if="!funcData.loading">
       <!-- 头部信息区 -->
-      <el-card class="info-card" shadow="hover">
+      <section class="info-card">
         <div class="header-section">
           <!-- 左侧封面 -->
           <div class="cover-container">
-            <el-image
+            <MediaImage
               :src="pageData.coverImage"
               :zoom-rate="1.2"
               :max-scale="7"
@@ -521,219 +548,211 @@ function toDownload() {
 
             <!-- 评分 -->
             <div class="rating-row">
-              <el-rate
+              <Rating
                 v-model="ratingStars"
                 disabled
                 show-score
                 text-color="#ff9900"
                 score-template="{value}"
               />
-              <span class="rating-count">({{ pageData.ratingCount }} 评分)</span>
+              <span class="rating-count">{{ t('({p0} 评分)', { p0: pageData.ratingCount }) }}</span>
             </div>
 
             <!-- 元数据 -->
             <div class="meta-info">
-              <el-space wrap :size="16">
+              <div class="inline-space">
                 <div class="meta-item">
-                  <el-icon><User /></el-icon>
-                  <span>上传者: {{ pageData.uploader }}</span>
+                  <IconFrame><User /></IconFrame>
+                  <span>{{ t('上传者: {p0}', { p0: pageData.uploader }) }}</span>
                 </div>
                 <div class="meta-item">
-                  <el-icon><Clock /></el-icon>
+                  <IconFrame><Clock /></IconFrame>
                   <span>{{ formatDate(pageData.publishDate) }}</span>
                 </div>
                 <div class="meta-item">
-                  <el-icon><Picture /></el-icon>
-                  <span>{{ pageData.imageCount }} 张图片</span>
+                  <IconFrame><Picture /></IconFrame>
+                  <span>{{ t('{p0} 张图片', { p0: pageData.imageCount }) }}</span>
                 </div>
                 <div class="meta-item">
-                  <el-icon><Download /></el-icon>
+                  <IconFrame><Download /></IconFrame>
                   <span>{{ pageData.totalSize }}</span>
                 </div>
                 <div class="meta-item" v-if="pageData.language">
-                  <el-icon><Reading /></el-icon>
+                  <IconFrame><Reading /></IconFrame>
                   <span>{{ pageData.language }}</span>
                 </div>
                 <div class="meta-item" v-if="pageData.favorited">
-                  <el-icon><StarFilled /></el-icon>
-                  <span>{{ pageData.favorited }} 收藏</span>
+                  <IconFrame><StarFilled /></IconFrame>
+                  <span>{{ t('{p0} 收藏', { p0: pageData.favorited }) }}</span>
                 </div>
-              </el-space>
+              </div>
             </div>
 
             <!-- 操作按钮 -->
             <div class="action-buttons">
-              <el-button
+              <ActionButton
                 class="read-button"
                 :class="{ 'has-progress': readingProgress.percent > 0 }"
                 :style="{ '--reading-progress': `${readingProgress.percent}%` }"
-                type="primary"
-                size="large"
-                :aria-label="readingProgress.label"
+                variant="default"
+                size="lg"
+                :aria-label="t(readingProgress.label)"
                 @click="toRead"
                 :loading="funcData.loading"
               >
-                <span v-if="readingProgress.percent > 0" class="read-button__liquid" aria-hidden="true">
-                  <i v-for="bubble in 5" :key="bubble" class="read-button__bubble" :style="{ '--bubble-index': bubble }" />
+                <span
+                  v-if="readingProgress.percent > 0"
+                  class="read-button__liquid"
+                  aria-hidden="true"
+                />
+                <span class="read-button__label"
+                  ><IconFrame><View /></IconFrame>{{ t(readingProgress.label) }}</span
+                >
+                <span
+                  v-if="readingProgress.percent > 0"
+                  class="read-button__filled-label"
+                  aria-hidden="true"
+                >
+                  <IconFrame><View /></IconFrame>{{ t(readingProgress.label) }}
                 </span>
-                <span class="read-button__label"><el-icon><View /></el-icon>{{ readingProgress.label }}</span>
-                <span v-if="readingProgress.percent > 0" class="read-button__filled-label" aria-hidden="true">
-                  <el-icon><View /></el-icon>{{ readingProgress.label }}
-                </span>
-              </el-button>
+              </ActionButton>
               <div class="secondary-action-buttons">
-                <el-tooltip :content="favoriteButtonLabel" placement="bottom">
-                  <el-button
+                <Hint :content="t(favoriteButtonLabel)" placement="bottom">
+                  <ActionButton
                     class="detail-action-button"
                     :class="{ 'is-active': isGalleryFavorited }"
                     :icon="isGalleryFavorited ? StarFilled : Star"
-                    circle
+                    size="icon"
                     :loading="favoriteLoading"
-                    :aria-label="favoriteButtonLabel"
+                    :aria-label="t(favoriteButtonLabel)"
                     @click="openFavoriteDialog"
                   />
-                </el-tooltip>
-                <el-tooltip content="分享" placement="bottom" :disabled="shareVisible">
-                  <el-button
+                </Hint>
+                <Hint :content="t('分享')" placement="bottom" :disabled="shareVisible">
+                  <ActionButton
                     class="detail-action-button"
                     :icon="Share"
-                    circle
-                    aria-label="分享"
+                    size="icon"
+                    :aria-label="t('分享')"
                     @click="openSharePreview"
                   />
-                </el-tooltip>
-                <el-tooltip content="下载" placement="bottom">
-                  <el-button
+                </Hint>
+                <Hint :content="t('下载')" placement="bottom">
+                  <ActionButton
                     class="detail-action-button"
                     :icon="Download"
-                    circle
-                    aria-label="下载"
+                    size="icon"
+                    :aria-label="t('下载')"
                     @click="toDownload"
                   />
-                </el-tooltip>
+                </Hint>
               </div>
             </div>
           </div>
         </div>
-      </el-card>
+      </section>
 
       <!-- 标签区 -->
-      <el-card class="tags-card" shadow="hover" v-if="tagGroups.length > 0">
-        <template #header>
+      <section class="tags-card" v-if="tagGroups.length > 0">
+        <header class="section-header">
           <div class="card-header">
-            <el-icon><Reading /></el-icon>
-            <span>标签</span>
+            <IconFrame><Reading /></IconFrame>
+            <span>{{ t('标签') }}</span>
           </div>
-        </template>
+        </header>
         <div class="tag-groups">
           <section v-for="group in tagGroups" :key="group.collection" class="tag-group">
             <h3 class="tag-group-title">{{ group.displayCollection }}</h3>
             <div class="tags-container">
-              <el-tooltip
+              <GalleryTagPopover
                 v-for="item in group.items"
                 :key="item.key"
-                :content="item.display.original"
-                :disabled="!item.display.translated"
-                placement="top"
-              >
-                <el-tag
-                  class="tag-item"
-                  :class="item.tag.official ? 'is-official' : 'is-unofficial'"
-                  :type="item.tag.official ? 'primary' : 'info'"
-                  :effect="item.tag.official ? 'light' : 'plain'"
-                  size="large"
-                  tabindex="0"
-                >
-                  <span class="tag-label">{{ item.display.text }}</span>
-                </el-tag>
-              </el-tooltip>
+                :namespace="group.collection"
+                :tag="item.tag"
+              />
             </div>
           </section>
         </div>
-      </el-card>
+      </section>
 
       <!-- 评论区 -->
-      <el-card
+      <section
         class="comments-card"
-        shadow="hover"
         v-if="pageData.userComments && pageData.userComments.length > 0"
       >
-        <template #header>
+        <header class="section-header">
           <div class="card-header">
-            <el-icon><ChatLineRound /></el-icon>
-            <span>用户评论 ({{ pageData.userComments.length }})</span>
+            <IconFrame><ChatLineRound /></IconFrame>
+            <span>{{ t('用户评论 ({p0})', { p0: pageData.userComments.length }) }}</span>
           </div>
-        </template>
+        </header>
         <div class="comments-container">
           <div v-for="(comment, index) in pageData.userComments" :key="index" class="comment-item">
             <div class="comment-header">
               <div class="comment-user">
-                <el-avatar :size="40" :icon="User" />
+                <AvatarMark :size="40" :icon="User" />
                 <div class="user-info">
                   <div class="username">
                     {{ comment.username }}
-                    <el-tag v-if="comment.isUploader" type="success" size="small" effect="dark">
-                      上传者
-                    </el-tag>
+                    <TagChip v-if="comment.isUploader" tone="success" size="small" effect="dark">{{
+                      t('上传者')
+                    }}</TagChip>
                   </div>
                   <div class="comment-date">{{ formatCommentDate(comment.date) }}</div>
                 </div>
               </div>
-              <el-rate
-                v-if="comment.score > 0"
-                :model-value="comment.score"
-                disabled
-                size="small"
-              />
+              <Rating v-if="comment.score > 0" :model-value="comment.score" disabled size="small" />
             </div>
-            <CommentContent :key="`${pageData.bookId}-${index}`" class="comment-content" :comment="comment" />
+            <CommentContent
+              :key="`${pageData.bookId}-${index}`"
+              class="comment-content"
+              :comment="comment"
+            />
           </div>
         </div>
-      </el-card>
+      </section>
     </div>
   </div>
   <BookShareOverlay v-model="shareVisible" :book="pageData" :cover-element="shareCoverElement" />
-  <el-dialog
+  <ModalPanel
     v-model="favoriteDialogVisible"
     class="favorite-dialog"
-    :title="isGalleryFavorited ? '管理收藏' : '添加收藏'"
+    :title="isGalleryFavorited ? t('管理收藏') : t('添加收藏')"
     width="min(460px, calc(100vw - 32px))"
-    :close-on-click-modal="!favoriteUpdating"
+    :dismissible="!favoriteUpdating"
   >
-    <div class="favorite-dialog-content" v-loading="favoriteLoading || favoriteUpdating">
-      <p>选择收藏夹</p>
-      <el-radio-group v-model="selectedFavoriteCategory" class="favorite-category-grid">
-        <el-radio
+    <div class="favorite-dialog-content" v-busy="favoriteLoading || favoriteUpdating">
+      <p>{{ t('选择收藏夹') }}</p>
+      <ChoiceGroup v-model="selectedFavoriteCategory" class="favorite-category-grid">
+        <RadioChoice
           v-for="category in favoriteCategories"
           :key="category.index"
           :value="category.index"
           border
         >
           {{ category.name }}
-        </el-radio>
-      </el-radio-group>
+        </RadioChoice>
+      </ChoiceGroup>
     </div>
     <template #footer>
       <div class="favorite-dialog-actions">
-        <el-button
+        <ActionButton
           v-if="isGalleryFavorited"
-          type="danger"
-          plain
+          variant="destructive"
           :disabled="favoriteUpdating"
           @click="removeGalleryFavorite"
+          >{{ t('取消收藏') }}</ActionButton
         >
-          取消收藏
-        </el-button>
         <span class="favorite-dialog-actions__spacer"></span>
-        <el-button :disabled="favoriteUpdating" @click="favoriteDialogVisible = false">
-          返回
-        </el-button>
-        <el-button type="primary" :loading="favoriteUpdating" @click="saveGalleryFavorite">
-          {{ isGalleryFavorited ? '更新分类' : '确认收藏' }}
-        </el-button>
+        <ActionButton :disabled="favoriteUpdating" @click="favoriteDialogVisible = false">{{
+          t('返回')
+        }}</ActionButton>
+        <ActionButton variant="default" :loading="favoriteUpdating" @click="saveGalleryFavorite">
+          {{ isGalleryFavorited ? t('更新分类') : t('确认收藏') }}
+        </ActionButton>
       </div>
     </template>
-  </el-dialog>
+  </ModalPanel>
 </template>
 
 <style scoped>
@@ -744,9 +763,9 @@ function toDownload() {
 }
 
 .read-button.has-progress {
-  color: #164b78;
-  border-color: var(--el-color-primary);
-  background: #fff;
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--surface);
 }
 
 .read-button__label,
@@ -757,16 +776,19 @@ function toDownload() {
   gap: 6px;
 }
 
-.read-button__label { position: relative; z-index: 1; }
+.read-button__label {
+  position: relative;
+  z-index: 1;
+}
 
 .read-button__filled-label {
   position: absolute;
   inset: 0;
   z-index: 2;
-  color: #fff;
+  color: var(--accent-foreground);
   clip-path: inset(0 calc(100% - var(--reading-progress)) 0 0);
-  transition: clip-path 900ms cubic-bezier(0.22, 1, 0.36, 1);
-  animation: reading-text-reveal 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  transition: clip-path 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: reading-text-reveal 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
   pointer-events: none;
 }
 
@@ -775,9 +797,9 @@ function toDownload() {
   inset: 0 auto 0 0;
   width: var(--reading-progress);
   overflow: hidden;
-  background: linear-gradient(110deg, #1765b3, #247aca);
-  transition: width 900ms cubic-bezier(0.22, 1, 0.36, 1);
-  animation: reading-liquid-enter 900ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  background: linear-gradient(110deg, var(--accent-strong), var(--accent));
+  transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1);
+  animation: reading-liquid-enter 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
   transform-origin: left;
   pointer-events: none;
 }
@@ -791,56 +813,39 @@ function toDownload() {
   border-radius: 45%;
   background: rgb(255 255 255 / 25%);
   content: '';
-  animation: reading-liquid-wave 3s ease-in-out infinite alternate;
-}
-
-.read-button__bubble {
-  position: absolute;
-  left: calc(var(--bubble-index) * 17% - 5%);
-  bottom: -10px;
-  width: calc(3px + var(--bubble-index) * 1px);
-  height: calc(3px + var(--bubble-index) * 1px);
-  border: 1px solid rgb(255 255 255 / 65%);
-  border-radius: 50%;
-  background: rgb(255 255 255 / 15%);
-  animation: reading-bubble-rise calc(2.4s + var(--bubble-index) * 0.3s) linear infinite;
-  animation-delay: calc(var(--bubble-index) * -0.7s);
 }
 
 .read-button.has-progress:hover,
 .read-button.has-progress:focus-visible {
-  color: #164b78;
-  background: #fff;
-  border-color: var(--el-color-primary);
-  box-shadow: 0 0 0 1px var(--el-color-primary) inset;
+  color: var(--accent);
+  background: var(--surface);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
 }
 
 @keyframes reading-liquid-enter {
-  from { transform: scaleX(0); }
-  to { transform: scaleX(1); }
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: scaleX(1);
+  }
 }
 @keyframes reading-text-reveal {
-  from { clip-path: inset(0 100% 0 0); }
-  to { clip-path: inset(0 calc(100% - var(--reading-progress)) 0 0); }
-}
-@keyframes reading-liquid-wave {
-  from { transform: translateY(-3px) rotate(-8deg); }
-  to { transform: translateY(3px) rotate(8deg); }
-}
-@keyframes reading-bubble-rise {
-  0% { transform: translate(0, 0) scale(0.6); opacity: 0; }
-  20% { opacity: 0.7; }
-  100% { transform: translate(5px, -56px) scale(1); opacity: 0; }
+  from {
+    clip-path: inset(0 100% 0 0);
+  }
+  to {
+    clip-path: inset(0 calc(100% - var(--reading-progress)) 0 0);
+  }
 }
 @media (prefers-reduced-motion: reduce) {
   .read-button__liquid,
   .read-button__liquid::after,
-  .read-button__bubble,
   .read-button__filled-label {
     animation: none;
     transition: none;
   }
-  .read-button__bubble { display: none; }
 }
 
 .bookinfo-view {
@@ -955,8 +960,8 @@ function toDownload() {
   align-items: center;
   justify-content: center;
   height: 400px;
-  background-color: var(--el-fill-color-light);
-  color: var(--el-text-color-secondary);
+  background-color: var(--muted);
+  color: var(--muted-foreground);
   border-radius: 8px;
 }
 
@@ -971,7 +976,7 @@ function toDownload() {
 .book-title {
   font-size: 28px;
   font-weight: 600;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
   margin: 0;
   line-height: 1.4;
 }
@@ -988,14 +993,14 @@ function toDownload() {
 }
 
 .rating-count {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 14px;
 }
 
 /* 元数据 */
 .meta-info {
   padding: 16px;
-  background-color: var(--el-fill-color-lighter);
+  background-color: var(--muted-soft);
   border-radius: 8px;
 }
 
@@ -1003,12 +1008,12 @@ function toDownload() {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--el-text-color-regular);
+  color: var(--text);
   font-size: 14px;
 }
 
-.meta-item .el-icon {
-  color: var(--el-color-primary);
+.meta-item .ui-icon {
+  color: var(--accent);
 }
 
 /* 操作按钮 */
@@ -1026,7 +1031,7 @@ function toDownload() {
   gap: 10px;
 }
 
-.secondary-action-buttons :deep(.el-button + .el-button) {
+.secondary-action-buttons :deep(.ui-button + .ui-button) {
   margin-left: 0;
 }
 
@@ -1040,14 +1045,14 @@ function toDownload() {
 }
 
 .detail-action-button.is-active {
-  border-color: var(--el-color-primary);
-  color: #fff;
-  background-color: var(--el-color-primary);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+  background-color: var(--accent);
 }
 
 .favorite-dialog-content > p {
   margin: 0 0 12px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
 }
 
@@ -1058,16 +1063,10 @@ function toDownload() {
   width: 100%;
 }
 
-.favorite-category-grid :deep(.el-radio) {
+.favorite-category-grid :deep(.ui-radio) {
   width: 100%;
   min-width: 0;
   margin: 0;
-}
-
-.favorite-category-grid :deep(.el-radio__label) {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .favorite-dialog-actions {
@@ -1076,7 +1075,7 @@ function toDownload() {
   gap: 8px;
 }
 
-.favorite-dialog-actions :deep(.el-button + .el-button) {
+.favorite-dialog-actions :deep(.ui-button + .ui-button) {
   margin-left: 0;
 }
 
@@ -1098,8 +1097,8 @@ function toDownload() {
   font-size: 16px;
 }
 
-.card-header .el-icon {
-  color: var(--el-color-primary);
+.card-header .ui-icon {
+  color: var(--accent);
 }
 
 .tag-groups {
@@ -1117,7 +1116,7 @@ function toDownload() {
 
 .tag-group-title {
   margin: 5px 0 0;
-  color: var(--el-text-color-regular);
+  color: var(--text);
   font-size: 14px;
   font-weight: 600;
   line-height: 1.5;
@@ -1131,39 +1130,6 @@ function toDownload() {
   min-width: 0;
 }
 
-.tag-item {
-  max-width: min(320px, 100%);
-  overflow: hidden;
-  transition:
-    border-color 0.2s ease,
-    background-color 0.2s ease;
-}
-
-.tag-item :deep(.el-tag__content) {
-  display: block;
-  min-width: 0;
-  max-width: 100%;
-  overflow: hidden;
-}
-
-.tag-label {
-  display: block;
-  width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tag-item.is-unofficial {
-  border-style: dashed;
-  color: var(--el-text-color-secondary);
-}
-
-.tag-item:focus-visible {
-  outline: 2px solid var(--el-color-primary-light-5);
-  outline-offset: 2px;
-}
-
 /* 评论区 */
 .comments-container {
   display: flex;
@@ -1173,13 +1139,13 @@ function toDownload() {
 
 .comment-item {
   padding: 16px;
-  background-color: var(--el-fill-color-lighter);
+  background-color: var(--muted-soft);
   border-radius: 8px;
   transition: background-color 0.3s;
 }
 
 .comment-item:hover {
-  background-color: var(--el-fill-color-light);
+  background-color: var(--muted);
 }
 
 .comment-header {
@@ -1204,7 +1170,7 @@ function toDownload() {
 .username {
   font-weight: 600;
   font-size: 15px;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1212,13 +1178,13 @@ function toDownload() {
 
 .comment-date {
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
 }
 
 .comment-content {
   font-size: 14px;
   line-height: 1.6;
-  color: var(--el-text-color-regular);
+  color: var(--text);
   white-space: pre-wrap;
   word-break: break-word;
   padding-left: 52px;

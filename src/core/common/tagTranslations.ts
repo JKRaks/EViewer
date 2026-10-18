@@ -1,4 +1,5 @@
 import { ref } from 'vue'
+import { locale } from '@/i18n'
 import type { tagItem } from '../model/book/tag'
 import tagCollectionTranslationData from '../data/tagCollectionTranslations.json'
 import { indexedDbCacheSettings } from '../cache/cacheSettings'
@@ -43,11 +44,14 @@ onTagTranslationCacheRebuilt(() => {
 /** 解析标签分组名称；缺失翻译时回退英文原名。 */
 export function getTagCollectionDisplayName(collection: string): string {
   const original = collection.trim()
+  if (locale.value === 'en') return original
   return tagCollectionTranslations[normalize(original)] ?? original
 }
 
 /** 异步查询翻译；当前未取得结果时先展示英文原名。 */
 export function getTagDisplayInfo(collection: string, tag: tagItem): tagDisplayInfo {
+  if (locale.value === 'en')
+    return { text: tag.name, original: tag.name, master: tag.name, translated: false }
   void translationRevision.value
   const namespace = normalize(collection)
   const original = tag.name.trim()
@@ -63,6 +67,13 @@ export function getTagDisplayInfo(collection: string, tag: tagItem): tagDisplayI
 
 /** 批量等待标签翻译完成，用于导出等不应先显示英文回退值的场景。 */
 export async function resolveTagDisplayInfos(inputs: tagDisplayInput[]): Promise<tagDisplayInfo[]> {
+  if (locale.value === 'en')
+    return inputs.map(({ tag }) => ({
+      text: tag.name,
+      original: tag.name,
+      master: tag.name,
+      translated: false,
+    }))
   const descriptors = inputs.map(({ collection, tag }) => {
     const namespace = normalize(collection)
     const original = tag.name.trim()

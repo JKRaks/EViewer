@@ -1,8 +1,28 @@
 <script setup lang="ts">
+import { t, getDisplayLocale, locale } from '@/i18n'
+
+import Field from '@/components/primitives/Field.vue'
+import SectionTabs from '@/components/primitives/SectionTabs'
+import SectionTab from '@/components/primitives/SectionTab.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
+import StatusPanel from '@/components/primitives/StatusPanel.vue'
+import ProgressMeter from '@/components/primitives/ProgressMeter.vue'
+import TagChip from '@/components/primitives/TagChip.vue'
+import IconFrame from '@/components/primitives/IconFrame.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
+import TextField from '@/components/primitives/TextField.vue'
+import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
+import RadioChoice from '@/components/primitives/RadioChoice.vue'
+import Notice from '@/components/primitives/Notice.vue'
 import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
-import { ArrowRight, Key, RefreshRight, SwitchButton } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import 'element-plus/es/components/message/style/css'
+import {
+  ArrowRight,
+  KeyRound as Key,
+  RotateCw as RefreshRight,
+  LogOut as SwitchButton,
+} from '@lucide/vue'
+import { notify } from '@/components/primitives/feedback'
 import UserConfigPanel from '@/components/UserConfigPanel.vue'
 import {
   clearAuthCookies,
@@ -15,10 +35,7 @@ import hathPerkTranslationData from '@/core/data/hathPerkTranslations.json'
 import { userDonationInput } from '@/core/model/auth/userDonationInput'
 import type { userDonationData } from '@/core/model/auth/userDonationOutput'
 import { userHathPerksInput } from '@/core/model/auth/userHathPerksInput'
-import type {
-  userHathPerkData,
-  userHathPerksData,
-} from '@/core/model/auth/userHathPerksOutput'
+import type { userHathPerkData, userHathPerksData } from '@/core/model/auth/userHathPerksOutput'
 import { userOverviewInput } from '@/core/model/auth/userOverviewInput'
 import type { userOverviewData } from '@/core/model/auth/userOverviewOutput'
 
@@ -159,7 +176,7 @@ const form = reactive({
 })
 
 const loginTime = computed(() =>
-  authState.lastLoginAt ? new Date(authState.lastLoginAt).toLocaleString('zh-CN') : '--',
+  authState.lastLoginAt ? new Date(authState.lastLoginAt).toLocaleString(getDisplayLocale()) : '--',
 )
 
 const imageUsagePercentage = computed(() => {
@@ -211,9 +228,15 @@ const hathPerkGroups = computed<HathPerkGroup[]>(() => {
 })
 
 watch(
-  activeTab,
-  (tab) => {
-    if (isAccountDataSection(tab) && authState.loggedIn) {
+  () => [authState.memberId, authState.lastLoginAt, authState.loggedIn, activeTab.value] as const,
+  ([memberId, lastLoginAt, loggedIn, tab], previous) => {
+    if (
+      previous &&
+      (memberId !== previous[0] || lastLoginAt !== previous[1] || loggedIn !== previous[2])
+    ) {
+      resetAccountData()
+    }
+    if (isAccountDataSection(tab) && loggedIn) {
       void loadAccountSection(tab)
     }
   },
@@ -236,11 +259,10 @@ async function submitCookies() {
     form.cookieText = ''
     form.memberId = ''
     form.passHash = ''
-    resetAccountData()
-    ElMessage.success('认证 Cookie 已保存')
+    notify.success(t('认证 Cookie 已保存'))
   } catch (error) {
-    console.error('保存认证 Cookie 失败:', error)
-    ElMessage.error(error instanceof Error ? error.message : '保存认证 Cookie 失败')
+    console.error(t('保存认证 Cookie 失败:'), error)
+    notify.error(error instanceof Error ? error.message : t('保存认证 Cookie 失败'))
   } finally {
     submitting.value = false
   }
@@ -251,7 +273,7 @@ function resolveAuthCredentials() {
     const memberId = form.memberId.trim()
     const passHash = form.passHash.trim()
     if (!memberId || !passHash) {
-      ElMessage.warning('请填写完整的认证 Cookie')
+      notify.warning(t('请填写完整的认证 Cookie'))
       return
     }
     return { memberId, passHash }
@@ -268,7 +290,7 @@ function resolveAuthCredentials() {
   const memberId = cookies.get('ipb_member_id') || ''
   const passHash = cookies.get('ipb_pass_hash') || ''
   if (!memberId || !passHash) {
-    ElMessage.warning('Cookie 字符串中缺少 ipb_member_id 或 ipb_pass_hash')
+    notify.warning(t('Cookie 字符串中缺少 ipb_member_id 或 ipb_pass_hash'))
     return
   }
   return { memberId, passHash }
@@ -279,12 +301,11 @@ async function logout() {
   loggingOut.value = true
   try {
     await clearAuthCookies()
-    resetAccountData()
     activeTab.value = 'authentication'
-    ElMessage.success('认证 Cookie 已清除')
+    notify.success(t('认证 Cookie 已清除'))
   } catch (error) {
-    console.error('清除认证 Cookie 失败:', error)
-    ElMessage.error(error instanceof Error ? error.message : '清除认证 Cookie 失败')
+    console.error(t('清除认证 Cookie 失败:'), error)
+    notify.error(error instanceof Error ? error.message : t('清除认证 Cookie 失败'))
   } finally {
     loggingOut.value = false
   }
@@ -308,7 +329,7 @@ async function extractCurrentCookie() {
     if (extractionController === controller) extractedCookie.value = cookie
   } catch (error) {
     if (!controller.signal.aborted) {
-      ElMessage.error(error instanceof Error ? error.message : '提取认证 Cookie 失败')
+      notify.error(error instanceof Error ? error.message : t('提取认证 Cookie 失败'))
     }
   } finally {
     if (extractionController === controller) {
@@ -321,9 +342,9 @@ async function extractCurrentCookie() {
 async function copyExtractedCookie() {
   try {
     await navigator.clipboard.writeText(extractedCookie.value)
-    ElMessage.success('认证 Cookie 已复制')
+    notify.success(t('认证 Cookie 已复制'))
   } catch {
-    ElMessage.warning('无法自动复制，请在文本框中选择并复制')
+    notify.warning(t('无法自动复制，请在文本框中选择并复制'))
   }
 }
 
@@ -351,32 +372,32 @@ async function loadAccountSection(section: AccountDataSection, force = false) {
     if (section === 'overview') {
       const result = await infoBusi.getUserOverview(new userOverviewInput())
       if (!result.isSuccess || !result.data) {
-        throw new Error(result.msg || '账户总览获取失败')
+        throw new Error(result.msg || t('账户总览获取失败'))
       }
       if (state.requestId === requestId) overviewData.value = result.data
     } else if (section === 'donation') {
       const result = await infoBusi.getUserDonation(new userDonationInput())
       if (!result.isSuccess || !result.data) {
-        throw new Error(result.msg || '捐赠信息获取失败')
+        throw new Error(result.msg || t('捐赠信息获取失败'))
       }
       if (state.requestId === requestId) donationData.value = result.data
     } else {
       const result = await infoBusi.getUserHathPerks(new userHathPerksInput())
       if (!result.isSuccess || !result.data) {
-        throw new Error(result.msg || 'Hath 特权获取失败')
+        throw new Error(result.msg || t('Hath 特权获取失败'))
       }
       if (state.requestId === requestId) hathPerksData.value = result.data
     }
   } catch (error) {
     if (state.requestId === requestId) {
-      state.error = error instanceof Error ? error.message : '数据获取失败'
+      state.error = error instanceof Error ? error.message : t('数据获取失败')
     }
     const sectionName = {
-      overview: '账户总览',
-      donation: '捐赠信息',
-      hathPerks: 'Hath 特权',
+      overview: t('账户总览'),
+      donation: t('捐赠信息'),
+      hathPerks: t('Hath 特权'),
     }[section]
-    console.error(`获取${sectionName}失败:`, error)
+    console.error(t('获取{p0}失败:', { p0: sectionName }), error)
   } finally {
     if (state.requestId === requestId) state.loading = false
   }
@@ -394,7 +415,9 @@ function resetAccountData() {
 }
 
 function formatNumber(value?: number) {
-  return value === undefined || !Number.isFinite(value) ? '--' : value.toLocaleString('zh-CN')
+  return value === undefined || !Number.isFinite(value)
+    ? '--'
+    : value.toLocaleString(getDisplayLocale())
 }
 
 function formatText(value?: string) {
@@ -402,26 +425,24 @@ function formatText(value?: string) {
 }
 
 function getHathPerkStatus(perk: userHathPerkData) {
-  if (perk.obtained) return { label: '已获得', type: 'success' as const }
-  if (perk.locked) return { label: '前置未解锁', type: 'info' as const }
-  if (perk.purchasable) return { label: '可购买', type: 'warning' as const }
+  if (perk.obtained) return { label: t('已获得'), type: 'success' as const }
+  if (perk.locked) return { label: t('前置未解锁'), type: 'info' as const }
+  if (perk.purchasable) return { label: t('可购买'), type: 'warning' as const }
   if (hathPerksData.value && hathPerksData.value.balance < perk.cost) {
-    return { label: 'Hath 不足', type: 'info' as const }
+    return { label: t('Hath 不足'), type: 'info' as const }
   }
-  return { label: '暂不可用', type: 'info' as const }
+  return { label: t('暂不可用'), type: 'info' as const }
 }
 
 function translateHathPerk(perk: userHathPerkData): HathPerkDisplay {
   const translation = hathPerkTranslations[perk.name]
-  const donationMatch = perk.donationRequirement.match(
-    /^Free with a \$([\d,.]+) donation\.$/i,
-  )
+  const donationMatch = perk.donationRequirement.match(/^Free with a \$([\d,.]+) donation\.$/i)
   return {
     ...perk,
     displayName: translation?.name ?? perk.name,
     displayDescription: translation?.description ?? perk.description,
     displayDonationRequirement: donationMatch?.[1]
-      ? `累计捐赠 $${donationMatch[1]} 可免费解锁。`
+      ? t('累计捐赠 ${p0} 可免费解锁。', { p0: donationMatch[1] })
       : perk.donationRequirement,
   }
 }
@@ -432,50 +453,49 @@ onBeforeUnmount(resetAccountData)
 <template>
   <main class="account-view">
     <header class="account-header">
-      <h1>账号信息</h1>
+      <h1>{{ t('账号信息') }}</h1>
     </header>
 
-    <el-tabs v-model="activeTab" class="account-tabs">
-      <el-tab-pane label="账户总览" name="overview" :disabled="!authState.loggedIn">
+    <SectionTabs v-model="activeTab" class="account-tabs">
+      <SectionTab :label="t('账户总览')" name="overview" :disabled="!authState.loggedIn">
         <section class="data-section">
           <div class="data-section-header">
             <div>
-              <h2>账户总览</h2>
-              <p>Member ID {{ authState.memberId }}</p>
+              <h2>{{ t('账户总览') }}</h2>
+              <p>{{ t('会员 ID') }} {{ authState.memberId }}</p>
             </div>
-            <el-button
-              circle
-              text
+            <ActionButton
+              size="icon"
+              variant="ghost"
               :icon="RefreshRight"
               :loading="moduleStates.overview.loading"
-              aria-label="刷新账户总览"
-              title="刷新账户总览"
+              :aria-label="t('刷新账户总览')"
+              :title="t('刷新账户总览')"
               @click="loadAccountSection('overview', true)"
             />
           </div>
 
           <div v-if="moduleStates.overview.loading" class="data-loading">
-            <el-skeleton :rows="8" animated />
+            <SkeletonBlock :rows="8" />
           </div>
-          <el-result
+          <StatusPanel
             v-else-if="moduleStates.overview.error"
             icon="error"
-            title="账户总览获取失败"
-            :sub-title="moduleStates.overview.error"
+            :title="t('账户总览获取失败')"
+            :sub-title="t(moduleStates.overview.error)"
           >
             <template #extra>
-              <el-button
-                type="primary"
+              <ActionButton
+                variant="default"
                 :icon="RefreshRight"
                 @click="loadAccountSection('overview', true)"
+                >{{ t('重试') }}</ActionButton
               >
-                重试
-              </el-button>
             </template>
-          </el-result>
+          </StatusPanel>
           <template v-else-if="overviewData">
             <section class="data-group">
-              <h3>图片限额</h3>
+              <h3>{{ t('图片限额') }}</h3>
               <div class="limit-summary">
                 <strong>
                   {{ formatNumber(overviewData.imageLimit.usage) }} /
@@ -483,7 +503,7 @@ onBeforeUnmount(resetAccountData)
                 </strong>
                 <span>{{ imageUsagePercentage }}%</span>
               </div>
-              <el-progress
+              <ProgressMeter
                 :percentage="imageUsagePercentage"
                 :show-text="false"
                 :stroke-width="8"
@@ -493,21 +513,21 @@ onBeforeUnmount(resetAccountData)
             <section class="data-group">
               <h3>GP</h3>
               <div class="metric-total">
-                <span>GP 总计</span>
+                <span>{{ t('GP 总计') }}</span>
                 <strong>{{ formatNumber(gpGainedTotal) }}</strong>
               </div>
-              <h4 class="metric-breakdown-title">GP 构成</h4>
+              <h4 class="metric-breakdown-title">{{ t('GP 构成') }}</h4>
               <dl class="metric-grid">
                 <div>
-                  <dt>画廊访问</dt>
+                  <dt>{{ t('画廊访问') }}</dt>
                   <dd>{{ formatNumber(overviewData.gpGained.galleryVisits) }}</dd>
                 </div>
                 <div>
-                  <dt>种子完成</dt>
+                  <dt>{{ t('种子完成') }}</dt>
                   <dd>{{ formatNumber(overviewData.gpGained.torrentCompletions) }}</dd>
                 </div>
                 <div>
-                  <dt>存档下载</dt>
+                  <dt>{{ t('存档下载') }}</dt>
                   <dd>{{ formatNumber(overviewData.gpGained.archiveDownloads) }}</dd>
                 </div>
                 <div>
@@ -520,105 +540,106 @@ onBeforeUnmount(resetAccountData)
             <section class="data-group">
               <h3>MP</h3>
               <div class="metric-total">
-                <span>MP 总计</span>
+                <span>{{ t('MP 总计') }}</span>
                 <strong>{{ formatNumber(overviewData.moderationPower.currentMp) }}</strong>
               </div>
-              <h4 class="metric-breakdown-title">MP 构成</h4>
+              <h4 class="metric-breakdown-title">{{ t('MP 构成') }}</h4>
               <dl class="metric-grid">
                 <div>
-                  <dt>基础 MP</dt>
+                  <dt>{{ t('基础 MP') }}</dt>
                   <dd>{{ formatNumber(overviewData.moderationPower.base) }}</dd>
                 </div>
                 <div>
-                  <dt>奖励 MP</dt>
+                  <dt>{{ t('奖励 MP') }}</dt>
                   <dd>{{ formatNumber(overviewData.moderationPower.awards) }}</dd>
                 </div>
                 <div>
-                  <dt>标签维护</dt>
+                  <dt>{{ t('标签维护') }}</dt>
                   <dd>{{ formatNumber(overviewData.moderationPower.tagging) }}</dd>
                 </div>
                 <div>
-                  <dt>等级</dt>
+                  <dt>{{ t('等级') }}</dt>
                   <dd>{{ formatNumber(overviewData.moderationPower.level) }}</dd>
                 </div>
                 <div>
-                  <dt>论坛活跃</dt>
+                  <dt>{{ t('论坛活跃') }}</dt>
                   <dd>{{ formatNumber(overviewData.moderationPower.forumActivity) }}</dd>
                 </div>
                 <div>
-                  <dt>捐赠贡献</dt>
+                  <dt>{{ t('捐赠贡献') }}</dt>
                   <dd>{{ formatNumber(overviewData.moderationPower.donations) }}</dd>
                 </div>
                 <div>
-                  <dt>Hentai@Home 上传</dt>
+                  <dt>{{ t('Hentai@Home 上传') }}</dt>
                   <dd>{{ formatNumber(overviewData.moderationPower.uploadHH) }}</dd>
                 </div>
                 <div>
-                  <dt>账户年限</dt>
+                  <dt>{{ t('账户年限') }}</dt>
                   <dd>{{ formatNumber(overviewData.moderationPower.accountAge) }}</dd>
                 </div>
               </dl>
             </section>
           </template>
         </section>
-      </el-tab-pane>
+      </SectionTab>
 
-      <el-tab-pane label="捐赠信息" name="donation" :disabled="!authState.loggedIn">
+      <SectionTab :label="t('捐赠信息')" name="donation" :disabled="!authState.loggedIn">
         <section class="data-section">
           <div class="data-section-header">
             <div>
-              <h2>捐赠信息</h2>
-              <p>Member ID {{ authState.memberId }}</p>
+              <h2>{{ t('捐赠信息') }}</h2>
+              <p>{{ t('会员 ID') }} {{ authState.memberId }}</p>
             </div>
-            <el-button
-              circle
-              text
+            <ActionButton
+              size="icon"
+              variant="ghost"
               :icon="RefreshRight"
               :loading="moduleStates.donation.loading"
-              aria-label="刷新捐赠信息"
-              title="刷新捐赠信息"
+              :aria-label="t('刷新捐赠信息')"
+              :title="t('刷新捐赠信息')"
               @click="loadAccountSection('donation', true)"
             />
           </div>
 
           <div v-if="moduleStates.donation.loading" class="data-loading">
-            <el-skeleton :rows="5" animated />
+            <SkeletonBlock :rows="5" />
           </div>
-          <el-result
+          <StatusPanel
             v-else-if="moduleStates.donation.error"
             icon="error"
-            title="捐赠信息获取失败"
-            :sub-title="moduleStates.donation.error"
+            :title="t('捐赠信息获取失败')"
+            :sub-title="t(moduleStates.donation.error)"
           >
             <template #extra>
-              <el-button
-                type="primary"
+              <ActionButton
+                variant="default"
                 :icon="RefreshRight"
                 @click="loadAccountSection('donation', true)"
+                >{{ t('重试') }}</ActionButton
               >
-                重试
-              </el-button>
             </template>
-          </el-result>
+          </StatusPanel>
           <template v-else-if="donationData">
             <dl class="donation-grid">
               <div class="donation-item donation-item--highlight">
-                <dt>未使用余额</dt>
+                <dt>{{ t('未使用余额') }}</dt>
                 <dd>{{ formatText(donationData.unspent) }}</dd>
               </div>
               <div class="donation-item donation-item--highlight">
-                <dt>累计捐赠</dt>
+                <dt>{{ t('累计捐赠') }}</dt>
                 <dd>{{ formatText(donationData.totalDonated) }}</dd>
               </div>
               <div class="donation-item">
-                <dt>服务器认领天数</dt>
+                <dt>{{ t('服务器认领天数') }}</dt>
                 <dd>{{ formatNumber(donationData.totalAdoptServerDay) }}</dd>
               </div>
               <div class="donation-item">
-                <dt>捐赠等级</dt>
+                <dt>{{ t('捐赠等级') }}</dt>
                 <dd>
                   {{
-                    currentDonationTier?.name ?? `Level ${formatNumber(donationData.donationLevel)}`
+                    currentDonationTier
+                      ? t(currentDonationTier.name)
+                      : t('等级 {p0}', { p0: formatNumber(donationData.donationLevel) })
                   }}
                 </dd>
               </div>
@@ -627,21 +648,25 @@ onBeforeUnmount(resetAccountData)
 
           <section class="donation-tier-section">
             <header class="donation-tier-header">
-              <h3>会员等级</h3>
+              <h3>{{ t('会员等级') }}</h3>
               <p>
-                会员等级由累计捐赠金额决定，并提供 EXP 加成、每日 Credits、GP、Hath 及免费存档额度。
+                {{
+                  t(
+                    '会员等级由累计捐赠金额决定，并提供 EXP 加成、每日 Credits、GP、Hath 及免费存档额度。',
+                  )
+                }}
               </p>
             </header>
             <div class="donation-tier-table-wrap">
               <table class="donation-tier-table">
                 <thead>
                   <tr>
-                    <th>捐赠等级</th>
-                    <th>获得条件</th>
-                    <th>EXP 加成</th>
-                    <th>每日奖励</th>
-                    <th>每日 Hath</th>
-                    <th>免费存档</th>
+                    <th>{{ t('捐赠等级') }}</th>
+                    <th>{{ t('获得条件') }}</th>
+                    <th>{{ t('EXP 加成') }}</th>
+                    <th>{{ t('每日奖励') }}</th>
+                    <th>{{ t('每日 Hath') }}</th>
+                    <th>{{ t('免费存档') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -652,96 +677,94 @@ onBeforeUnmount(resetAccountData)
                   >
                     <td>
                       <div class="tier-name">
-                        <strong>{{ tier.name }}</strong>
-                        <el-tag
+                        <strong>{{ t(tier.name) }}</strong>
+                        <TagChip
                           v-if="donationData?.donationLevel === tier.level"
                           size="small"
                           effect="plain"
+                          >{{ t('当前') }}</TagChip
                         >
-                          当前
-                        </el-tag>
                       </div>
                     </td>
-                    <td>{{ tier.requirement }}</td>
+                    <td>{{ t(tier.requirement) }}</td>
                     <td class="tier-number">{{ tier.expBonus }}</td>
                     <td class="daily-bonus">
                       <template v-if="tier.dailyCredits">
-                        <span>{{ tier.dailyCredits }} Credits</span>
+                        <span>{{ tier.dailyCredits }} {{ t('信用点') }}</span>
                         <span>{{ tier.dailyGp }} GP</span>
                       </template>
                       <span v-else>--</span>
                     </td>
                     <td class="tier-number">{{ tier.dailyHath }}</td>
-                    <td class="tier-number">{{ tier.freeArchives }}</td>
+                    <td class="tier-number">{{ t(tier.freeArchives) }}</td>
                   </tr>
                 </tbody>
               </table>
             </div>
           </section>
         </section>
-      </el-tab-pane>
+      </SectionTab>
 
-      <el-tab-pane label="Hath 特权" name="hathPerks" :disabled="!authState.loggedIn">
+      <SectionTab :label="t('Hath 特权')" name="hathPerks" :disabled="!authState.loggedIn">
         <section class="data-section">
           <div class="data-section-header">
             <div>
-              <h2>Hath 特权</h2>
-              <p>Member ID {{ authState.memberId }}</p>
+              <h2>{{ t('Hath 特权') }}</h2>
+              <p>{{ t('会员 ID') }} {{ authState.memberId }}</p>
             </div>
-            <el-button
-              circle
-              text
+            <ActionButton
+              size="icon"
+              variant="ghost"
               :icon="RefreshRight"
               :loading="moduleStates.hathPerks.loading"
-              aria-label="刷新 Hath 特权"
-              title="刷新 Hath 特权"
+              :aria-label="t('刷新 Hath 特权')"
+              :title="t('刷新 Hath 特权')"
               @click="loadAccountSection('hathPerks', true)"
             />
           </div>
 
           <div v-if="moduleStates.hathPerks.loading" class="data-loading">
-            <el-skeleton :rows="8" animated />
+            <SkeletonBlock :rows="8" />
           </div>
-          <el-result
+          <StatusPanel
             v-else-if="moduleStates.hathPerks.error"
             icon="error"
-            title="Hath 特权获取失败"
-            :sub-title="moduleStates.hathPerks.error"
+            :title="t('Hath 特权获取失败')"
+            :sub-title="t(moduleStates.hathPerks.error)"
           >
             <template #extra>
-              <el-button
-                type="primary"
+              <ActionButton
+                variant="default"
                 :icon="RefreshRight"
                 @click="loadAccountSection('hathPerks', true)"
+                >{{ t('重试') }}</ActionButton
               >
-                重试
-              </el-button>
             </template>
-          </el-result>
+          </StatusPanel>
           <template v-else-if="hathPerksData">
             <dl class="hath-summary">
               <div class="hath-summary-balance">
-                <dt>Hath 余额</dt>
+                <dt>{{ t('Hath 余额') }}</dt>
                 <dd>{{ formatNumber(hathPerksData.balance) }}</dd>
               </div>
               <div>
-                <dt>已获得</dt>
+                <dt>{{ t('已获得') }}</dt>
                 <dd>{{ formatNumber(hathPerksSummary.obtained) }}</dd>
               </div>
               <div>
-                <dt>可购买</dt>
+                <dt>{{ t('可购买') }}</dt>
                 <dd>{{ formatNumber(hathPerksSummary.purchasable) }}</dd>
               </div>
               <div>
-                <dt>前置未解锁</dt>
+                <dt>{{ t('前置未解锁') }}</dt>
                 <dd>{{ formatNumber(hathPerksSummary.locked) }}</dd>
               </div>
             </dl>
 
             <section class="hath-perks-section">
               <header class="hath-perks-header">
-                <h3>特权列表</h3>
-                <span>{{ formatNumber(hathPerksData.perks.length) }} 项</span>
+                <h3>{{ t('特权列表') }}</h3>
+                <span>{{ t('{p0} 项', { p0: formatNumber(hathPerksData.perks.length) }) }}</span>
               </header>
               <div v-if="hathPerksData.perks.length" class="hath-perks-list">
                 <details
@@ -755,7 +778,11 @@ onBeforeUnmount(resetAccountData)
                   "
                 >
                   <summary
-                    :title="group.children.length ? `${group.children.length} 项子特权` : undefined"
+                    :title="
+                      group.children.length
+                        ? t('{p0} 项子特权', { p0: group.children.length })
+                        : undefined
+                    "
                     @click="!group.children.length && $event.preventDefault()"
                   >
                     <article
@@ -767,21 +794,35 @@ onBeforeUnmount(resetAccountData)
                     >
                       <div class="hath-perk-content">
                         <div class="hath-perk-title">
-                          <h4 :title="group.parent.name">{{ group.parent.displayName }}</h4>
-                          <el-tag
-                            :type="getHathPerkStatus(group.parent).type"
+                          <h4 :title="t(group.parent.name)">
+                            {{ locale === 'en' ? group.parent.name : group.parent.displayName }}
+                          </h4>
+                          <TagChip
+                            :tone="getHathPerkStatus(group.parent).type"
                             size="small"
                             effect="plain"
                           >
-                            {{ getHathPerkStatus(group.parent).label }}
-                          </el-tag>
+                            {{ t(getHathPerkStatus(group.parent).label) }}
+                          </TagChip>
                         </div>
-                        <p>{{ formatText(group.parent.displayDescription) }}</p>
+                        <p>
+                          {{
+                            formatText(
+                              locale === 'en'
+                                ? group.parent.description
+                                : group.parent.displayDescription,
+                            )
+                          }}
+                        </p>
                         <span
                           v-if="group.parent.displayDonationRequirement"
                           class="hath-donation-requirement"
                         >
-                          {{ group.parent.displayDonationRequirement }}
+                          {{
+                            locale === 'en'
+                              ? group.parent.donationRequirement
+                              : group.parent.displayDonationRequirement
+                          }}
                         </span>
                       </div>
                       <div class="hath-perk-cost">
@@ -792,9 +833,9 @@ onBeforeUnmount(resetAccountData)
                     <span v-if="group.children.length" class="hath-collapse-meta">
                       {{ formatNumber(group.children.length) }}
                     </span>
-                    <el-icon v-if="group.children.length" class="hath-collapse-icon">
+                    <IconFrame v-if="group.children.length" class="hath-collapse-icon">
                       <ArrowRight />
-                    </el-icon>
+                    </IconFrame>
                   </summary>
 
                   <template v-if="group.children.length">
@@ -810,21 +851,33 @@ onBeforeUnmount(resetAccountData)
                       >
                         <div class="hath-perk-content">
                           <div class="hath-perk-title">
-                            <h4 :title="perk.name">{{ perk.displayName }}</h4>
-                            <el-tag
-                              :type="getHathPerkStatus(perk).type"
+                            <h4 :title="t(perk.name)">
+                              {{ locale === 'en' ? perk.name : perk.displayName }}
+                            </h4>
+                            <TagChip
+                              :tone="getHathPerkStatus(perk).type"
                               size="small"
                               effect="plain"
                             >
-                              {{ getHathPerkStatus(perk).label }}
-                            </el-tag>
+                              {{ t(getHathPerkStatus(perk).label) }}
+                            </TagChip>
                           </div>
-                          <p>{{ formatText(perk.displayDescription) }}</p>
+                          <p>
+                            {{
+                              formatText(
+                                locale === 'en' ? perk.description : perk.displayDescription,
+                              )
+                            }}
+                          </p>
                           <span
                             v-if="perk.displayDonationRequirement"
                             class="hath-donation-requirement"
                           >
-                            {{ perk.displayDonationRequirement }}
+                            {{
+                              locale === 'en'
+                                ? perk.donationRequirement
+                                : perk.displayDonationRequirement
+                            }}
                           </span>
                         </div>
                         <div class="hath-perk-cost">
@@ -836,78 +889,77 @@ onBeforeUnmount(resetAccountData)
                   </template>
                 </details>
               </div>
-              <el-empty v-else :image-size="56" description="暂无 Hath 特权数据" />
+              <EmptyState v-else :image-size="56" :description="t('暂无 Hath 特权数据')" />
             </section>
           </template>
         </section>
-      </el-tab-pane>
+      </SectionTab>
 
-      <el-tab-pane label="用户配置" name="userConfig" :disabled="!authState.loggedIn" lazy>
+      <SectionTab :label="t('用户配置')" name="userConfig" :disabled="!authState.loggedIn" lazy>
         <section class="data-section">
-          <UserConfigPanel />
+          <UserConfigPanel :key="authState.memberId" />
         </section>
-      </el-tab-pane>
+      </SectionTab>
 
-      <el-tab-pane label="认证信息" name="authentication">
+      <SectionTab :label="t('认证信息')" name="authentication">
         <section class="account-section">
-          <h2>登录态</h2>
+          <h2>{{ t('登录态') }}</h2>
           <div v-if="authState.loggedIn" class="account-status">
             <div>
               <div class="status-line">
-                <el-tag type="success" effect="plain">已保存</el-tag>
-                <strong>Member ID {{ authState.memberId }}</strong>
+                <TagChip tone="success" effect="plain">{{ t('已保存') }}</TagChip>
+                <strong>{{ t('会员 ID') }} {{ authState.memberId }}</strong>
               </div>
-              <div class="status-meta">保存时间 {{ loginTime }}</div>
+              <div class="status-meta">{{ t('保存时间 {p0}', { p0: loginTime }) }}</div>
             </div>
             <div class="auth-status-actions">
-              <el-button
+              <ActionButton
                 :loading="extracting"
                 :disabled="submitting || loggingOut"
                 @click="extractCurrentCookie"
+                >{{ t('提取 Cookie') }}</ActionButton
               >
-                提取 Cookie
-              </el-button>
-              <el-button
-                type="danger"
-                plain
+              <ActionButton
+                variant="destructive"
                 :icon="SwitchButton"
                 :loading="loggingOut"
                 @click="logout"
+                >{{ t('退出') }}</ActionButton
               >
-                退出
-              </el-button>
             </div>
           </div>
-          <el-empty v-else :image-size="56" description="尚未维护登录态" />
+          <EmptyState v-else :image-size="56" :description="t('尚未维护登录态')" />
           <div v-if="extractedCookie" class="auth-cookie-export">
-            <el-input
+            <TextField
               :model-value="extractedCookie"
               type="textarea"
               :rows="3"
               readonly
-              aria-label="当前使用中的认证 Cookie"
+              :aria-label="t('当前使用中的认证 Cookie')"
             />
             <div class="auth-status-actions">
-              <el-button type="primary" @click="copyExtractedCookie">复制 Cookie</el-button>
-              <el-button @click="clearExtractedCookie">关闭</el-button>
+              <ActionButton variant="default" @click="copyExtractedCookie">{{
+                t('复制 Cookie')
+              }}</ActionButton>
+              <ActionButton @click="clearExtractedCookie">{{ t('关闭') }}</ActionButton>
             </div>
           </div>
         </section>
 
         <section class="account-section">
-          <h2>{{ authState.loggedIn ? '更换认证 Cookie' : '认证 Cookie' }}</h2>
-          <el-form class="cookie-form" label-position="top" @submit.prevent="submitCookies">
-            <el-radio-group
+          <h2>{{ authState.loggedIn ? t('更换认证 Cookie') : t('认证 Cookie') }}</h2>
+          <form class="cookie-form" @submit.prevent="submitCookies">
+            <ChoiceGroup
               v-model="authInputMode"
               class="auth-input-mode"
-              aria-label="认证信息输入方式"
+              :aria-label="t('认证信息输入方式')"
             >
-              <el-radio-button value="cookie">Cookie 字符串</el-radio-button>
-              <el-radio-button value="fields">仅输入所需值</el-radio-button>
-            </el-radio-group>
+              <RadioChoice value="cookie">{{ t('Cookie 字符串') }}</RadioChoice>
+              <RadioChoice value="fields">{{ t('仅输入所需值') }}</RadioChoice>
+            </ChoiceGroup>
 
-            <el-form-item v-if="authInputMode === 'cookie'" label="Cookie 字符串">
-              <el-input
+            <Field v-if="authInputMode === 'cookie'" :label="t('Cookie 字符串')">
+              <TextField
                 v-model="form.cookieText"
                 type="textarea"
                 :rows="4"
@@ -915,45 +967,43 @@ onBeforeUnmount(resetAccountData)
                 autocomplete="off"
                 placeholder="ipb_member_id=...; ipb_pass_hash=..."
               />
-            </el-form-item>
+            </Field>
             <template v-else>
-              <el-form-item label="ipb_member_id">
-                <el-input
+              <Field label="ipb_member_id">
+                <TextField
                   v-model="form.memberId"
                   autocomplete="off"
-                  placeholder="输入 ipb_member_id"
+                  :placeholder="t('输入 ipb_member_id')"
                 />
-              </el-form-item>
-              <el-form-item label="ipb_pass_hash">
-                <el-input
+              </Field>
+              <Field label="ipb_pass_hash">
+                <TextField
                   v-model="form.passHash"
                   type="password"
                   autocomplete="off"
-                  placeholder="输入 ipb_pass_hash"
+                  :placeholder="t('输入 ipb_pass_hash')"
                   show-password
                 />
-              </el-form-item>
+              </Field>
             </template>
-            <el-button
+            <ActionButton
               class="save-button"
-              type="primary"
-              native-type="submit"
+              variant="default"
+              type="submit"
               :icon="Key"
               :loading="submitting"
+              >{{ t('保存 Cookie') }}</ActionButton
             >
-              保存 Cookie
-            </el-button>
-          </el-form>
-          <el-alert
+          </form>
+          <Notice
             class="cookie-tip"
-            title="认证值将由代理写入浏览器 HttpOnly Cookie，不会保存到 EViewer 本地数据中。"
-            type="info"
+            :title="t('认证值将由代理写入浏览器 HttpOnly Cookie，不会保存到 EViewer 本地数据中。')"
+            tone="info"
             :closable="false"
-            show-icon
           />
         </section>
-      </el-tab-pane>
-    </el-tabs>
+      </SectionTab>
+    </SectionTabs>
   </main>
 </template>
 
@@ -964,7 +1014,7 @@ onBeforeUnmount(resetAccountData)
   gap: 8px;
 }
 
-.auth-status-actions :deep(.el-button + .el-button) {
+.auth-status-actions :deep(.ui-button + .ui-button) {
   margin-left: 0;
 }
 
@@ -983,12 +1033,12 @@ onBeforeUnmount(resetAccountData)
   width: min(100%, 860px);
   margin: 0 auto;
   padding: 28px 20px 96px;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
 }
 
 .account-header {
   padding-bottom: 18px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .account-header h1 {
@@ -1004,13 +1054,13 @@ onBeforeUnmount(resetAccountData)
 .account-section,
 .data-section {
   padding: 24px 0 8px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .account-section h2,
 .data-section-header h2 {
   margin: 0 0 16px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 15px;
   font-weight: 600;
 }
@@ -1023,7 +1073,7 @@ onBeforeUnmount(resetAccountData)
   min-height: 56px;
 }
 
-.account-section :deep(.el-empty) {
+.account-section :deep(.ui-empty) {
   padding: 20px 0 12px;
 }
 
@@ -1041,7 +1091,7 @@ onBeforeUnmount(resetAccountData)
 .status-meta,
 .data-section-header p {
   margin: 6px 0 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
@@ -1053,14 +1103,6 @@ onBeforeUnmount(resetAccountData)
   display: flex;
   width: min(100%, 360px);
   margin-bottom: 20px;
-}
-
-.auth-input-mode :deep(.el-radio-button) {
-  flex: 1;
-}
-
-.auth-input-mode :deep(.el-radio-button__inner) {
-  width: 100%;
 }
 
 .save-button {
@@ -1081,11 +1123,11 @@ onBeforeUnmount(resetAccountData)
 
 .data-section-header h2 {
   margin-bottom: 0;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
   font-size: 18px;
 }
 
-.data-section-header .el-button {
+.data-section-header .ui-button {
   flex: 0 0 auto;
 }
 
@@ -1095,7 +1137,7 @@ onBeforeUnmount(resetAccountData)
 
 .data-group {
   padding: 22px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .data-group:last-child {
@@ -1104,7 +1146,7 @@ onBeforeUnmount(resetAccountData)
 
 .data-group h3 {
   margin: 0 0 14px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 14px;
   font-weight: 600;
 }
@@ -1116,28 +1158,28 @@ onBeforeUnmount(resetAccountData)
   justify-content: space-between;
   gap: 20px;
   padding: 12px 16px;
-  border: 1px solid var(--el-border-color-lighter);
-  border-left: 3px solid var(--el-color-primary);
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--accent);
   border-radius: 6px;
-  background: var(--el-fill-color-light);
+  background: var(--muted);
 }
 
 .metric-total span {
-  color: var(--el-text-color-regular);
+  color: var(--text);
   font-size: 14px;
   font-weight: 600;
 }
 
 .metric-total strong {
   overflow-wrap: anywhere;
-  color: var(--el-color-primary);
+  color: var(--accent);
   font-size: 22px;
   font-weight: 700;
 }
 
 .metric-breakdown-title {
   margin: 18px 0 10px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
   font-weight: 500;
 }
@@ -1156,7 +1198,7 @@ onBeforeUnmount(resetAccountData)
 }
 
 .limit-summary span {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
@@ -1167,7 +1209,7 @@ onBeforeUnmount(resetAccountData)
   gap: 1px;
   margin: 0;
   overflow: hidden;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
 }
 
@@ -1175,13 +1217,13 @@ onBeforeUnmount(resetAccountData)
 .donation-item {
   min-width: 0;
   padding: 14px 16px;
-  background: var(--el-bg-color-page);
+  background: var(--background);
 }
 
 .metric-grid dt,
 .donation-item dt {
   overflow: hidden;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1191,7 +1233,7 @@ onBeforeUnmount(resetAccountData)
 .donation-item dd {
   margin: 8px 0 0;
   overflow-wrap: anywhere;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
   font-size: 16px;
   font-weight: 600;
 }
@@ -1202,7 +1244,7 @@ onBeforeUnmount(resetAccountData)
 }
 
 .donation-item--highlight dd {
-  color: var(--el-color-primary);
+  color: var(--accent);
   font-size: 18px;
 }
 
@@ -1212,20 +1254,20 @@ onBeforeUnmount(resetAccountData)
   gap: 1px;
   margin: 22px 0 0;
   overflow: hidden;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
-  background: var(--el-border-color-lighter);
+  background: var(--border-soft);
 }
 
 .hath-summary > div {
   min-width: 0;
   padding: 14px 16px;
-  background: var(--el-bg-color-page);
+  background: var(--background);
 }
 
 .hath-summary dt {
   overflow: hidden;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -1234,20 +1276,29 @@ onBeforeUnmount(resetAccountData)
 .hath-summary dd {
   margin: 8px 0 0;
   overflow-wrap: anywhere;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
   font-size: 18px;
   font-weight: 700;
 }
 
 .hath-summary .hath-summary-balance dd {
-  color: var(--el-color-primary);
+  color: var(--accent);
   font-size: 20px;
+}
+
+.metric-total strong,
+.limit-summary strong,
+.donation-item--highlight dd,
+.hath-summary dd {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
 }
 
 .hath-perks-section {
   margin-top: 30px;
   padding-top: 24px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
 }
 
 .hath-perks-header {
@@ -1264,19 +1315,19 @@ onBeforeUnmount(resetAccountData)
 }
 
 .hath-perks-header span {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 12px;
 }
 
 .hath-perks-list {
   margin-top: 16px;
   overflow: hidden;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
 }
 
 .hath-perk-group + .hath-perk-group {
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
 }
 
 .hath-perk-item {
@@ -1285,19 +1336,19 @@ onBeforeUnmount(resetAccountData)
   gap: 20px;
   align-items: center;
   padding: 16px;
-  background: var(--el-bg-color);
+  background: var(--surface);
 }
 
 .hath-perk-item--parent {
-  background: var(--el-bg-color);
+  background: var(--surface);
 }
 
 .hath-perk-item.is-obtained {
-  box-shadow: inset 3px 0 0 var(--el-color-success);
+  box-shadow: inset 3px 0 0 var(--success);
 }
 
 .hath-perk-item.is-obtained .hath-perk-title h4 {
-  color: var(--el-color-success-dark-2);
+  color: var(--success-strong);
 }
 
 .hath-perk-item.is-locked > * {
@@ -1327,7 +1378,7 @@ onBeforeUnmount(resetAccountData)
 }
 
 .hath-perk-group.has-children > summary:hover .hath-perk-item {
-  background: var(--el-fill-color-lighter);
+  background: var(--muted-soft);
 }
 
 .hath-collapse-icon,
@@ -1335,7 +1386,7 @@ onBeforeUnmount(resetAccountData)
   position: absolute;
   top: 50%;
   z-index: 1;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   transform: translateY(-50%);
 }
 
@@ -1355,16 +1406,16 @@ onBeforeUnmount(resetAccountData)
 }
 
 .hath-sub-perks-list {
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
 }
 
 .hath-perk-item--sub {
   padding: 14px 16px 14px 38px;
-  background: var(--el-bg-color-page);
+  background: var(--background);
 }
 
 .hath-perk-item--sub + .hath-perk-item--sub {
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
 }
 
 .hath-perk-item--sub .hath-perk-title h4 {
@@ -1389,13 +1440,13 @@ onBeforeUnmount(resetAccountData)
   font-weight: 650;
 }
 
-.hath-perk-title .el-tag {
+.hath-perk-title .ui-tag {
   flex: 0 0 auto;
 }
 
 .hath-perk-content p {
   margin: 7px 0 0;
-  color: var(--el-text-color-regular);
+  color: var(--text);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -1403,7 +1454,7 @@ onBeforeUnmount(resetAccountData)
 .hath-donation-requirement {
   display: block;
   margin-top: 5px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 11px;
   line-height: 1.5;
 }
@@ -1421,20 +1472,20 @@ onBeforeUnmount(resetAccountData)
 
 .hath-perk-cost strong {
   overflow-wrap: anywhere;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
   font-size: 16px;
 }
 
 .hath-perk-cost span {
   margin-top: 3px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 11px;
 }
 
 .donation-tier-section {
   margin-top: 30px;
   padding-top: 24px;
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
 }
 
 .donation-tier-header h3 {
@@ -1446,7 +1497,7 @@ onBeforeUnmount(resetAccountData)
 .donation-tier-header p {
   max-width: 680px;
   margin: 8px 0 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
   line-height: 1.7;
 }
@@ -1454,7 +1505,7 @@ onBeforeUnmount(resetAccountData)
 .donation-tier-table-wrap {
   margin-top: 16px;
   overflow-x: auto;
-  border: 1px solid var(--el-border-color-lighter);
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
   -webkit-overflow-scrolling: touch;
 }
@@ -1475,8 +1526,8 @@ onBeforeUnmount(resetAccountData)
 }
 
 .donation-tier-table th {
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
+  color: var(--muted-foreground);
+  background: var(--muted);
   font-weight: 600;
   white-space: nowrap;
 }
@@ -1498,11 +1549,11 @@ onBeforeUnmount(resetAccountData)
 }
 
 .donation-tier-table tbody tr {
-  border-top: 1px solid var(--el-border-color-lighter);
+  border-top: 1px solid var(--border-soft);
 }
 
 .donation-tier-table tbody tr.is-current {
-  background: var(--el-color-primary-light-9);
+  background: var(--accent-soft);
 }
 
 .tier-name {
@@ -1518,7 +1569,7 @@ onBeforeUnmount(resetAccountData)
 }
 
 .tier-number {
-  color: var(--el-text-color-regular);
+  color: var(--text);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -1540,7 +1591,7 @@ onBeforeUnmount(resetAccountData)
   }
 
   .save-button,
-  .account-status .el-button {
+  .account-status .ui-button {
     width: 100%;
   }
 

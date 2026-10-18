@@ -1,292 +1,190 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
-import {
-  Calendar,
-  Expand,
-  Fold,
-  Histogram,
-  Menu as MenuIcon,
-  TrendCharts,
-} from '@element-plus/icons-vue'
+import { t } from '@/i18n'
+
+import { computed, nextTick, onMounted, ref } from 'vue'
+import { Bookmark, ArrowUpRight } from '@lucide/vue'
 import { getLayoutScrollTop, scrollLayoutTo } from '@/composables/layoutScroll'
+import { listReadingHistory } from '@/core/cache/readingHistory'
+import { useIndexedDbCacheSettings } from '@/core/cache/cacheSettings'
+import type { ReadingHistoryRecord } from '@/core/cache/indexedDb'
 import HomeYesterdayPanel from '@/components/HomeYesterdayPanel.vue'
 import HomePopularPanel from '@/components/HomePopularPanel.vue'
 import ToplistOverviewPanel from '@/components/ToplistOverviewPanel.vue'
-
 defineOptions({ name: 'HomeView' })
-
 const activePanel = ref('yesterday')
-const sidebarCollapsed = ref(false)
-const isMobile = ref(false)
+const latest = ref<ReadingHistoryRecord>()
+const settings = useIndexedDbCacheSettings()
 const panels = {
   yesterday: HomeYesterdayPanel,
   popular: HomePopularPanel,
   overview: ToplistOverviewPanel,
 }
 const activePanelComponent = computed(() => panels[activePanel.value as keyof typeof panels])
-
-async function selectPanel(index: string) {
-  if (!(index in panels)) return
-  if (isMobile.value) sidebarCollapsed.value = true
-  if (index === activePanel.value) return
-
+const sections = [
+  { key: 'yesterday', label: '昨日热门' },
+  { key: 'popular', label: '最近流行' },
+  { key: 'overview', label: '排行总览' },
+]
+async function selectPanel(key: string) {
+  if (!(key in panels) || key === activePanel.value) return
   sessionStorage.setItem(`home-panel-scroll:${activePanel.value}`, String(getLayoutScrollTop()))
-
-  activePanel.value = index
+  activePanel.value = key
   await nextTick()
-  const targetPosition = Number(sessionStorage.getItem(`home-panel-scroll:${index}`) || '0')
-  requestAnimationFrame(() => scrollLayoutTo(targetPosition))
+  requestAnimationFrame(() =>
+    scrollLayoutTo(Number(sessionStorage.getItem(`home-panel-scroll:${key}`) || '0')),
+  )
 }
-
-function toggleSidebar() {
-  sidebarCollapsed.value = !sidebarCollapsed.value
-}
-
-function syncSidebarViewport() {
-  const nextMobile = window.innerWidth < 768
-  if (nextMobile !== isMobile.value) {
-    isMobile.value = nextMobile
-    sidebarCollapsed.value = nextMobile
-  }
-}
-
-onMounted(() => {
-  syncSidebarViewport()
-  window.addEventListener('resize', syncSidebarViewport)
-})
-
-onUnmounted(() => {
-  window.removeEventListener('resize', syncSidebarViewport)
+onMounted(async () => {
+  if (settings.enabled && settings.cacheReadingHistory)
+    latest.value = (await listReadingHistory())[0]
 })
 </script>
-
 <template>
   <div class="home-view">
-    <button
-      v-if="isMobile && !sidebarCollapsed"
-      type="button"
-      class="sidebar-scrim"
-      aria-label="关闭首页导航"
-      @click="sidebarCollapsed = true"
-    />
-
-    <div class="home-shell" :class="{ 'is-collapsed': sidebarCollapsed }">
-      <aside
-        class="home-sidebar"
-        :class="{ 'is-mobile': isMobile }"
-        :aria-hidden="isMobile && sidebarCollapsed"
-        :inert="isMobile && sidebarCollapsed"
-      >
-        <div class="sidebar-header">
-          <span v-show="!sidebarCollapsed" class="sidebar-title">EHViewer</span>
-          <el-tooltip :content="sidebarCollapsed ? '展开导航' : '收起导航'" placement="right">
-            <el-button
-              class="sidebar-toggle"
-              :icon="sidebarCollapsed ? Expand : Fold"
-              circle
-              :aria-label="sidebarCollapsed ? '展开首页导航' : '收起首页导航'"
-              :aria-expanded="!sidebarCollapsed"
-              @click="toggleSidebar"
-            />
-          </el-tooltip>
-        </div>
-
-        <el-menu
-          :default-active="activePanel"
-          :collapse="!isMobile && sidebarCollapsed"
-          :collapse-transition="false"
-          class="home-menu"
-          @select="selectPanel"
-        >
-          <el-menu-item index="yesterday" aria-label="昨日热门">
-            <el-icon><Calendar /></el-icon>
-            <template #title>昨日热门</template>
-          </el-menu-item>
-          <el-menu-item index="popular" aria-label="最近流行">
-            <el-icon><TrendCharts /></el-icon>
-            <template #title>最近流行</template>
-          </el-menu-item>
-          <el-menu-item index="overview" aria-label="排行总览">
-            <el-icon><Histogram /></el-icon>
-            <template #title>排行总览</template>
-          </el-menu-item>
-        </el-menu>
-      </aside>
-
-      <main class="home-content">
-        <KeepAlive>
-          <component :is="activePanelComponent">
-            <template #navigation>
-              <el-button
-                v-if="isMobile"
-                class="mobile-menu-trigger"
-                :icon="MenuIcon"
-                circle
-                aria-label="打开首页导航"
-                @click="toggleSidebar"
-              />
-            </template>
-          </component>
-        </KeepAlive>
-      </main>
-    </div>
+    <main class="home-content">
+      <KeepAlive>
+        <component :is="activePanelComponent">
+          <template #navigation>
+            <div class="home-controls">
+              <div v-if="latest" class="home-intro">
+                <RouterLink
+                  :to="{ path: '/viewer', query: { bookId: latest.bookId, reading: 'continue' } }"
+                  class="resume-note"
+                  ><Bookmark :size="20" :stroke-width="1.4" /><span
+                    ><small>{{ t('接着上次读') }}</small
+                    ><strong>{{ latest.title }}</strong
+                    ><small>{{ t('第 {p0} 张', { p0: latest.lastOrdinal }) }}</small></span
+                  ><ArrowUpRight :size="16"
+                /></RouterLink>
+              </div>
+              <nav class="home-sections" :aria-label="t('发现内容')">
+                <button
+                  v-for="section in sections"
+                  :key="section.key"
+                  type="button"
+                  :class="{ active: activePanel === section.key }"
+                  :aria-current="activePanel === section.key ? 'page' : undefined"
+                  @click="selectPanel(section.key)"
+                >
+                  {{ t(section.label) }}</button
+                ><RouterLink to="/booklist" class="home-search-link"
+                  >{{ t('找一找') }}<ArrowUpRight :size="14"
+                /></RouterLink>
+              </nav>
+            </div>
+          </template>
+        </component>
+      </KeepAlive>
+    </main>
   </div>
 </template>
-
 <style scoped>
 .home-view {
-  position: relative;
-  width: 100%;
   max-width: 1400px;
-  margin: 0 auto;
+  margin: auto;
 }
-
-.home-shell {
-  display: grid;
-  grid-template-columns: 168px minmax(0, 1fr);
-  gap: 20px;
-  align-items: start;
-  transition: grid-template-columns 0.2s ease;
+.home-intro {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 0 0 12px;
 }
-
-.home-shell.is-collapsed {
-  grid-template-columns: 56px minmax(0, 1fr);
-}
-
-.home-sidebar {
-  position: sticky;
-  top: 0;
-  z-index: 6;
-  width: 100%;
-  padding: 8px 0;
-  overflow: hidden;
-}
-
-.sidebar-header {
+.resume-note {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  min-height: 44px;
-  padding: 0 8px 8px;
+  gap: 12px;
+  padding: 8px 2px 8px 16px;
+  border-left: 2px solid var(--accent-ring);
+  color: var(--text);
+  max-width: 290px;
+  transition: border-color var(--motion-fast);
 }
-
-.sidebar-title {
-  padding-left: 8px;
-  color: var(--el-text-color-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  white-space: nowrap;
+.resume-note:hover {
+  text-decoration: none;
+  border-color: var(--accent);
 }
-
-.sidebar-toggle {
-  width: 36px;
-  height: 36px;
-  flex-shrink: 0;
-  border-color: transparent;
-  background-color: transparent;
-}
-
-.home-menu {
-  width: 100%;
-  border-right: 0;
-  background-color: transparent;
-}
-
-.home-menu :deep(.el-menu-item) {
-  height: 44px;
-  margin: 2px 0;
-  padding: 0 14px !important;
-  border-radius: 6px;
-  color: var(--el-text-color-regular);
-  line-height: 44px;
-}
-
-.home-menu :deep(.el-menu-item:hover) {
-  background-color: var(--el-fill-color-light);
-}
-
-.home-menu :deep(.el-menu-item.is-active) {
-  color: var(--el-color-primary);
-  background-color: var(--el-color-primary-light-9);
-  font-weight: 600;
-}
-
-.home-menu :deep(.el-menu-item .el-icon) {
-  font-size: 17px;
-}
-
-.home-shell.is-collapsed .sidebar-header {
-  justify-content: center;
-  padding-inline: 0;
-}
-
-.home-shell.is-collapsed .home-menu :deep(.el-menu-item) {
-  justify-content: center;
-  width: 44px;
-  padding: 0 !important;
-}
-
-.home-content {
+.resume-note > span {
+  display: grid;
+  gap: 2px;
   min-width: 0;
 }
-
-.mobile-menu-trigger,
-.sidebar-scrim {
-  display: none;
+.resume-note small {
+  font-size: 11px;
+  color: var(--muted-foreground);
 }
-
+.resume-note strong {
+  font-size: 13px;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.home-sections {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 12px;
+  margin-bottom: 0;
+}
+.home-sections button,
+.home-search-link {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
+}
+.home-sections button {
+  position: relative;
+  background: transparent;
+  color: var(--muted-foreground);
+  padding: 6px 0;
+  min-height: 36px;
+  border: 0;
+  font-size: 13px;
+  transition: color var(--motion-fast);
+}
+.home-sections button.active {
+  color: var(--accent);
+}
+.home-sections button.active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--accent);
+  bottom: -13px;
+}
+.home-search-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  font-size: 12px;
+}
 @media (max-width: 767px) {
-  .home-shell,
-  .home-shell.is-collapsed {
-    display: block;
+  .home-intro {
+    padding-bottom: 12px;
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 16px;
   }
-
-  .mobile-menu-trigger {
-    display: inline-flex;
-    width: 40px;
-    height: 40px;
-    flex-shrink: 0;
-    border-color: var(--el-border-color-lighter);
-    background-color: var(--el-bg-color);
+  .resume-note {
+    width: 100%;
+    max-width: 100%;
+    padding: 4px 0 4px 12px;
   }
-
-  .sidebar-scrim {
-    position: fixed;
-    inset: 0;
-    z-index: 1190;
-    display: block;
-    padding: 0;
-    background-color: var(--el-overlay-color-lighter);
-    border: 0;
+  .resume-note > span {
+    grid-template-columns: auto 1fr auto;
+    align-items: center;
+    gap: 8px;
+    width: 100%;
   }
-
-  .home-sidebar.is-mobile {
-    position: fixed;
-    top: max(10px, env(safe-area-inset-top));
-    left: 10px;
-    z-index: 1200;
-    width: 180px;
-    max-height: calc(100dvh - 20px - env(safe-area-inset-top));
-    padding: 8px;
-    overflow-y: auto;
-    background-color: var(--el-bg-color);
-    border: 1px solid var(--el-border-color-lighter);
-    border-radius: 8px;
-    box-shadow: var(--el-box-shadow-light);
-    transform: translateX(0);
-    transition:
-      transform 0.2s ease,
-      opacity 0.2s ease;
+  .home-sections {
+    gap: 18px;
   }
-
-  .home-shell.is-collapsed .home-sidebar.is-mobile {
-    opacity: 0;
-    transform: translateX(calc(-100% - 20px));
-    pointer-events: none;
-  }
-
-  .home-sidebar.is-mobile .sidebar-header {
-    padding-inline: 4px;
+  .home-sections button {
+    font-size: 12px;
   }
 }
 </style>
