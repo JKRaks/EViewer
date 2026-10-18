@@ -2,8 +2,14 @@
 import { computed, onDeactivated, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Search } from '@lucide/vue'
-import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent, PopoverClose } from 'reka-ui'
-import { Button } from '@/components/ui/button'
+import {
+  PopoverRoot,
+  PopoverTrigger,
+  PopoverPortal,
+  PopoverContent,
+  PopoverClose,
+  PopoverArrow,
+} from 'reka-ui'
 import TagChip from '@/components/primitives/TagChip.vue'
 import { createGalleryTagSearchRoute } from '@/core/books/gallerySearchState'
 import { getTagDisplayInfo } from '@/core/common/tagTranslations'
@@ -36,22 +42,28 @@ onDeactivated(() => (open.value = false))
     </PopoverTrigger>
     <PopoverPortal>
       <PopoverContent
+        as-child
         side="top"
         align="start"
         :side-offset="8"
         :collision-padding="12"
-        class="gallery-tag-popover data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
       >
-        <p class="gallery-tag-name">{{ display.text }}</p>
-        <p class="gallery-tag-origin">{{ namespace }}:{{ tag.name }}</p>
-        <PopoverClose as-child>
-          <Button as-child variant="outline" size="sm" class="ui-button gallery-tag-search">
-            <RouterLink :to="searchRoute">
+        <div class="gallery-tag-popover" :aria-label="display.text">
+          <span class="gallery-tag-identity"
+            ><span class="gallery-tag-namespace">{{ namespace }}:</span>{{ tag.name }}</span
+          >
+          <PopoverClose as-child>
+            <RouterLink
+              :to="searchRoute"
+              class="gallery-tag-search"
+              :aria-label="t('搜索此标签')"
+              :title="t('搜索此标签')"
+            >
               <Search :size="16" aria-hidden="true" />
-              {{ t('搜索此标签') }}
             </RouterLink>
-          </Button>
-        </PopoverClose>
+          </PopoverClose>
+          <PopoverArrow :width="10" :height="5" class="gallery-tag-arrow" />
+        </div>
       </PopoverContent>
     </PopoverPortal>
   </PopoverRoot>
@@ -93,32 +105,53 @@ onDeactivated(() => (open.value = false))
   border-color: var(--accent-ring);
 }
 .gallery-tag-popover {
-  z-index: 60;
-  min-width: 180px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 4800;
+  width: max-content;
   max-width: min(320px, calc(100vw - 24px));
   max-height: var(--reka-popover-content-available-height);
-  overflow-y: auto;
-  padding: 14px;
+  padding: 5px 7px 5px 10px;
   border: 1px solid var(--border);
-  border-radius: 12px;
+  border-radius: 8px;
   color: var(--popover-foreground);
-  background: var(--popover);
-  box-shadow: var(--shadow);
-  transform-origin: var(--reka-popover-content-transform-origin);
+  background: var(--surface-raised);
+  box-shadow: var(--shadow-soft);
+  font-size: 13px;
+  line-height: 1.5;
 }
-.gallery-tag-name {
-  margin: 0;
-  font-weight: 500;
+.gallery-tag-identity {
+  min-width: 0;
+  max-height: calc(var(--reka-popover-content-available-height) - 12px);
+  overflow-y: auto;
   overflow-wrap: anywhere;
 }
-.gallery-tag-origin {
-  margin: 2px 0 12px;
+.gallery-tag-namespace {
   color: var(--muted-foreground);
-  font-size: 12px;
-  overflow-wrap: anywhere;
 }
 .gallery-tag-search {
-  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 5px;
+  color: var(--accent);
+  background: var(--accent-soft);
   text-decoration: none;
+}
+.gallery-tag-search:hover {
+  background: var(--muted);
+}
+.gallery-tag-popover :deep(.gallery-tag-arrow) {
+  fill: var(--surface-raised);
+}
+@media (max-width: 767px), (pointer: coarse) {
+  .gallery-tag-search {
+    width: 36px;
+    height: 36px;
+  }
 }
 </style>
