@@ -18,7 +18,7 @@
 
 /* 主内容区 */
 .layout-container > .layout-main {
-  padding: max(var(--layout-padding), env(safe-area-inset-top))
+  padding: calc(var(--layout-padding) + env(safe-area-inset-top))
     max(var(--layout-padding), env(safe-area-inset-right))
     calc(var(--layout-padding) + env(safe-area-inset-bottom))
     max(var(--layout-padding), env(safe-area-inset-left));
@@ -27,6 +27,16 @@
   background-color: var(--background);
   min-height: 0;
   min-width: 0;
+}
+
+/* Keep text out of Safari's translucent status-bar edge. */
+.layout-safe-area {
+  position: fixed;
+  inset: 0 0 auto;
+  height: env(safe-area-inset-top, 0px);
+  z-index: 1200;
+  background: var(--background);
+  pointer-events: none;
 }
 
 /* Installed applications keep scrolling inside the viewport-sized shell. */

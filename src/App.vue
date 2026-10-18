@@ -338,6 +338,7 @@ onUnmounted(() => {
       class="layout-container"
       :class="{ 'is-mobile': isMobile, 'hv-theme': route.path === '/hentaiverse' }"
     >
+      <div class="layout-safe-area" aria-hidden="true" />
       <main class="layout-main">
         <SiteHeader v-if="route.path !== '/viewer'" />
         <Suspense>
