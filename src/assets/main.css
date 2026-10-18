@@ -219,9 +219,6 @@ html.app-standalone body {
   }
 }
 
-.layout-main {
-  padding-bottom: calc(90px + env(safe-area-inset-bottom)) !important;
-}
 .layout-container {
   --layout-padding: 24px;
 }

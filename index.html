@@ -13,9 +13,106 @@
   <meta name="apple-mobile-web-app-title" content="EViewer">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
   <title>EViewer</title>
+  <script>
+    // Match the saved theme before the application bundle paints.
+    try {
+      const theme = localStorage.getItem('eviewer-theme')
+      document.documentElement.classList.toggle('dark',
+        theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches))
+    } catch { /* Theme detection must not block the first paint. */ }
+  </script>
+  <style>
+    #app-launch {
+      position: fixed;
+      inset: 0;
+      z-index: 2000;
+      display: grid;
+      place-items: center;
+      background: var(--background, #fafafa);
+      color: var(--foreground, #292f31);
+    }
+    html.dark #app-launch {
+      background: var(--background, #1e2224);
+      color: var(--foreground, #eceeed);
+    }
+    .launch-wordmark {
+      width: min(66vw, 320px);
+      height: auto;
+      fill: currentColor;
+      transform: translateY(-4vh);
+    }
+    .launch-dot { fill: var(--accent, #285f8c); }
+    html.dark .launch-dot { fill: var(--accent, #99c7e5); }
+    .launch-stroke {
+      opacity: 0;
+      stroke-dasharray: 1;
+      stroke-dashoffset: 1;
+      animation: launch-write linear both;
+    }
+    .launch-bloom {
+      position: absolute;
+      border-radius: 50%;
+      background: var(--accent, #285f8c);
+      visibility: hidden;
+    }
+    html.dark .launch-bloom { background: var(--accent, #99c7e5); }
+    #app.is-revealing {
+      position: relative;
+      z-index: 2001;
+      background: var(--background, #fafafa);
+    }
+    @keyframes launch-write {
+      from { opacity: 0; stroke-dashoffset: 1; }
+      1% { opacity: 1; }
+      to { opacity: 1; stroke-dashoffset: 0; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .launch-stroke { animation: none; opacity: 1; stroke-dashoffset: 0; }
+    }
+  </style>
 </head>
 
 <body>
+  <!-- Inline paths draw before the bundle loads, without fetching a font. -->
+  <div id="app-launch" aria-hidden="true">
+    <svg class="launch-wordmark" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 292 84">
+      <defs>
+          <mask id="launch-ink-0" maskUnits="userSpaceOnUse" x="0" y="0" width="292" height="84">
+            <path class="launch-stroke" pathLength="1" d="M54 23Q48 15 38 17H26L15 65H37Q44 65 48 53M22 40H40" fill="none" stroke="white" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" style="animation-delay:.08s;animation-duration:.24s" />
+          </mask>
+          <mask id="launch-ink-1" maskUnits="userSpaceOnUse" x="0" y="0" width="292" height="84">
+            <path class="launch-stroke" pathLength="1" d="M56 17H66L71 64L101 17H108" fill="none" stroke="white" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" style="animation-delay:.32s;animation-duration:.2s" />
+          </mask>
+          <mask id="launch-ink-2" maskUnits="userSpaceOnUse" x="0" y="0" width="292" height="84">
+            <path class="launch-stroke" pathLength="1" d="M99 35Q113 27 110 40L104 59Q105 68 116 63M114 17v.1" fill="none" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" style="animation-delay:.52s;animation-duration:.12s" />
+          </mask>
+          <mask id="launch-ink-3" maskUnits="userSpaceOnUse" x="0" y="0" width="292" height="84">
+            <path class="launch-stroke" pathLength="1" d="M125 49Q147 47 145 35Q141 28 132 35Q120 44 122 56Q125 74 146 58" fill="none" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" style="animation-delay:.64s;animation-duration:.16s" />
+          </mask>
+          <mask id="launch-ink-4" maskUnits="userSpaceOnUse" x="0" y="0" width="292" height="84">
+            <path class="launch-stroke" pathLength="1" d="M149 35Q163 28 159 43L155 57Q155 74 176 58L182 32L176 55Q174 75 194 59Q209 41 200 33" fill="none" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" style="animation-delay:.8s;animation-duration:.22s" />
+          </mask>
+          <mask id="launch-ink-5" maskUnits="userSpaceOnUse" x="0" y="0" width="292" height="84">
+            <path class="launch-stroke" pathLength="1" d="M214 49Q236 47 234 35Q230 28 221 35Q209 44 211 56Q214 74 235 58" fill="none" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" style="animation-delay:1.02s;animation-duration:.15s" />
+          </mask>
+          <mask id="launch-ink-6" maskUnits="userSpaceOnUse" x="0" y="0" width="292" height="84">
+            <path class="launch-stroke" pathLength="1" d="M239 35Q255 26 249 43L244 66M252 40Q268 25 267 38" fill="none" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" style="animation-delay:1.17s;animation-duration:.15s" />
+          </mask>
+          <mask id="launch-ink-7" maskUnits="userSpaceOnUse" x="0" y="0" width="292" height="84">
+            <path class="launch-stroke" pathLength="1" d="M276.6 62v.1" fill="none" stroke="white" stroke-width="14" stroke-linecap="round" stroke-linejoin="round" style="animation-delay:1.32s;animation-duration:.08s" />
+          </mask>
+      </defs>
+        <path mask="url(#launch-ink-0)" d="M54.8 16.1L52 28.2L49.4 28.2C49.2 25.7 48.7 23.6 47.8 21.9C46.9 20.2 45.7 19.3 44.2 19C43.5 18.9 42.6 18.9 41.6 18.8C40.6 18.8 39.5 18.7 38.2 18.7L30.2 18.7L25.5 38.8L31.2 38.8C32.9 38.8 34.3 38.6 35.2 38.3C36.2 38 37.1 37.4 37.8 36.6C38.5 35.9 39.2 34.9 39.9 33.7C40.5 32.5 41 31.4 41.3 30.6L43.9 30.6L39.4 50.1L36.8 50.1C36.8 49.8 36.8 49.5 36.8 49.1C36.8 48.8 36.9 48.4 36.9 48C36.9 47.1 36.8 46.3 36.7 45.5C36.6 44.7 36.4 44.1 36.2 43.7C35.7 42.8 35 42.2 34.1 41.9C33.2 41.6 32 41.5 30.5 41.5L24.9 41.5L21.4 56.7C21.3 57.3 21.1 57.9 21 58.6C21 59.2 20.9 59.8 20.9 60.1C20.9 61.4 21.4 62.3 22.3 62.7C23.2 63.1 25.3 63.4 28.4 63.4C32.4 63.4 35.1 63.2 36.5 62.9C37.9 62.6 38.9 62.2 39.6 61.7C40.9 60.6 42.5 58.9 44.3 56.5C46.1 54.1 47.3 52.4 47.9 51.3L50.4 51.3L46.1 66L4.7 66L5.2 63.7C5.9 63.7 6.9 63.6 8.1 63.4C9.3 63.3 10.1 63.1 10.5 62.9C11.3 62.6 11.9 62.2 12.4 61.6C12.8 60.9 13.1 60.2 13.3 59.4L21.6 23.2C21.7 23 21.7 22.8 21.8 22.6C21.8 22.3 21.8 22.1 21.8 21.9C21.8 21.4 21.7 21 21.5 20.6C21.3 20.3 21 19.9 20.5 19.7C19.9 19.4 19.1 19.1 18.1 18.9C17 18.6 16.2 18.5 15.6 18.5L16.2 16.1Z" />
+        <path mask="url(#launch-ink-1)" d="M107.6 16.1L107.1 18.5C106.4 18.5 105.7 18.6 104.8 18.8C103.9 19.1 103.1 19.4 102.4 19.8C101.4 20.3 100.6 21 99.9 21.7C99.3 22.5 98.7 23.4 98 24.4C95.5 28.1 91.8 34 86.8 41.9C81.8 49.9 76.7 58.1 71.4 66.7L68.5 66.7C67.3 58.8 66.1 50.2 64.8 40.9C63.5 31.7 62.7 25.8 62.3 23.2C62.1 22.4 61.9 21.8 61.6 21.3C61.2 20.7 60.7 20.2 60.1 19.7C59.5 19.3 58.9 19 58.2 18.8C57.5 18.6 56.8 18.5 56.1 18.5L56.7 16.1L76.9 16.1L76.4 18.5C73.9 18.6 72.1 18.8 71.1 19.2C70.1 19.5 69.6 20.1 69.6 20.8C69.6 21 69.6 21.3 69.6 21.5C69.6 21.8 69.6 22 69.6 22.1C69.9 24.4 70.5 28.2 71.2 33.5C72 38.8 73 46.2 74.4 55.8C77.7 50.7 81 45.4 84.4 40C87.8 34.5 90.2 30.5 91.7 28C93.1 25.6 94 24 94.3 23C94.6 22.1 94.8 21.5 94.8 21.2C94.8 20.8 94.6 20.4 94.1 20C93.7 19.7 93.1 19.4 92.4 19.2C91.7 19 91 18.8 90.2 18.7C89.3 18.6 88.6 18.5 88.1 18.5L88.6 16.1Z" />
+        <path mask="url(#launch-ink-2)" d="M116 62.2L115.5 64.4C113.3 65.3 111.6 65.9 110.3 66.3C109 66.6 107.9 66.8 107 66.8C105.1 66.8 103.7 66.3 102.8 65.3C101.8 64.3 101.4 63.1 101.4 61.7C101.4 61.2 101.4 60.6 101.5 60C101.6 59.4 101.8 58.7 102 57.8L105.7 42.8C105.9 42 106.1 41.1 106.2 40.2C106.4 39.3 106.5 38.5 106.5 37.8C106.5 36.5 106.3 35.6 105.8 35.2C105.4 34.7 104.5 34.5 103.2 34.5C102.7 34.5 102 34.6 101.1 34.8C100.3 34.9 99.6 35.1 99.2 35.2L99.7 32.9C101.5 32.1 103.2 31.5 104.6 31.1C106.1 30.7 107.2 30.5 108.1 30.5C110 30.5 111.4 31 112.3 31.9C113.1 32.8 113.6 34 113.6 35.6C113.6 36 113.5 36.6 113.4 37.3C113.3 38 113.2 38.8 113 39.5L109.3 54.4C109 55.4 108.8 56.3 108.7 57.1C108.5 58 108.4 58.7 108.4 59.3C108.4 60.6 108.7 61.6 109.3 62C109.9 62.5 110.8 62.8 112.2 62.8C112.6 62.8 113.3 62.7 114.1 62.6C114.9 62.5 115.6 62.4 116 62.2ZM118.5 17.2C118.5 18.6 118.1 19.7 117.2 20.7C116.3 21.7 115.2 22.2 114 22.2C112.8 22.2 111.7 21.7 110.9 20.8C110 19.8 109.6 18.8 109.6 17.5C109.6 16.3 110 15.1 110.9 14.2C111.7 13.2 112.8 12.7 114 12.7C115.3 12.7 116.4 13.2 117.2 14.1C118.1 15 118.5 16 118.5 17.2Z" />
+        <path mask="url(#launch-ink-3)" d="M148.4 37.8C148.4 40.3 147.6 42.5 146.1 44.2C144.5 46 142.2 47.5 139.3 48.5C137.1 49.3 134.9 50 132.6 50.4C130.4 50.9 128 51.4 125.3 51.7C125.3 55.4 125.9 58.2 127.3 60.2C128.7 62.1 130.7 63.1 133.3 63.1C135.7 63.1 137.8 62.5 139.6 61.3C141.3 60.2 143.1 58.4 144.8 56.1L146.8 57.6C145 60.4 142.6 62.7 139.8 64.4C137 66.2 134.1 67 131.1 67C126.9 67 123.7 65.8 121.6 63.5C119.4 61.2 118.3 57.9 118.3 53.6C118.3 50.7 118.7 47.9 119.7 45.2C120.6 42.5 121.9 40 123.7 37.8C125.4 35.6 127.6 33.9 130.1 32.5C132.6 31.2 135.4 30.5 138.4 30.5C141.8 30.5 144.3 31.2 145.9 32.6C147.6 33.9 148.4 35.7 148.4 37.8ZM141.9 37C141.9 36.1 141.8 35.3 141.5 34.8C141.3 34.3 141 33.9 140.6 33.6C140.1 33.4 139.7 33.2 139.2 33.1C138.7 33 138.3 33 137.8 33C135 33 132.4 34.6 130 37.6C127.6 40.7 126.1 44.6 125.5 49.2C127.1 48.9 129 48.6 131 48.2C133.1 47.8 134.8 47.2 136.2 46.5C138.1 45.5 139.6 44.2 140.5 42.6C141.4 41 141.9 39.2 141.9 37Z" />
+        <path mask="url(#launch-ink-4)" d="M204.6 37C204.6 40.7 204.1 44.4 203 48C202 51.6 200.5 54.8 198.7 57.5C196.6 60.6 194.3 62.9 191.8 64.6C189.2 66.2 186.4 67.1 183.4 67.1C181.1 67.1 179.1 66.5 177.3 65.2C175.4 64 174.1 62.4 173.5 60.2C172.7 61 171.9 61.8 171.2 62.5C170.5 63.2 169.5 63.9 168.4 64.7C167.2 65.4 166.2 66 165.2 66.4C164.3 66.8 163.1 67 161.6 67C159.8 67 158.3 66.7 157.2 66.2C156 65.6 155.1 64.9 154.4 64C153.7 63.2 153.3 62.2 153 61.1C152.7 60.1 152.6 59 152.6 57.8C152.6 57.3 152.6 56.8 152.7 56.1C152.8 55.4 152.9 54.8 153 54.3L156 43.2C156.3 42.2 156.5 41.2 156.7 40.3C156.8 39.5 156.8 38.7 156.8 38.2C156.8 36.9 156.6 36 156.2 35.6C155.8 35.1 154.9 34.9 153.5 34.9C153 34.9 152.4 35 151.6 35.2C150.8 35.4 150.2 35.6 149.7 35.7L150.2 33.4C152.1 32.6 153.7 32 155.1 31.5C156.4 31.1 157.6 30.9 158.4 30.9C160.3 30.9 161.6 31.3 162.5 32.2C163.4 33.1 163.8 34.4 163.8 36C163.8 36.4 163.8 37 163.7 37.7C163.6 38.4 163.5 39.1 163.3 39.9L160 52.9C159.8 53.7 159.6 54.6 159.5 55.5C159.4 56.5 159.3 57.1 159.3 57.6C159.3 59.3 159.6 60.7 160.4 61.6C161.1 62.5 162.2 62.9 163.9 62.9C165.4 62.9 166.9 62.5 168.5 61.7C170.2 60.9 171.6 59.7 173 58.2L179.2 31.5L185.3 31L185.7 31.6L180.8 53C180.6 53.7 180.5 54.6 180.3 55.6C180.1 56.6 180 57.3 180 57.5C180 58.8 180.2 59.8 180.6 60.6C181 61.3 181.6 61.9 182.2 62.2C182.8 62.6 183.4 62.8 184.1 62.9C184.7 63 185.4 63 186 63C187.6 63 189.2 62.5 190.9 61.5C192.6 60.5 194 59.2 195.3 57.5C196.7 55.7 197.7 53.7 198.5 51.5C199.3 49.4 199.7 47 199.7 44.5C199.7 43 199.5 42 199.2 41.2C198.8 40.4 198.3 39.8 197.9 39.2C197.4 38.6 197 38 196.6 37.4C196.2 36.7 196 35.8 196 34.6C196 33.3 196.5 32.3 197.3 31.6C198.2 30.9 199.2 30.5 200.2 30.5C201.5 30.5 202.6 31.1 203.4 32.2C204.2 33.3 204.6 34.9 204.6 37Z" />
+        <path mask="url(#launch-ink-5)" d="M237.2 37.8C237.2 40.3 236.4 42.5 234.8 44.2C233.3 46 231 47.5 228 48.5C225.8 49.3 223.6 50 221.4 50.4C219.2 50.9 216.7 51.4 214 51.7C214 55.4 214.7 58.2 216.1 60.2C217.5 62.1 219.5 63.1 222.1 63.1C224.5 63.1 226.5 62.5 228.3 61.3C230.1 60.2 231.9 58.4 233.6 56.1L235.6 57.6C233.7 60.4 231.4 62.7 228.6 64.4C225.8 66.2 222.8 67 219.8 67C215.7 67 212.5 65.8 210.3 63.5C208.1 61.2 207 57.9 207 53.6C207 50.7 207.5 47.9 208.4 45.2C209.3 42.5 210.7 40 212.5 37.8C214.2 35.6 216.3 33.9 218.9 32.5C221.4 31.2 224.2 30.5 227.2 30.5C230.6 30.5 233.1 31.2 234.7 32.6C236.3 33.9 237.2 35.7 237.2 37.8ZM230.7 37C230.7 36.1 230.6 35.3 230.3 34.8C230 34.3 229.7 33.9 229.3 33.6C228.9 33.4 228.4 33.2 228 33.1C227.5 33 227 33 226.5 33C223.7 33 221.1 34.6 218.8 37.6C216.4 40.7 214.9 44.6 214.2 49.2C215.9 48.9 217.7 48.6 219.8 48.2C221.9 47.8 223.6 47.2 224.9 46.5C226.9 45.5 228.3 44.2 229.3 42.6C230.2 41 230.7 39.2 230.7 37Z" />
+        <path mask="url(#launch-ink-6)" d="M269.9 36.2C269.9 36.9 269.8 37.6 269.6 38.4C269.4 39.2 269.2 39.8 268.8 40.4C268.4 41 267.9 41.5 267.4 41.8C266.9 42.2 266.2 42.3 265.3 42.3C264 42.3 263 42 262.4 41.4C261.8 40.7 261.5 40 261.5 39.3C261.5 38.5 261.6 37.7 262 36.8C262.3 35.9 262.7 35 263.1 34.1C262.8 34.1 262.3 34.2 261.7 34.4C261 34.5 260.3 34.8 259.4 35.3C258.4 35.7 257.4 36.4 256.3 37.3C255.1 38.2 253.9 39.3 252.6 40.8L246.9 66L240.3 66L245.5 43.2C245.6 42.7 245.8 41.8 246 40.7C246.2 39.6 246.3 38.7 246.3 38.2C246.3 36.9 246.1 36 245.6 35.5C245.2 35.1 244.3 34.9 243 34.9C242.5 34.9 241.8 35 241 35.1C240.2 35.3 239.6 35.5 239.1 35.6L239.7 33.3C241.5 32.5 243.1 31.9 244.5 31.5C245.9 31.1 247.1 30.9 248.1 30.9C250 30.9 251.3 31.4 252.1 32.4C252.9 33.5 253.3 35 253.3 37L253.6 37C256.3 34.6 258.5 32.9 259.9 32C261.3 31 262.8 30.5 264.4 30.5C265.2 30.5 265.9 30.6 266.6 30.8C267.3 31 267.9 31.3 268.4 31.7C268.9 32.2 269.3 32.8 269.5 33.5C269.8 34.1 269.9 35 269.9 36.2Z" />
+        <path class="launch-dot" mask="url(#launch-ink-7)" d="M281.4 62C281.4 63.3 281 64.4 280 65.3C279.1 66.3 277.9 66.7 276.6 66.7C275.3 66.7 274.2 66.3 273.2 65.3C272.3 64.4 271.8 63.3 271.8 62C271.8 60.7 272.3 59.5 273.2 58.6C274.2 57.6 275.3 57.2 276.6 57.2C277.9 57.2 279.1 57.6 280 58.6C281 59.5 281.4 60.7 281.4 62Z" />
+    </svg>
+    <span class="launch-bloom"></span>
+  </div>
   <div id="app"></div>
   <script type="module" src="/src/main.ts"></script>
 </body>

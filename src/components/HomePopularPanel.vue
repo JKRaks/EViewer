@@ -7,7 +7,7 @@ import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
 import SkeletonLine from '@/components/primitives/SkeletonLine.vue'
 import Notice from '@/components/primitives/Notice.vue'
 import EmptyState from '@/components/primitives/EmptyState.vue'
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import {
   RefreshCw as Refresh,
   TrendingUp as TrendCharts,
@@ -23,8 +23,6 @@ defineOptions({ name: 'HomePopularPanel' })
 const books = ref<bookItem[]>([])
 const loading = ref(false)
 const errorMessage = ref('')
-const featuredBooks = computed(() => books.value.slice(0, 3))
-const regularBooks = computed(() => books.value.slice(3))
 
 async function fetchPopularBooks() {
   if (loading.value) return
@@ -91,19 +89,8 @@ onMounted(() => void fetchPopularBooks())
 
     <EmptyState v-else-if="books.length === 0" :description="t('暂无流行画册')" />
 
-    <div v-else class="popular-content" v-busy="loading">
-      <section class="featured-grid gallery-masonry">
-        <BookItem v-for="book in featuredBooks" :key="book.bookId" :book="book" />
-      </section>
-      <section v-if="regularBooks.length" class="regular-section">
-        <div class="section-title">
-          <h2>{{ t('更多流行') }}</h2>
-          <span>{{ t('{p0} 本', { p0: regularBooks.length }) }}</span>
-        </div>
-        <div class="regular-grid gallery-masonry">
-          <BookItem v-for="book in regularBooks" :key="book.bookId" :book="book" />
-        </div>
-      </section>
+    <div v-else class="popular-grid gallery-masonry" v-busy="loading">
+      <BookItem v-for="book in books" :key="book.bookId" :book="book" />
     </div>
   </div>
 </template>
@@ -145,40 +132,15 @@ onMounted(() => void fetchPopularBooks())
   color: var(--muted-foreground);
   font-size: 13px;
 }
-.popular-content,
-.regular-section {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+.popular-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 26px 22px;
 }
-.featured-grid {
-  columns: 3 360px;
-  column-gap: 14px;
-}
-.featured-grid :deep(.book-item),
-.regular-grid :deep(.book-item) {
+.popular-grid :deep(.book-item) {
   display: flex;
   width: 100%;
-  margin-bottom: 12px;
-  break-inside: avoid;
-}
-.section-title {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-.section-title h2 {
   margin: 0;
-  font-size: 18px;
-}
-.section-title span {
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-.regular-grid {
-  columns: 360px;
-  column-gap: 12px;
 }
 .skeleton-grid {
   display: grid;
@@ -199,12 +161,12 @@ onMounted(() => void fetchPopularBooks())
   height: 126px;
   flex-shrink: 0;
 }
-@media (max-width: 1024px) {
-  .featured-grid {
-    columns: 1;
+@media (max-width: 1050px) {
+  .popular-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
-@media (max-width: 768px) {
+@media (max-width: 767px) {
   .panel-header {
     padding: 14px 2px;
   }
@@ -214,41 +176,7 @@ onMounted(() => void fetchPopularBooks())
   .panel-header p {
     display: none;
   }
-  .regular-grid,
-  .featured-grid {
-    columns: 1;
-  }
-}
-.featured-grid,
-.regular-grid {
-  display: grid;
-  columns: auto;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 26px 22px;
-}
-.featured-grid > :deep(.book-item),
-.regular-grid > :deep(.book-item) {
-  margin: 0;
-}
-.featured-grid > .ui-empty,
-.featured-grid > .load-more-trigger,
-.featured-grid > .loading-more,
-.featured-grid > .no-more,
-.regular-grid > .ui-empty,
-.regular-grid > .load-more-trigger,
-.regular-grid > .loading-more,
-.regular-grid > .no-more {
-  grid-column: 1/-1;
-}
-@media (max-width: 1050px) {
-  .featured-grid,
-  .regular-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-@media (max-width: 767px) {
-  .featured-grid,
-  .regular-grid {
+  .popular-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 22px 14px;
   }
