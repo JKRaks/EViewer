@@ -42,6 +42,7 @@ export interface HentaiVerseStatGroup {
 export interface HentaiVerseMetric {
   label: string
   value: string
+  percent?: number
 }
 
 export interface HentaiVerseAttribute {

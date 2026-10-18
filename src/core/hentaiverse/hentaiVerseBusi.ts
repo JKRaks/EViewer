@@ -1,3 +1,4 @@
+import { formatSystemMessage } from '@/i18n'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
 import type {
   HentaiVerseAbilityActionName,
@@ -250,7 +251,6 @@ export class HentaiVerseBusi {
     if (!page.authenticated) throw new Error('HentaiVerse 登录态已失效')
     return {
       ...updated,
-      monsters: updated.monsters.map((monster) => ({ ...monster, defeated: true })),
       actions: [],
       completed: true,
       completionText: updated.completionText || '源站已确认本次战斗结束。',
@@ -287,7 +287,10 @@ export class HentaiVerseBusi {
     })
     const payload = (await response.json().catch(() => ({}))) as T & { error?: string }
     if (!response.ok || payload.error)
-      throw new Error(payload.error || `HentaiVerse 请求失败 (${response.status})`)
+      throw new Error(
+        payload.error ||
+          formatSystemMessage('HentaiVerse 请求失败 ({p0})', { p0: response.status }),
+      )
     return payload
   }
 }
@@ -295,10 +298,10 @@ export class HentaiVerseBusi {
 function readError(text: string, status: number) {
   try {
     const parsed = JSON.parse(text) as { error?: string }
-    return parsed.error || `HentaiVerse 请求失败 (${status})`
+    return parsed.error || formatSystemMessage('HentaiVerse 请求失败 ({p0})', { p0: status })
   } catch {
     return status === 302 || status === 303
       ? 'HentaiVerse 登录态已失效'
-      : `HentaiVerse 请求失败 (${status})`
+      : formatSystemMessage('HentaiVerse 请求失败 ({p0})', { p0: status })
   }
 }

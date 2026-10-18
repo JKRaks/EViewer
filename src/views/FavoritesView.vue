@@ -1,4 +1,19 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import StatusPanel from '@/components/primitives/StatusPanel.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import Hint from '@/components/primitives/Hint.vue'
+import SectionTabs from '@/components/primitives/SectionTabs'
+import SectionTab from '@/components/primitives/SectionTab.vue'
+import TextField from '@/components/primitives/TextField.vue'
+import IconFrame from '@/components/primitives/IconFrame.vue'
+import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
+import RadioChoice from '@/components/primitives/RadioChoice.vue'
+import Notice from '@/components/primitives/Notice.vue'
+import CheckField from '@/components/primitives/CheckField.vue'
+import SelectField from '@/components/primitives/SelectField.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
 import {
   computed,
   nextTick,
@@ -10,10 +25,15 @@ import {
   watch,
 } from 'vue'
 import { useRouter } from 'vue-router'
-import { Delete, Loading, Operation, RefreshRight, Search, Switch } from '@element-plus/icons-vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import 'element-plus/es/components/message/style/css'
-import 'element-plus/es/components/message-box/style/css'
+import {
+  Trash2 as Delete,
+  LoaderCircle as Loading,
+  SlidersHorizontal as Operation,
+  RotateCw as RefreshRight,
+  Search,
+  ArrowLeftRight as Switch,
+} from '@lucide/vue'
+import { notify, dialogs } from '@/components/primitives/feedback'
 import BookItem from '@/components/BookItem.vue'
 import { useAuthState } from '@/core/auth/authState'
 import { favoriteBusi } from '@/core/books/favoriteBusi'
@@ -56,6 +76,7 @@ const loadMoreTrigger = ref<HTMLElement | null>(null)
 let observer: IntersectionObserver | null = null
 let pendingReset = false
 let loadedFavoriteRevision = favoriteDataRevision.value
+let favoriteRequestId = 0
 
 const {
   persistScrollPosition,
@@ -98,6 +119,7 @@ const fetchFavorites = async (reset: boolean = true) => {
   const isLoadingMore = !reset
   if (isLoadingMore && !listResult.value?.nextPage) return
   const requestInput = createListInput(isLoadingMore ? listResult.value?.nextPage : undefined)
+  const requestId = ++favoriteRequestId
 
   errorMessage.value = ''
   authenticationRequired.value = false
@@ -106,6 +128,7 @@ const fetchFavorites = async (reset: boolean = true) => {
 
   try {
     const result = await listBusi.getFavoriteList(requestInput)
+    if (requestId !== favoriteRequestId) return
     if (requestInput.category !== currentCategory.value) {
       pendingReset = true
       return
@@ -119,7 +142,7 @@ const fetchFavorites = async (reset: boolean = true) => {
       return
     }
     if (!result.isSuccess) {
-      errorMessage.value = result.msg || '个人收藏获取失败'
+      errorMessage.value = result.msg || t('个人收藏获取失败')
       return
     }
 
@@ -141,15 +164,17 @@ const fetchFavorites = async (reset: boolean = true) => {
     await nextTick()
     setupObserver()
   } catch (error) {
-    if (requestInput.category === currentCategory.value) {
-      errorMessage.value = error instanceof Error ? error.message : '个人收藏获取失败'
+    if (requestId === favoriteRequestId && requestInput.category === currentCategory.value) {
+      errorMessage.value = error instanceof Error ? error.message : t('个人收藏获取失败')
     }
   } finally {
-    const shouldReload = pendingReset && authState.loggedIn
-    pendingReset = false
-    loading.value = false
-    loadingMore.value = false
-    if (shouldReload) void fetchFavorites()
+    if (requestId === favoriteRequestId) {
+      const shouldReload = pendingReset && authState.loggedIn
+      pendingReset = false
+      loading.value = false
+      loadingMore.value = false
+      if (shouldReload) void fetchFavorites()
+    }
   }
 }
 
@@ -167,17 +192,20 @@ const handleSortChange = async (value: string | number | boolean) => {
   if (nextMode === sortMode.value) return
 
   const previousMode = listResult.value?.sortMode ?? sortMode.value
+  const memberId = authState.memberId
   sortMode.value = nextMode
   sorting.value = true
   try {
     const result = await listBusi.updateFavoriteSort(new favoriteSortInput(nextMode))
+    if (memberId !== authState.memberId) return
     if (!result.isSuccess) throw new Error(result.msg)
     await fetchFavorites()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '收藏排序更新失败')
+    if (memberId !== authState.memberId) return
+    notify.error(error instanceof Error ? error.message : t('收藏排序更新失败'))
     sortMode.value = previousMode
   } finally {
-    sorting.value = false
+    if (memberId === authState.memberId) sorting.value = false
   }
 }
 
@@ -196,25 +224,28 @@ const toggleAllLoaded = (value: boolean | string | number) => {
 
 const runFavoriteAction = async (action: 'delete' | `fav${number}`) => {
   if (selectedGalleryIds.value.length === 0 || sorting.value || updating.value) return
+  const memberId = authState.memberId
   updating.value = true
   try {
     const result = await listBusi.updateFavorites(
       new favoriteActionInput(action, selectedGalleryIds.value),
     )
+    if (memberId !== authState.memberId) return
     if (!result.isSuccess) throw new Error(result.msg)
     selectedGalleryIds.value = []
-    ElMessage.success(action === 'delete' ? '已删除选中的收藏' : '收藏分类已更新')
+    notify.success(action === 'delete' ? t('已删除选中的收藏') : t('收藏分类已更新'))
     await fetchFavorites()
   } catch (error) {
-    ElMessage.error(error instanceof Error ? error.message : '收藏夹更新失败')
+    if (memberId !== authState.memberId) return
+    notify.error(error instanceof Error ? error.message : t('收藏夹更新失败'))
   } finally {
-    updating.value = false
+    if (memberId === authState.memberId) updating.value = false
   }
 }
 
 const moveSelected = async () => {
   if (moveTarget.value === undefined) {
-    ElMessage.warning('请选择目标收藏分类')
+    notify.warning(t('请选择目标收藏分类'))
     return
   }
   await runFavoriteAction(`fav${moveTarget.value}`)
@@ -222,17 +253,18 @@ const moveSelected = async () => {
 
 const deleteSelected = async () => {
   if (selectedGalleryIds.value.length === 0) return
+  const memberId = authState.memberId
   try {
-    await ElMessageBox.confirm(
-      `确定删除选中的 ${selectedGalleryIds.value.length} 个收藏吗？此操作无法撤销。`,
-      '删除收藏',
+    await dialogs.confirm(
+      t('确定删除选中的 {p0} 个收藏吗？此操作无法撤销。', { p0: selectedGalleryIds.value.length }),
+      t('删除收藏'),
       {
         type: 'warning',
-        confirmButtonText: '删除',
-        cancelButtonText: '取消',
+        confirmButtonText: t('删除'),
+        cancelButtonText: t('取消'),
       },
     )
-    await runFavoriteAction('delete')
+    if (memberId === authState.memberId) await runFavoriteAction('delete')
   } catch {
     // 用户取消时不执行操作。
   }
@@ -256,6 +288,7 @@ const setupObserver = () => {
 const activatePage = async () => {
   bindScrollListener()
   setupObserver()
+  if (loading.value || loadingMore.value) return
   if (
     authState.loggedIn &&
     (!initialized.value || loadedFavoriteRevision !== favoriteDataRevision.value)
@@ -265,17 +298,25 @@ const activatePage = async () => {
 }
 
 watch(
-  () => authState.loggedIn,
-  (loggedIn) => {
+  () => [authState.loggedIn, authState.memberId, authState.lastLoginAt] as const,
+  ([loggedIn]) => {
+    favoriteRequestId++
+    books.value = []
+    listResult.value = undefined
+    selectedGalleryIds.value = []
+    currentCategory.value = 'all'
+    keyword.value = ''
+    moveTarget.value = undefined
+    loading.value = false
+    loadingMore.value = false
+    sorting.value = false
+    updating.value = false
+    pendingReset = false
+    initialized.value = false
+    errorMessage.value = ''
+    authenticationRequired.value = false
     if (loggedIn) {
-      initialized.value = false
       void fetchFavorites()
-    } else {
-      books.value = []
-      listResult.value = undefined
-      initialized.value = false
-      authenticationRequired.value = false
-      pendingReset = false
     }
   },
 )
@@ -303,190 +344,188 @@ onUnmounted(() => {
 <template>
   <main class="favorites-view">
     <template v-if="!authState.loggedIn || authenticationRequired">
-      <el-result
+      <StatusPanel
         icon="warning"
-        title="需要认证信息"
-        sub-title="维护有效的认证 Cookie 后才能读取个人收藏。"
+        :title="t('需要认证信息')"
+        :sub-title="t('维护有效的认证 Cookie 后才能读取个人收藏。')"
       >
         <template #extra>
-          <el-button type="primary" @click="goToLogin">前往账号管理</el-button>
+          <ActionButton variant="default" @click="goToLogin">{{ t('前往账号管理') }}</ActionButton>
         </template>
-      </el-result>
+      </StatusPanel>
     </template>
 
     <template v-else>
       <header class="favorites-header">
         <div>
-          <h1>个人收藏</h1>
-          <p>共 {{ totalCount }} 个画册</p>
+          <h1>{{ t('个人收藏') }}</h1>
+          <p>{{ t('共 {p0} 个画册', { p0: totalCount }) }}</p>
         </div>
         <div class="favorites-header-actions">
-          <el-tooltip
-            :content="searchExpanded ? '收起搜索排序' : '展开搜索排序'"
+          <Hint
+            :content="searchExpanded ? t('收起搜索排序') : t('展开搜索排序')"
             placement="bottom"
           >
-            <el-button
+            <ActionButton
               class="tool-toggle"
               :class="{ 'is-active': searchExpanded }"
               :icon="Search"
-              circle
-              :aria-label="searchExpanded ? '收起搜索排序' : '展开搜索排序'"
+              size="icon"
+              :aria-label="searchExpanded ? t('收起搜索排序') : t('展开搜索排序')"
               :aria-expanded="searchExpanded"
               @click="searchExpanded = !searchExpanded"
             />
-          </el-tooltip>
+          </Hint>
           <span class="tool-toggle-wrapper">
-            <el-tooltip
-              :content="operationsExpanded ? '收起批量操作' : '展开批量操作'"
+            <Hint
+              :content="operationsExpanded ? t('收起批量操作') : t('展开批量操作')"
               placement="bottom"
             >
-              <el-button
+              <ActionButton
                 class="tool-toggle"
                 :class="{ 'is-active': operationsExpanded }"
                 :icon="Operation"
-                circle
+                size="icon"
                 :disabled="books.length === 0"
-                :aria-label="operationsExpanded ? '收起批量操作' : '展开批量操作'"
+                :aria-label="operationsExpanded ? t('收起批量操作') : t('展开批量操作')"
                 :aria-expanded="operationsExpanded"
                 @click="operationsExpanded = !operationsExpanded"
               />
-            </el-tooltip>
+            </Hint>
             <small v-if="selectedGalleryIds.length" class="tool-toggle-count">
               {{ selectedGalleryIds.length }}
             </small>
           </span>
-          <el-tooltip content="刷新收藏" placement="bottom">
-            <el-button
+          <Hint :content="t('刷新收藏')" placement="bottom">
+            <ActionButton
               class="tool-toggle"
               :icon="RefreshRight"
-              circle
+              size="icon"
               :loading="loading || sorting"
-              aria-label="刷新收藏"
+              :aria-label="t('刷新收藏')"
               @click="fetchFavorites()"
             />
-          </el-tooltip>
+          </Hint>
         </div>
       </header>
 
-      <el-tabs
+      <SectionTabs
         :model-value="currentCategory"
         class="favorite-tabs"
         @tab-change="handleCategoryChange"
       >
-        <el-tab-pane name="all" :disabled="sorting || updating">
+        <SectionTab name="all" :disabled="sorting || updating">
           <template #label>
             <span class="category-tab"
-              ><span>全部</span><small>{{ totalCount }}</small></span
+              ><span>{{ t('全部') }}</span
+              ><small>{{ totalCount }}</small></span
             >
           </template>
-        </el-tab-pane>
-        <el-tab-pane
+        </SectionTab>
+        <SectionTab
           v-for="category in listResult?.categories ?? []"
           :key="category.index"
           :name="String(category.index)"
           :disabled="sorting || updating"
         >
           <template #label>
-            <span class="category-tab" :title="category.name">
+            <span class="category-tab" :title="t(category.name)">
               <span class="category-name">{{ category.name }}</span>
               <small>{{ category.count }}</small>
             </span>
           </template>
-        </el-tab-pane>
-      </el-tabs>
+        </SectionTab>
+      </SectionTabs>
 
-      <el-collapse-transition>
+      <Transition name="disclosure">
         <section v-show="searchExpanded" class="favorite-controls">
-          <el-input
+          <TextField
             v-model="keyword"
             class="favorite-search"
-            placeholder="搜索收藏..."
+            :placeholder="t('搜索收藏...')"
+            :aria-label="t('搜索收藏')"
             clearable
             :disabled="sorting || updating"
             @keyup.enter="fetchFavorites()"
           >
             <template #prefix>
-              <el-icon><Search /></el-icon>
+              <IconFrame><Search /></IconFrame>
             </template>
-          </el-input>
-          <el-button
-            type="primary"
+          </TextField>
+          <ActionButton
+            variant="default"
             :loading="loading"
             :disabled="sorting || updating"
             @click="fetchFavorites()"
+            >{{ t('搜索') }}</ActionButton
           >
-            搜索
-          </el-button>
-          <el-radio-group
+          <ChoiceGroup
             :model-value="sortMode"
             class="sort-selector"
             :disabled="sorting || updating"
             @change="handleSortChange"
           >
-            <el-radio-button value="published">更新时间</el-radio-button>
-            <el-radio-button value="favorited">收藏时间</el-radio-button>
-          </el-radio-group>
+            <RadioChoice value="published">{{ t('更新时间') }}</RadioChoice>
+            <RadioChoice value="favorited">{{ t('收藏时间') }}</RadioChoice>
+          </ChoiceGroup>
         </section>
-      </el-collapse-transition>
+      </Transition>
 
-      <el-alert
+      <Notice
         v-if="errorMessage"
         class="favorite-error"
-        type="error"
-        :title="errorMessage"
-        show-icon
+        tone="error"
+        :title="t(errorMessage)"
         :closable="false"
       >
         <template #default>
-          <el-button text type="primary" @click="fetchFavorites()">重新加载</el-button>
+          <ActionButton variant="ghost" @click="fetchFavorites()">{{ t('重新加载') }}</ActionButton>
         </template>
-      </el-alert>
+      </Notice>
 
-      <el-collapse-transition>
+      <Transition name="disclosure">
         <section v-show="operationsExpanded && books.length > 0" class="batch-toolbar">
-          <el-checkbox
+          <CheckField
             :model-value="allLoadedSelected"
             :indeterminate="partiallySelected"
             :disabled="sorting || updating"
             @change="toggleAllLoaded"
-          >
-            已选 {{ selectedGalleryIds.length }}
-          </el-checkbox>
+            >{{ t('已选 {p0}', { p0: selectedGalleryIds.length }) }}
+          </CheckField>
           <div class="batch-actions">
-            <el-select v-model="moveTarget" placeholder="移动到" :disabled="sorting || updating">
-              <el-option
+            <SelectField
+              v-model="moveTarget"
+              :placeholder="t('移动到')"
+              :aria-label="t('目标收藏分类')"
+              :disabled="sorting || updating"
+            >
+              <option
                 v-for="category in listResult?.categories ?? []"
                 :key="category.index"
-                :label="category.name"
+                :label="t(category.name)"
                 :value="category.index"
-              />
-            </el-select>
-            <el-button
+              ></option>
+            </SelectField>
+            <ActionButton
               :icon="Switch"
               :disabled="sorting || selectedGalleryIds.length === 0 || moveTarget === undefined"
               :loading="updating"
               @click="moveSelected"
+              >{{ t('移动') }}</ActionButton
             >
-              移动
-            </el-button>
-            <el-button
-              type="danger"
+            <ActionButton
+              variant="destructive"
               :icon="Delete"
               :disabled="sorting || selectedGalleryIds.length === 0"
               :loading="updating"
               @click="deleteSelected"
+              >{{ t('删除') }}</ActionButton
             >
-              删除
-            </el-button>
           </div>
         </section>
-      </el-collapse-transition>
+      </Transition>
 
-      <section
-        class="favorite-list"
-        v-loading="loading || sorting"
-        :element-loading-text="sorting ? '正在切换排序...' : '正在加载收藏...'"
-      >
+      <section class="favorite-list gallery-masonry" v-busy="loading || sorting">
         <BookItem
           v-for="book in books"
           :key="book.bookId"
@@ -498,14 +537,17 @@ onUnmounted(() => {
           @update:selected="setBookSelected(book.galleryId, $event)"
         />
 
-        <el-empty v-if="!loading && !errorMessage && books.length === 0" description="暂无收藏" />
+        <EmptyState
+          v-if="!loading && !errorMessage && books.length === 0"
+          :description="t('暂无收藏')"
+        />
         <div ref="loadMoreTrigger" class="load-more-trigger"></div>
         <div v-if="loadingMore" class="loading-more">
-          <el-icon class="is-loading"><Loading /></el-icon>
-          <span>加载中...</span>
+          <IconFrame class="is-loading"><Loading /></IconFrame>
+          <span>{{ t('加载中...') }}</span>
         </div>
         <div v-else-if="books.length > 0 && !listResult?.nextPage" class="no-more">
-          已加载全部收藏
+          {{ t('已加载全部收藏') }}
         </div>
       </section>
     </template>
@@ -527,7 +569,7 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .favorites-header > div:first-child {
@@ -541,13 +583,13 @@ onUnmounted(() => {
   gap: 10px;
 }
 
-.favorites-header-actions :deep(.el-button + .el-button) {
+.favorites-header-actions :deep(.ui-button + .ui-button) {
   margin-left: 0;
 }
 
 .favorites-header h1 {
   margin: 0;
-  color: var(--el-text-color-primary);
+  color: var(--foreground);
   font-size: 24px;
   font-weight: 700;
   line-height: 1.3;
@@ -556,7 +598,7 @@ onUnmounted(() => {
 .favorites-header p {
   overflow: hidden;
   margin: 4px 0 0;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -583,8 +625,8 @@ onUnmounted(() => {
   min-width: 18px;
   padding: 0 5px;
   border-radius: 8px;
-  color: var(--el-text-color-secondary);
-  background: var(--el-fill-color-light);
+  color: var(--muted-foreground);
+  background: var(--muted);
   font-size: 11px;
   line-height: 18px;
   text-align: center;
@@ -612,13 +654,13 @@ onUnmounted(() => {
   transform: translateY(-1px);
 }
 
-.tool-toggle :deep(.el-icon) {
+.tool-toggle :deep(.ui-icon) {
   font-size: var(--tool-icon-size);
 }
 
 .tool-toggle.is-active {
-  color: #fff;
-  background-color: var(--el-color-primary);
+  color: var(--accent-foreground);
+  background-color: var(--accent);
 }
 
 .tool-toggle-wrapper {
@@ -632,10 +674,10 @@ onUnmounted(() => {
   right: -5px;
   min-width: 18px;
   padding: 0 5px;
-  border: 2px solid var(--el-bg-color-page);
+  border: 2px solid var(--background);
   border-radius: 9px;
-  color: #fff;
-  background: var(--el-color-danger);
+  color: var(--background);
+  background: var(--danger);
   font-size: 11px;
   line-height: 18px;
   text-align: center;
@@ -648,7 +690,7 @@ onUnmounted(() => {
   align-items: center;
   gap: 10px;
   padding: 12px 0 18px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .favorite-error {
@@ -661,7 +703,7 @@ onUnmounted(() => {
   justify-content: space-between;
   gap: 16px;
   padding: 12px 0;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
 }
 
 .batch-actions {
@@ -670,11 +712,11 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.batch-actions :deep(.el-select) {
+.batch-actions :deep(.ui-select) {
   width: 180px;
 }
 
-.batch-actions :deep(.el-button + .el-button) {
+.batch-actions :deep(.ui-button + .ui-button) {
   margin-left: 0;
 }
 
@@ -698,7 +740,7 @@ onUnmounted(() => {
   justify-content: center;
   gap: 8px;
   padding: 18px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 13px;
 }
 
@@ -725,22 +767,14 @@ onUnmounted(() => {
     width: 100%;
   }
 
-  .sort-selector :deep(.el-radio-button) {
-    flex: 1;
-  }
-
-  .sort-selector :deep(.el-radio-button__inner) {
-    width: 100%;
-  }
-
   .batch-toolbar,
   .batch-actions {
     align-items: stretch;
     flex-direction: column;
   }
 
-  .batch-actions :deep(.el-select),
-  .batch-actions :deep(.el-button) {
+  .batch-actions :deep(.ui-select),
+  .batch-actions :deep(.ui-button) {
     width: 100%;
   }
 }
@@ -764,10 +798,36 @@ onUnmounted(() => {
     grid-template-columns: 1fr;
   }
 
-  .favorite-controls > :deep(.el-button),
+  .favorite-controls > :deep(.ui-button),
   .sort-selector {
     grid-column: 1;
     width: 100%;
+  }
+}
+.favorite-list {
+  display: grid;
+  columns: auto;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 26px 22px;
+}
+.favorite-list > :deep(.book-item) {
+  margin: 0;
+}
+.favorite-list > .ui-empty,
+.favorite-list > .load-more-trigger,
+.favorite-list > .loading-more,
+.favorite-list > .no-more {
+  grid-column: 1/-1;
+}
+@media (max-width: 1050px) {
+  .favorite-list {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (max-width: 767px) {
+  .favorite-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 22px 14px;
   }
 }
 </style>

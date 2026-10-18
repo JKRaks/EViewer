@@ -1,3 +1,4 @@
+@import './interface.css';
 @import './base.css';
 
 /* 全局重置 - 确保没有默认边距 */
@@ -23,7 +24,7 @@
     max(var(--layout-padding), env(safe-area-inset-left));
   flex: 1;
   overflow: visible;
-  background-color: var(--el-bg-color-page);
+  background-color: var(--background);
   min-height: 0;
   min-width: 0;
 }
@@ -63,11 +64,6 @@ html.app-standalone body {
     opacity 0.2s ease;
 }
 
-/* Element Plus 默认给相邻按钮加 margin-left，会导致纵向按钮错列 */
-.floating-actions .el-button + .el-button {
-  margin-left: 0;
-}
-
 .floating-actions.is-hidden {
   opacity: 0;
   transform: translateY(18px);
@@ -86,10 +82,6 @@ html.app-standalone body {
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
-}
-
-.floating-btn .el-icon {
-  font-size: var(--fab-icon-size);
 }
 
 .floating-menu-wrapper {
@@ -145,6 +137,9 @@ html.app-standalone body {
 }
 
 .floating-sub-label {
+  font-family: var(--font-display);
+  font-weight: 400;
+  font-synthesis: none;
   white-space: nowrap;
   line-height: 1;
 }
@@ -161,13 +156,8 @@ html.app-standalone body {
 }
 
 .floating-btn.is-active {
-  background-color: var(--el-color-primary);
-  color: #fff;
-}
-
-/* 抽屉菜单 */
-.drawer-menu {
-  border: none;
+  background-color: var(--accent);
+  color: var(--accent-foreground);
 }
 
 /* 加载容器 */
@@ -182,7 +172,7 @@ html.app-standalone body {
 }
 
 .loading-container p {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 14px;
 }
 @media (max-width: 767px) {
@@ -200,31 +190,8 @@ html.app-standalone body {
   input[type='url'],
   input[type='number'],
   textarea,
-  select,
-  .el-input__inner,
-  .el-textarea__inner,
-  .el-select__input,
-  .el-select__selected-item,
-  .el-select__placeholder {
+  select {
     font-size: 16px !important;
-  }
-
-  .el-input__wrapper,
-  .el-select__wrapper {
-    min-height: 40px !important;
-  }
-
-  .el-textarea__inner {
-    line-height: 1.5;
-  }
-
-  .el-select-dropdown__item {
-    height: auto !important;
-    min-height: 40px !important;
-    padding-top: 8px !important;
-    padding-bottom: 8px !important;
-    font-size: 16px !important;
-    line-height: 24px !important;
   }
 }
 
@@ -239,5 +206,40 @@ html.app-standalone body {
     --fab-icon-size: 20px;
     right: 12px;
     bottom: calc(12px + env(safe-area-inset-bottom));
+  }
+}
+
+.layout-main {
+  padding-bottom: calc(90px + env(safe-area-inset-bottom)) !important;
+}
+.layout-container {
+  --layout-padding: 24px;
+}
+.floating-btn.ui-button {
+  border: 1px solid var(--glass-edge);
+  background: var(--glass);
+  color: var(--text);
+  backdrop-filter: blur(10px);
+  box-shadow:
+    inset 0 1px 0 #fff4,
+    var(--shadow-soft);
+}
+.floating-btn.ui-button:hover {
+  background: var(--surface-raised);
+}
+.floating-btn.ui-button.is-active {
+  background: var(--accent-soft);
+  color: var(--accent);
+  border-color: var(--accent-ring);
+}
+.floating-actions .ui-button {
+  min-height: var(--fab-size);
+}
+.floating-menu .ui-button {
+  min-height: var(--fab-size);
+}
+@media (max-width: 767px) {
+  .layout-container {
+    --layout-padding: 14px;
   }
 }

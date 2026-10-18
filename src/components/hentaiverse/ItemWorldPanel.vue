@@ -1,4 +1,12 @@
 <script setup lang="ts">
+import { t } from '@/i18n'
+
+import SectionTabs from '@/components/primitives/SectionTabs'
+import SectionTab from '@/components/primitives/SectionTab.vue'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
+import RadioChoice from '@/components/primitives/RadioChoice.vue'
+import EmptyState from '@/components/primitives/EmptyState.vue'
 import { computed, ref, watch } from 'vue'
 import type {
   HentaiVerseItemWorldPage,
@@ -30,58 +38,65 @@ watch(
 
 <template>
   <section class="item-world-panel">
-    <el-tabs :model-value="data.selectedCategory" @tab-change="emit('category', String($event))">
-      <el-tab-pane
+    <SectionTabs
+      :model-value="data.selectedCategory"
+      @tab-change="emit('category', String($event))"
+    >
+      <SectionTab
         v-for="category in data.categories"
         :key="category.value"
-        :label="category.label"
+        :label="t(category.label)"
         :name="category.value"
       />
-    </el-tabs>
-    <p>世界种子：{{ data.worldSeeds || '数量未知' }}</p>
-    <p v-if="detailsLoading" role="status">正在加载装备属性…</p>
+    </SectionTabs>
+    <p>{{ t('世界种子：{p0}', { p0: data.worldSeeds || t('数量未知') }) }}</p>
+    <p v-if="detailsLoading" role="status">{{ t('正在加载装备属性…') }}</p>
     <div v-else-if="detailsError" role="alert">
-      {{ detailsError }}
-      <el-button link type="primary" @click="emit('retryDetails')">重试加载属性</el-button>
+      {{ t(detailsError) }}
+      <ActionButton variant="link" @click="emit('retryDetails')">{{
+        t('重试加载属性')
+      }}</ActionButton>
     </div>
-    <el-radio-group v-if="data.candidates.length" v-model="selected" class="world-equipment">
+    <ChoiceGroup v-if="data.candidates.length" v-model="selected" class="world-equipment">
       <article
         v-for="item in data.candidates"
         :key="item.id"
         class="world-candidate"
         :class="{ selected: selected === item.id }"
       >
-        <el-radio :value="item.id" :disabled="loading || item.locked">{{ item.name }}</el-radio>
+        <RadioChoice :value="item.id" :disabled="loading || item.locked">{{
+          t(item.name)
+        }}</RadioChoice>
         <EquipmentDetail v-if="details?.[item.id]" :data="details[item.id]!" />
       </article>
-    </el-radio-group>
-    <el-empty
+    </ChoiceGroup>
+    <EmptyState
       v-else
-      :description="data.emptyReason || '此分类没有可进入装备界的装备，需先完成灵魂绑定'"
+      :description="data.emptyReason || t('此分类没有可进入装备界的装备，需先完成灵魂绑定')"
     />
     <dl v-if="info">
-      <dt>世界等级</dt>
-      <dd>{{ info.level }}</dd>
-      <dt>战斗轮数</dt>
-      <dd>{{ info.rounds }}</dd>
-      <dt>怪物等级</dt>
-      <dd>{{ info.monsterLevel }}</dd>
-      <dt>难度</dt>
-      <dd>{{ info.difficulty }}</dd>
-      <dt>入场消耗</dt>
-      <dd>{{ info.cost }} 世界种子</dd>
+      <dt>{{ t('世界等级') }}</dt>
+      <dd>{{ t(info.level) }}</dd>
+      <dt>{{ t('战斗轮数') }}</dt>
+      <dd>{{ t(info.rounds) }}</dd>
+      <dt>{{ t('怪物等级') }}</dt>
+      <dd>{{ t(info.monsterLevel) }}</dd>
+      <dt>{{ t('难度') }}</dt>
+      <dd>{{ t(info.difficulty) }}</dd>
+      <dt>{{ t('入场消耗') }}</dt>
+      <dd>{{ t('{p0} 世界种子', { p0: info.cost }) }}</dd>
     </dl>
-    <p v-if="selected && !info">未能读取源站入场信息，请刷新后重试。</p>
-    <el-button
+    <p v-if="selected && !info">{{ t('未能读取源站入场信息，请刷新后重试。') }}</p>
+    <ActionButton
       v-if="data.candidates.length"
-      type="primary"
+      variant="default"
       :disabled="loading || !info?.available || !data.postToken"
       @click="emit('start', { postoken: data.postToken, 'eqids[]': [selected] })"
-      >进入装备界</el-button
+      >{{ t('进入装备界') }}</ActionButton
     >
     <details class="world-rules">
-      <summary>装备界规则</summary>
-      <p v-for="rule in data.rules" :key="rule">{{ rule }}</p>
+      <summary>{{ t('装备界规则') }}</summary>
+      <p v-for="rule in data.rules" :key="rule">{{ t(rule) }}</p>
     </details>
   </section>
 </template>
@@ -99,21 +114,17 @@ watch(
 .world-candidate {
   min-width: 0;
   padding: 12px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--border);
   border-radius: 6px;
 }
 .world-candidate.selected {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
-.world-equipment :deep(.el-radio) {
+.world-equipment :deep(.ui-radio) {
   height: auto;
   min-height: 32px;
   margin-right: 0;
-}
-.world-equipment :deep(.el-radio__label) {
-  white-space: normal;
-  overflow-wrap: anywhere;
 }
 dl {
   display: grid;
@@ -127,7 +138,7 @@ dd {
 .world-rules {
   margin-top: 20px;
   font-size: 13px;
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   line-height: 1.8;
 }
 summary {

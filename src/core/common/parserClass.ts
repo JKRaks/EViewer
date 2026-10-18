@@ -113,7 +113,7 @@ export class parserClass {
     if (body) {
       return new parserClass(body)
     } else {
-      throw new Error('Failed to parse HTML body.')
+      throw new Error('无法解析 HTML 正文')
     }
   }
 
@@ -122,7 +122,7 @@ export class parserClass {
     if (head) {
       return new parserClass(head)
     } else {
-      throw new Error('Failed to parse HTML head.')
+      throw new Error('无法解析 HTML 头部')
     }
   }
 }

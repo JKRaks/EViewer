@@ -785,12 +785,12 @@ async function handleImageProxy(request, requestUrl) {
     })
   }
 
-  const body = await response.arrayBuffer()
-  if (body.byteLength > IMAGE_PROXY_MAX_BYTES) {
-    return new Response(JSON.stringify({ error: '图片体积超过限制' }), {
-      status: 413,
-      headers: { 'Content-Type': 'application/json' },
-    })
+  let body
+  try {
+    body = await readLimitedBody(response, IMAGE_PROXY_MAX_BYTES)
+  } catch (error) {
+    if (!(error instanceof RangeError)) throw error
+    return jsonResponse(request, { error: '图片体积超过限制' }, 413)
   }
 
   const headers = new Headers({
@@ -806,6 +806,35 @@ async function handleImageProxy(request, requestUrl) {
   }
 
   return new Response(body, { status: 200, headers })
+}
+
+/** Stop chunked responses at the limit instead of allocating an unbounded arrayBuffer. */
+export async function readLimitedBody(response, maximumBytes) {
+  const reader = response.body?.getReader()
+  if (!reader) return new Uint8Array()
+  const chunks = []
+  let size = 0
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      size += value.byteLength
+      if (size > maximumBytes) {
+        await reader.cancel()
+        throw new RangeError('Response body exceeds size limit')
+      }
+      chunks.push(value)
+    }
+  } finally {
+    reader.releaseLock()
+  }
+  const bytes = new Uint8Array(size)
+  let offset = 0
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset)
+    offset += chunk.byteLength
+  }
+  return bytes
 }
 
 /** 仅将受限 multipart 图片请求转发到源站图片检索入口。 */
@@ -1060,6 +1089,22 @@ async function handleRequest(request, env = {}) {
     !isAllowedRequesterOrigin(request)
   ) {
     return jsonResponse(request, { error: '不允许的请求来源' }, 403)
+  }
+  // The binding existed in deployment config but was never consumed. Only use
+  // Cloudflare's connection IP; a caller-controlled forwarding header is not an identity.
+  const clientIp = request.headers.get('CF-Connecting-IP')
+  if (request.method !== 'OPTIONS' && clientIp && env['proxy-df']?.limit) {
+    const { success } = await env['proxy-df'].limit({ key: clientIp })
+    if (!success) {
+      const response = jsonResponse(
+        request,
+        { error: '请求过于频繁，请稍后重试', code: 'RATE_LIMITED' },
+        429,
+      )
+      response.headers.set('Retry-After', '60')
+      response.headers.set('Cache-Control', 'no-store')
+      return response
+    }
   }
   // Login/logout must stay available to repair legacy conflicting cookies.
   if (!pathname.startsWith('/auth/') && request.method !== 'OPTIONS') {

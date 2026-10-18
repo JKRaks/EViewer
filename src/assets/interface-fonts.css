@@ -1,0 +1,9 @@
+@import './alibaba-puhuiti.css';
+
+@font-face {
+  font-family: 'Smiley Sans';
+  src: url('./fonts/SmileySans-Oblique.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: swap;
+}

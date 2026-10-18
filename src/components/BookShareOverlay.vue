@@ -1,8 +1,21 @@
 <script setup lang="ts">
+import { t, locale } from '@/i18n'
+
+import { DialogRoot, DialogPortal, DialogOverlay, DialogContent, DialogTitle } from 'reka-ui'
+import ActionButton from '@/components/primitives/ActionButton.vue'
+import IconFrame from '@/components/primitives/IconFrame.vue'
+import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
+import RadioChoice from '@/components/primitives/RadioChoice.vue'
+import Hint from '@/components/primitives/Hint.vue'
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
-import { Close, CopyDocument, Download, Loading, Share } from '@element-plus/icons-vue'
-import { ElMessage } from 'element-plus'
-import 'element-plus/es/components/message/style/css'
+import {
+  X as Close,
+  Copy as CopyDocument,
+  Download,
+  LoaderCircle as Loading,
+  Share2 as Share,
+} from '@lucide/vue'
+import { notify } from '@/components/primitives/feedback'
 import type { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import {
   generateBookShareCard,
@@ -36,13 +49,14 @@ const generatedCache = new Map<string, GeneratedShareCard>()
 let generationId = 0
 let lockedMainElement: HTMLElement | null = null
 let previousMainOverflowY = ''
+let returnFocus: HTMLElement | null = null
 
 watch(
   () => props.modelValue,
   (visible) => {
     if (visible) {
+      returnFocus = document.activeElement instanceof HTMLElement ? document.activeElement : null
       setBackgroundScrollLocked(true)
-      window.addEventListener('keydown', handleKeydown)
       window.addEventListener('pagehide', handlePageHide)
       window.addEventListener(layoutScrollModeChange, handleScrollModeChange)
       if (qrSource.value === shareSettings.preferredLinkType) {
@@ -52,7 +66,6 @@ watch(
       }
     } else {
       setBackgroundScrollLocked(false)
-      window.removeEventListener('keydown', handleKeydown)
       window.removeEventListener('pagehide', handlePageHide)
       window.removeEventListener(layoutScrollModeChange, handleScrollModeChange)
       generationId++
@@ -62,7 +75,7 @@ watch(
   },
 )
 
-watch(qrSource, () => {
+watch([qrSource, locale], () => {
   if (props.modelValue) void renderPreview()
 })
 
@@ -76,7 +89,6 @@ watch(
 
 onBeforeUnmount(() => {
   setBackgroundScrollLocked(false)
-  window.removeEventListener('keydown', handleKeydown)
   window.removeEventListener('pagehide', handlePageHide)
   window.removeEventListener(layoutScrollModeChange, handleScrollModeChange)
   clearGeneratedCache()
@@ -86,12 +98,12 @@ async function renderPreview() {
   const source = qrSource.value
   const bookId = props.book.bookId
   if (!bookId) {
-    generationError.value = '画册信息尚未加载完成'
+    generationError.value = t('画册信息尚未加载完成')
     return
   }
 
   const currentGeneration = ++generationId
-  const cacheKey = `${bookId}\u0000${source}`
+  const cacheKey = `${bookId}\u0000${source}\u0000${locale.value}`
   const cached = generatedCache.get(cacheKey)
   if (cached) {
     setGenerated(cached)
@@ -111,8 +123,8 @@ async function renderPreview() {
     setGenerated(result)
   } catch (error) {
     if (currentGeneration !== generationId) return
-    console.error('生成分享卡失败:', error)
-    generationError.value = error instanceof Error ? error.message : '分享卡生成失败'
+    console.error(t('生成分享卡失败:'), error)
+    generationError.value = error instanceof Error ? error.message : t('分享卡生成失败')
   } finally {
     if (currentGeneration === generationId) generating.value = false
   }
@@ -141,8 +153,11 @@ function close() {
   emit('update:modelValue', false)
 }
 
-function handleKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') close()
+function restoreFocus(event: Event) {
+  if (returnFocus?.isConnected) {
+    event.preventDefault()
+    returnFocus.focus({ preventScroll: true })
+  }
 }
 
 function handlePageHide() {
@@ -184,7 +199,7 @@ function downloadImage() {
 async function shareImage() {
   const result = generated.value
   if (!result || !navigator.share) {
-    ElMessage.info('当前浏览器不支持系统分享，可下载图片后分享')
+    notify.info(t('当前浏览器不支持系统分享，可下载图片后分享'))
     return
   }
 
@@ -194,19 +209,19 @@ async function shareImage() {
       await navigator.share({
         files: [file],
         title: props.book.bookName,
-        text: '来自 EViewer 的画册分享',
+        text: t('来自 EViewer 的画册分享'),
       })
     } else {
       await navigator.share({
         title: props.book.bookName,
-        text: '来自 EViewer 的画册分享',
+        text: t('来自 EViewer 的画册分享'),
         url: result.targetUrl,
       })
     }
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return
-    console.error('调起系统分享失败:', error)
-    ElMessage.error('调起系统分享失败')
+    console.error(t('调起系统分享失败:'), error)
+    notify.error(t('调起系统分享失败'))
   }
 }
 
@@ -214,125 +229,142 @@ async function copyLink() {
   if (!shareLink.value) return
   try {
     await navigator.clipboard.writeText(shareLink.value)
-    ElMessage.success('分享链接已复制')
+    notify.success(t('分享链接已复制'))
   } catch {
-    ElMessage.error('复制链接失败')
+    notify.error(t('复制链接失败'))
   }
 }
 
 async function shareLinkWithSystem() {
   if (!shareLink.value) return
   if (!navigator.share) {
-    ElMessage.info('当前浏览器不支持系统分享，请复制链接')
+    notify.info(t('当前浏览器不支持系统分享，请复制链接'))
     return
   }
   try {
     await navigator.share({ title: props.book.bookName, url: shareLink.value })
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') return
-    ElMessage.error('调起系统分享失败')
+    notify.error(t('调起系统分享失败'))
   }
 }
 </script>
 
 <template>
-  <Teleport to="body">
-    <Transition name="share-overlay">
-      <div
-        v-if="modelValue"
-        class="share-mask"
-        role="dialog"
-        aria-modal="true"
-        aria-label="画册分享预览"
-        @click.self="close"
-      >
-        <el-button
+  <DialogRoot :open="modelValue" @update:open="!$event && close()"
+    ><DialogPortal
+      ><DialogOverlay class="share-mask" /><DialogContent
+        class="share-dialog"
+        :aria-describedby="undefined"
+        @close-auto-focus="restoreFocus"
+        ><DialogTitle class="sr-only">{{ t('画册分享预览') }}</DialogTitle>
+        <ActionButton
           class="share-close"
-          circle
+          size="icon"
           :icon="Close"
-          aria-label="关闭分享预览"
+          :aria-label="t('关闭分享预览')"
           @click="close"
         />
 
         <div class="share-floating-content" @click.stop>
           <div class="share-preview-stage" aria-live="polite">
-            <el-icon v-if="generating" class="share-loading" :size="36"><Loading /></el-icon>
+            <IconFrame v-if="generating" class="share-loading" :size="36"><Loading /></IconFrame>
             <div v-else-if="generationError" class="share-error">
-              <span>{{ generationError }}</span>
-              <el-button type="primary" @click="renderPreview">重新生成</el-button>
+              <span>{{ t(generationError) }}</span>
+              <ActionButton variant="default" @click="renderPreview">{{
+                t('重新生成')
+              }}</ActionButton>
             </div>
             <img
               v-else-if="previewUrl"
               :src="previewUrl"
               class="share-preview"
-              alt="EViewer 画册分享卡预览"
+              :alt="t('EViewer 画册分享卡预览')"
             />
           </div>
 
           <div class="share-controls">
             <div class="share-source-control">
-              <span class="share-source-label">链接类型</span>
-              <el-radio-group
+              <span class="share-source-label">{{ t('链接类型') }}</span>
+              <ChoiceGroup
                 v-model="qrSource"
                 class="share-source-selector"
-                aria-label="链接类型"
+                :aria-label="t('链接类型')"
               >
-                <el-radio value="site">本站</el-radio>
-                <el-radio value="source">源站</el-radio>
-              </el-radio-group>
+                <RadioChoice value="site">{{ t('本站') }}</RadioChoice>
+                <RadioChoice value="source">{{ t('源站') }}</RadioChoice>
+              </ChoiceGroup>
             </div>
             <div class="share-action-row">
-              <el-tooltip content="下载分享图" placement="top">
-                <el-button
+              <Hint :content="t('下载分享图')" placement="top">
+                <ActionButton
                   class="share-action-button"
-                  circle
+                  size="icon"
                   :icon="Download"
                   :disabled="!generated || generating"
-                  aria-label="下载分享图"
+                  :aria-label="t('下载分享图')"
                   @click="downloadImage"
                 />
-              </el-tooltip>
-              <el-tooltip content="系统分享" placement="top">
-                <el-button
+              </Hint>
+              <Hint :content="t('系统分享')" placement="top">
+                <ActionButton
                   class="share-action-button"
-                  circle
+                  size="icon"
                   :icon="Share"
                   :disabled="!generated || generating"
-                  aria-label="系统分享"
+                  :aria-label="t('系统分享')"
                   @click="shareImage"
                 />
-              </el-tooltip>
+              </Hint>
             </div>
           </div>
 
           <div class="share-link-box">
-            <span class="share-link-title">分享链接</span>
+            <span class="share-link-title">{{ t('分享链接') }}</span>
             <div class="share-link-row">
-              <span class="share-link-value" :title="shareLink">{{ shareLink }}</span>
-              <el-tooltip content="复制链接" placement="top">
-                <el-button :icon="CopyDocument" aria-label="复制分享链接" :disabled="!shareLink" @click="copyLink" />
-              </el-tooltip>
-              <el-tooltip content="系统分享链接" placement="top">
-                <el-button :icon="Share" aria-label="系统分享链接" :disabled="!shareLink" @click="shareLinkWithSystem" />
-              </el-tooltip>
+              <span class="share-link-value" :title="t(shareLink)">{{ shareLink }}</span>
+              <Hint :content="t('复制链接')" placement="top">
+                <ActionButton
+                  :icon="CopyDocument"
+                  :aria-label="t('复制分享链接')"
+                  :disabled="!shareLink"
+                  @click="copyLink"
+                />
+              </Hint>
+              <Hint :content="t('系统分享链接')" placement="top">
+                <ActionButton
+                  :icon="Share"
+                  :aria-label="t('系统分享链接')"
+                  :disabled="!shareLink"
+                  @click="shareLinkWithSystem"
+                />
+              </Hint>
             </div>
           </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+        </div> </DialogContent></DialogPortal
+  ></DialogRoot>
 </template>
 
 <style scoped>
+.share-dialog {
+  position: fixed;
+  z-index: 4001;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  overflow-y: auto;
+  padding: 60px 20px 28px;
+  outline: none;
+}
 .share-mask {
   position: fixed;
   inset: 0;
-  z-index: 3000;
+  z-index: 4000;
   display: grid;
   place-items: center;
   padding: max(56px, env(safe-area-inset-top)) 24px max(28px, env(safe-area-inset-bottom));
   overflow: auto;
-  background: var(--el-overlay-color-lighter);
+  background: var(--overlay);
 }
 
 .share-close {
@@ -343,8 +375,8 @@ async function shareLinkWithSystem() {
   width: 44px;
   height: 44px;
   border: 1px solid rgba(255, 255, 255, 0.3);
-  color: #fff;
-  background: rgba(32, 49, 75, 0.72);
+  color: var(--foreground);
+  background: var(--glass);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
@@ -352,9 +384,9 @@ async function shareLinkWithSystem() {
 
 .share-close:hover,
 .share-close:focus-visible {
-  border-color: rgba(255, 255, 255, 0.7);
-  color: #fff;
-  background: rgba(64, 158, 255, 0.9);
+  border-color: var(--accent-ring);
+  color: var(--accent);
+  background: var(--accent-soft);
 }
 
 .share-floating-content {
@@ -401,6 +433,12 @@ async function shareLinkWithSystem() {
   flex-direction: column;
   align-items: center;
   gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--glass-edge);
+  border-radius: 12px;
+  color: var(--foreground);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
 }
 
 .share-link-box {
@@ -411,19 +449,9 @@ async function shareLinkWithSystem() {
   padding: 10px 12px;
   border: 0;
   border-radius: 8px;
-  color: #fff;
-  background: transparent;
-}
-
-.share-link-box::before {
-  position: absolute;
-  z-index: -1;
-  inset: -8px;
-  border-radius: 16px;
-  background: rgba(32, 49, 75, 0.3);
-  backdrop-filter: blur(16px) saturate(1.15);
-  -webkit-backdrop-filter: blur(16px) saturate(1.15);
-  content: '';
+  color: var(--foreground);
+  background: var(--glass);
+  backdrop-filter: blur(10px);
 }
 
 .share-link-title {
@@ -448,7 +476,7 @@ async function shareLinkWithSystem() {
   user-select: all;
 }
 
-.share-link-row :deep(.el-button + .el-button) {
+.share-link-row :deep(.ui-button + .ui-button) {
   margin-left: 0;
 }
 
@@ -461,7 +489,7 @@ async function shareLinkWithSystem() {
 }
 
 .share-source-label {
-  color: rgba(255, 255, 255, 0.78);
+  color: var(--text);
   font-size: 13px;
   font-weight: 600;
 }
@@ -471,37 +499,11 @@ async function shareLinkWithSystem() {
   gap: 24px;
 }
 
-.share-source-selector :deep(.el-radio) {
+.share-source-selector :deep(.ui-radio) {
   display: flex;
   height: 32px;
   margin: 0;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.share-source-selector :deep(.el-radio__inner) {
-  width: 18px;
-  height: 18px;
-}
-
-.share-source-selector :deep(.el-radio__inner::after) {
-  width: 6px;
-  height: 6px;
-}
-
-.share-source-selector :deep(.el-radio__label) {
-  padding-left: 8px;
-  color: inherit;
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.share-source-selector :deep(.el-radio__input.is-checked .el-radio__inner) {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary);
-}
-
-.share-source-selector :deep(.el-radio__input.is-checked + .el-radio__label) {
-  color: #fff;
+  color: var(--foreground);
 }
 
 .share-action-row {
@@ -514,37 +516,48 @@ async function shareLinkWithSystem() {
 .share-action-button {
   width: 46px;
   height: 46px;
-  border-color: var(--el-color-primary);
-  color: #fff;
-  background: var(--el-color-primary);
+  border-color: var(--accent);
+  color: var(--accent-foreground);
+  background: var(--accent);
   box-shadow: 0 8px 20px rgba(0, 0, 0, 0.2);
 }
 
 .share-action-button:hover,
 .share-action-button:focus-visible {
-  border-color: var(--el-color-primary-dark-2);
-  color: #fff;
-  background: var(--el-color-primary-dark-2);
+  border-color: var(--accent-strong);
+  color: var(--accent-foreground);
+  background: var(--accent-strong);
 }
 
-.share-overlay-enter-active,
-.share-overlay-leave-active {
-  transition: opacity 0.2s ease;
+.share-dialog[data-state='open'] {
+  animation: share-reveal var(--motion-panel) var(--ease);
 }
-
-.share-overlay-enter-active .share-floating-content,
-.share-overlay-leave-active .share-floating-content {
-  transition: transform 0.2s ease;
+.share-dialog[data-state='closed'] {
+  animation: share-reveal var(--motion-panel) var(--ease) reverse;
 }
-
-.share-overlay-enter-from,
-.share-overlay-leave-to {
-  opacity: 0;
+.share-mask[data-state='open'] {
+  animation: share-fade var(--motion-panel) var(--ease);
 }
-
-.share-overlay-enter-from .share-floating-content,
-.share-overlay-leave-to .share-floating-content {
-  transform: translateY(12px);
+.share-mask[data-state='closed'] {
+  animation: share-fade var(--motion-panel) var(--ease) reverse;
+}
+@keyframes share-reveal {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes share-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 @keyframes share-rotate {
@@ -592,15 +605,6 @@ async function shareLinkWithSystem() {
 
   .share-action-button + .share-action-button {
     margin-left: 0;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .share-overlay-enter-active,
-  .share-overlay-leave-active,
-  .share-overlay-enter-active .share-floating-content,
-  .share-overlay-leave-active .share-floating-content {
-    transition: none;
   }
 }
 </style>

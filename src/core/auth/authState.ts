@@ -1,3 +1,4 @@
+import { formatSystemMessage } from '@/i18n'
 import { reactive } from 'vue'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
 import { clearUserConfigCache } from './userConfigCache'
@@ -111,7 +112,9 @@ async function requestAuth(path: string, body?: Record<string, string>): Promise
   })
   const result = (await response.json().catch(() => ({}))) as Partial<AuthResponse>
   if (!response.ok || !result.success) {
-    throw new Error(result.message || `认证请求失败 (${response.status})`)
+    throw new Error(
+      result.message || formatSystemMessage('认证请求失败 ({p0})', { p0: response.status }),
+    )
   }
   return result as AuthResponse
 }
