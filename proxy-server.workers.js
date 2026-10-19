@@ -7,6 +7,8 @@
  * 代理配置映射
  * 可以在 wrangler.toml 或环境变量中配置
  */
+import { handleAuthBridge, cancelAuthBridge, clearBridgeCookie } from './worker/auth-bridge.js'
+
 const ORIGIN_MAP = [
   {
     path: '/ehentai',
@@ -283,13 +285,45 @@ function jsonResponse(request, payload, status = 200, cookies = []) {
   return new Response(JSON.stringify(payload), { status, headers })
 }
 
-async function handleAuthRequest(request, requestUrl) {
+function installAuthCookies(request, requestUrl, body) {
+  const memberId = normalizeAuthInput(body?.memberId, 'ipb_member_id')
+  const passHash = normalizeAuthInput(body?.passHash, 'ipb_pass_hash')
+  if (!/^[1-9]\d{0,19}$/.test(memberId)) {
+    return jsonResponse(request, { success: false, message: 'ipb_member_id 格式不正确' }, 400)
+  }
+  if (!isValidPassHash(passHash)) {
+    return jsonResponse(request, { success: false, message: 'ipb_pass_hash 格式不正确' }, 400)
+  }
+  return jsonResponse(
+    request,
+    {
+      success: true,
+      credentialReady: true,
+      memberId,
+      expiresAt: Date.now() + AUTH_COOKIE_MAX_AGE * 1000,
+    },
+    200,
+    [
+      ...clearLegacyAuthCookies(requestUrl),
+      ...AUTH_COOKIE_PATHS.flatMap((path) => [
+        buildAuthCookie('ipb_member_id', memberId, requestUrl, path),
+        buildAuthCookie('ipb_pass_hash', passHash, requestUrl, path),
+      ]),
+    ],
+  )
+}
+
+async function handleAuthRequest(request, requestUrl, env) {
   if (!isAllowedRequesterOrigin(request)) {
     return jsonResponse(request, { success: false, message: '不允许的请求来源' }, 403)
   }
 
   if (requestUrl.pathname === '/auth/logout') {
-    return jsonResponse(request, { success: true }, 200, clearLegacyAuthCookies(requestUrl))
+    await cancelAuthBridge(request, env).catch(() => {})
+    return jsonResponse(request, { success: true }, 200, [
+      ...clearLegacyAuthCookies(requestUrl),
+      clearBridgeCookie(requestUrl, buildAuthCookie),
+    ])
   }
 
   const contentLength = Number(request.headers.get('content-length') || '0')
@@ -303,27 +337,12 @@ async function handleAuthRequest(request, requestUrl) {
   } catch {
     return jsonResponse(request, { success: false, message: '请求格式不正确' }, 400)
   }
-  const memberId = normalizeAuthInput(body?.memberId, 'ipb_member_id')
-  const passHash = normalizeAuthInput(body?.passHash, 'ipb_pass_hash')
-  if (!/^[1-9]\d{0,19}$/.test(memberId)) {
-    return jsonResponse(request, { success: false, message: 'ipb_member_id 格式不正确' }, 400)
+  const response = installAuthCookies(request, requestUrl, body)
+  if (response.ok) {
+    await cancelAuthBridge(request, env).catch(() => {})
+    response.headers.append('Set-Cookie', clearBridgeCookie(requestUrl, buildAuthCookie))
   }
-  if (!isValidPassHash(passHash)) {
-    return jsonResponse(request, { success: false, message: 'ipb_pass_hash 格式不正确' }, 400)
-  }
-
-  return jsonResponse(
-    request,
-    { success: true, memberId, expiresAt: Date.now() + AUTH_COOKIE_MAX_AGE * 1000 },
-    200,
-    [
-      ...clearLegacyAuthCookies(requestUrl),
-      ...AUTH_COOKIE_PATHS.flatMap((path) => [
-        buildAuthCookie('ipb_member_id', memberId, requestUrl, path),
-        buildAuthCookie('ipb_pass_hash', passHash, requestUrl, path),
-      ]),
-    ],
-  )
+  return response
 }
 
 function authExportJsonResponse(request, payload, status, trustedOrigin) {
@@ -1086,6 +1105,8 @@ async function handleRequest(request, env = {}) {
   if (
     request.method !== 'OPTIONS' &&
     pathname !== '/image-proxy' &&
+    !(pathname === '/auth/bridge/receive' && request.method === 'POST') &&
+    !(pathname === '/auth/bridge/script.user.js' && request.method === 'GET') &&
     !isAllowedRequesterOrigin(request)
   ) {
     return jsonResponse(request, { error: '不允许的请求来源' }, 403)
@@ -1106,6 +1127,17 @@ async function handleRequest(request, env = {}) {
       return response
     }
   }
+  if (pathname.startsWith('/auth/bridge/')) {
+    if (request.method === 'OPTIONS')
+      return handleCorsPreFlight(request, url, allowedAuthExportOrigins)
+    return handleAuthBridge(request, env, {
+      trusted: isAllowedRequesterOrigin,
+      respond: jsonResponse,
+      install: installAuthCookies,
+      cookie: buildAuthCookie,
+    })
+  }
+
   // Login/logout must stay available to repair legacy conflicting cookies.
   if (!pathname.startsWith('/auth/') && request.method !== 'OPTIONS') {
     try {
@@ -1116,7 +1148,27 @@ async function handleRequest(request, env = {}) {
   }
 
   if (request.method === 'POST' && (pathname === '/auth/cookies' || pathname === '/auth/logout')) {
-    return handleAuthRequest(request, url)
+    return handleAuthRequest(request, url, env)
+  }
+
+  if (request.method === 'GET' && pathname === '/ehentai/auth/status') {
+    const values = new Map(
+      getAllowedAuthCookieHeader(request.headers.get('cookie') || '')
+        .split('; ')
+        .filter(Boolean)
+        .map((part) => {
+          const index = part.indexOf('=')
+          return [part.slice(0, index), part.slice(index + 1)]
+        }),
+    )
+    const memberId = values.get('ipb_member_id') || ''
+    const credentialReady =
+      /^[1-9]\d{0,19}$/.test(memberId) && isValidPassHash(values.get('ipb_pass_hash'))
+    return jsonResponse(request, {
+      success: true,
+      credentialReady,
+      memberId: credentialReady ? memberId : '',
+    })
   }
 
   if (request.method === 'POST' && pathname === '/ehentai/auth/export') {

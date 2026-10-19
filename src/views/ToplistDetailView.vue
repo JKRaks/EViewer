@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t, getDisplayLocale } from '@/i18n'
 
 import IconFrame from '@/components/primitives/IconFrame.vue'
@@ -35,6 +36,7 @@ const kind = ref<toplistKind>('gallery')
 const galleryEntries = ref<galleryToplistEntry[]>([])
 const contributorEntries = ref<contributorToplistEntry[]>([])
 const loading = ref(false)
+useAppLaunchReadiness(() => loading.value)
 const errorMessage = ref('')
 let requestVersion = 0
 

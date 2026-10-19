@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t, getDisplayLocale, locale } from '@/i18n'
 
 import Field from '@/components/primitives/Field.vue'
@@ -15,7 +16,7 @@ import TextField from '@/components/primitives/TextField.vue'
 import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
 import RadioChoice from '@/components/primitives/RadioChoice.vue'
 import Notice from '@/components/primitives/Notice.vue'
-import { computed, onBeforeUnmount, reactive, ref, watch } from 'vue'
+import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ArrowRight,
   KeyRound as Key,
@@ -24,6 +25,8 @@ import {
 } from '@lucide/vue'
 import { notify } from '@/components/primitives/feedback'
 import UserConfigPanel from '@/components/UserConfigPanel.vue'
+import AuthBridgePanel from '@/components/AuthBridgePanel.vue'
+import { requestBridge } from '@/core/auth/authBridge'
 import {
   clearAuthCookies,
   extractAuthCookies,
@@ -157,6 +160,9 @@ const infoBusi = new userInfoBusi()
 const activeTab = ref<AccountTab>(authState.loggedIn ? 'overview' : 'authentication')
 const authInputMode = ref<AuthInputMode>('cookie')
 const submitting = ref(false)
+const bridgeBusy = ref(false)
+const bridgeRestoring = ref(authState.loggedIn)
+const bridgeRestoreController = new AbortController()
 const loggingOut = ref(false)
 const extracting = ref(false)
 const extractedCookie = ref('')
@@ -169,11 +175,34 @@ const moduleStates = reactive<Record<AccountDataSection, ModuleState>>({
   donation: { loading: false, error: '', requestId: 0 },
   hathPerks: { loading: false, error: '', requestId: 0 },
 })
+useAppLaunchReadiness(
+  () => bridgeRestoring.value || Object.values(moduleStates).some((state) => state.loading),
+  'account',
+)
 const form = reactive({
   cookieText: '',
   memberId: '',
   passHash: '',
 })
+
+// A suspended PWA may reopen on the overview tab using the previous account hint.
+// Bring its pending authorization back into view so the panel can finish receiving it.
+onMounted(async () => {
+  if (activeTab.value === 'authentication') return
+  try {
+    const status = await requestBridge('status', bridgeRestoreController.signal)
+    if (
+      !bridgeRestoreController.signal.aborted &&
+      ['waiting', 'ready', 'claimed'].includes(status.state)
+    )
+      activeTab.value = 'authentication'
+  } catch {
+    // Account details and manual authentication remain available without the bridge.
+  } finally {
+    bridgeRestoring.value = false
+  }
+})
+onBeforeUnmount(() => bridgeRestoreController.abort())
 
 const loginTime = computed(() =>
   authState.lastLoginAt ? new Date(authState.lastLoginAt).toLocaleString(getDisplayLocale()) : '--',
@@ -248,6 +277,7 @@ function isAccountDataSection(tab: AccountTab): tab is AccountDataSection {
 }
 
 async function submitCookies() {
+  if (submitting.value || loggingOut.value || bridgeBusy.value) return
   const credentials = resolveAuthCredentials()
   if (!credentials) return
 
@@ -297,6 +327,7 @@ function resolveAuthCredentials() {
 }
 
 async function logout() {
+  if (loggingOut.value || submitting.value || bridgeBusy.value) return
   clearExtractedCookie()
   loggingOut.value = true
   try {
@@ -915,7 +946,7 @@ onBeforeUnmount(resetAccountData)
             <div class="auth-status-actions">
               <ActionButton
                 :loading="extracting"
-                :disabled="submitting || loggingOut"
+                :disabled="submitting || loggingOut || bridgeBusy"
                 @click="extractCurrentCookie"
                 >{{ t('提取 Cookie') }}</ActionButton
               >
@@ -923,6 +954,7 @@ onBeforeUnmount(resetAccountData)
                 variant="destructive"
                 :icon="SwitchButton"
                 :loading="loggingOut"
+                :disabled="bridgeBusy"
                 @click="logout"
                 >{{ t('退出') }}</ActionButton
               >
@@ -945,6 +977,12 @@ onBeforeUnmount(resetAccountData)
             </div>
           </div>
         </section>
+
+        <AuthBridgePanel
+          class="account-section"
+          :disabled="submitting || loggingOut"
+          @busy="bridgeBusy = $event"
+        />
 
         <section class="account-section">
           <h2>{{ authState.loggedIn ? t('更换认证 Cookie') : t('认证 Cookie') }}</h2>
@@ -992,6 +1030,7 @@ onBeforeUnmount(resetAccountData)
               type="submit"
               :icon="Key"
               :loading="submitting"
+              :disabled="bridgeBusy"
               >{{ t('保存 Cookie') }}</ActionButton
             >
           </form>

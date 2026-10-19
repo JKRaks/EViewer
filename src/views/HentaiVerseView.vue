@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
 import '@/assets/hentaiverse.css'
@@ -48,6 +49,7 @@ const authState = useAuthState()
 const activeSection = ref<HentaiVerseSection>('character')
 const page = ref<HentaiVersePage>()
 const loading = ref(false)
+useAppLaunchReadiness(() => loading.value, 'battle')
 const error = ref('')
 const battleBlocked = ref(false)
 const currentTarget = ref<HentaiVersePageTarget>({ ...HENTAIVERSE_SECTIONS[0]!.target })

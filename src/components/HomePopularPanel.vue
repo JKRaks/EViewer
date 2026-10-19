@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
 import IconFrame from '@/components/primitives/IconFrame.vue'
@@ -8,11 +9,7 @@ import SkeletonLine from '@/components/primitives/SkeletonLine.vue'
 import Notice from '@/components/primitives/Notice.vue'
 import EmptyState from '@/components/primitives/EmptyState.vue'
 import { onMounted, ref } from 'vue'
-import {
-  RefreshCw as Refresh,
-  TrendingUp as TrendCharts,
-  TriangleAlert as Warning,
-} from '@lucide/vue'
+import { RefreshCw as Refresh, TrendingUp as TrendCharts } from '@lucide/vue'
 import BookItem from '@/components/BookItem.vue'
 import { bookListBusi } from '@/core/books/bookListBusi'
 import type { bookItem } from '@/core/model/book/bookOutput'
@@ -22,6 +19,7 @@ defineOptions({ name: 'HomePopularPanel' })
 
 const books = ref<bookItem[]>([])
 const loading = ref(false)
+useAppLaunchReadiness(() => loading.value)
 const errorMessage = ref('')
 
 async function fetchPopularBooks() {
@@ -78,11 +76,14 @@ onMounted(() => void fetchPopularBooks())
       </template>
     </SkeletonBlock>
 
-    <Notice v-else-if="errorMessage && books.length === 0" tone="error" :closable="false">
-      <template #title
-        ><IconFrame><Warning /></IconFrame> {{ t(errorMessage) }}</template
-      >
-      <ActionButton size="sm" :icon="Refresh" @click="fetchPopularBooks">{{
+    <Notice
+      v-else-if="errorMessage && books.length === 0"
+      class="load-error"
+      tone="error"
+      :title="t('暂时无法加载')"
+      :description="t(errorMessage)"
+    >
+      <ActionButton class="retry-button" size="sm" :icon="Refresh" @click="fetchPopularBooks">{{
         t('重新加载')
       }}</ActionButton>
     </Notice>
@@ -100,6 +101,17 @@ onMounted(() => void fetchPopularBooks())
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+.load-error :deep(> div) {
+  min-width: 0;
+}
+.load-error :deep(p) {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.load-error .retry-button {
+  min-height: 44px;
+  margin: 8px 0 0;
 }
 .panel-header {
   display: flex;

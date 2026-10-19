@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t, getDisplayLocale } from '@/i18n'
 
 import SectionTabs from '@/components/primitives/SectionTabs'
@@ -24,6 +25,7 @@ defineOptions({
 const route = useRoute()
 const activeDownloadType = ref('torrent')
 const loading = ref(false)
+useAppLaunchReadiness(() => loading.value)
 const errorMessage = ref('')
 const bookName = ref('')
 const torrentItems = ref<galleryTorrentItem[]>([])

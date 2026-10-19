@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t, getDisplayLocale } from '@/i18n'
 
 import ActionButton from '@/components/primitives/ActionButton.vue'
@@ -21,6 +22,7 @@ const router = useRouter()
 const settings = useIndexedDbCacheSettings()
 const records = ref<ReadingHistoryRecord[]>([])
 const loading = ref(true)
+useAppLaunchReadiness(() => loading.value, 'history')
 const openMenuId = ref('')
 const draggingId = ref('')
 const dragOffset = ref(0)

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
 import ActionButton from '@/components/primitives/ActionButton.vue'
@@ -25,6 +26,7 @@ const router = useRouter()
 const sections = ref<toplistOverviewSection[]>([])
 const activePeriod = ref(5)
 const loading = ref(false)
+useAppLaunchReadiness(() => loading.value)
 const errorMessage = ref('')
 let requestVersion = 0
 

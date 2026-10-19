@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t, locale } from '@/i18n'
 
 import TextField from '@/components/primitives/TextField.vue'
@@ -93,6 +94,7 @@ const allBooks = ref<bookItem[]>([])
 const showAdvanced = ref(false)
 const imageSearchVisible = ref(false)
 const loading = ref(false)
+useAppLaunchReadiness(() => loading.value)
 const loadingMore = ref(false)
 const moreError = ref('')
 const hasSearched = ref(false)

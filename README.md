@@ -170,6 +170,7 @@ npm run icons:generate   # 生成应用图标
 - [贡献指南](CONTRIBUTING.md)
 - [标签采集工具](tool/README.md)
 - [界面国际化](src/i18n/README.md)
+- [原站授权登录与部署](docs/login-bridge.md)
 - [界面字体](src/assets/fonts/README.md)
 - [UI 来源](src/components/ui/README.md)
 
