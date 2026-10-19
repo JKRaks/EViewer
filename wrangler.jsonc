@@ -29,6 +29,10 @@
     "PROXY_LOG_LEVEL": "info",
   },
   "version_metadata": { "binding": "EVIEWER_VERSION" },
+  "durable_objects": {
+    "bindings": [{ "name": "AUTH_BRIDGE", "class_name": "AuthBridgeSession" }],
+  },
+  "migrations": [{ "tag": "auth-bridge-v1", "new_sqlite_classes": ["AuthBridgeSession"] }],
   "ratelimits": [
     { "name": "proxy-df", "namespace_id": "2", "simple": { "limit": 120, "period": 60 } },
   ],
@@ -46,6 +50,9 @@
     "issues": { "enabled": true },
   },
   "previews": {
+    "durable_objects": {
+      "bindings": [{ "name": "AUTH_BRIDGE", "class_name": "AuthBridgeSession" }],
+    },
     "vars": {
       "EVIEWER_PROXY_ENVIRONMENT": "preview",
       "PROXY_LOG_LEVEL": "debug",

@@ -75,9 +75,7 @@ npm run dev:worker
 
 代理使用 `ipb_member_id` 和 `ipb_pass_hash` Cookie 访问原站。在应用的「账号信息 → 认证信息 → 登录态」填写并保存。
 
-认证导出接口 `POST /ehentai/auth/export` 仅接受同源或配置的 origin。
-
-前端页面与 `VITE_EH_URL` 不同源时，将前端页面的完整 origin 加入允许列表。`ALLOWED_ORIGINS` 和 `ALLOWED_AUTH_EXPORT_ORIGINS` 在 Cloudflare 对应 Worker / Preview 中以 Secret 维护；部署保留 `keep_vars: true`，仓库与 CI 不写入这些值。
+前端与代理不同源部署时，需将前端 origin 加入白名单。`ALLOWED_ORIGINS` 和 `ALLOWED_AUTH_EXPORT_ORIGINS` 在 Cloudflare Worker 中以 Secret 维护；部署时保留 `keep_vars: true`，不要在仓库或 CI 中写入这些值。
 
 ## 部署（Cloudflare Workers）
 

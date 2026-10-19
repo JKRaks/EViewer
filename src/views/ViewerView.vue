@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { allowAppLaunchInteraction, useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
 import ActionButton from '@/components/primitives/ActionButton.vue'
@@ -92,6 +93,7 @@ const pageData = reactive({
   pageIndex: 0,
   noMore: false,
 })
+useAppLaunchReadiness(() => pageData.loading)
 const bookImages = ref<ViewerImageItem[]>([])
 const totalImages = ref(0)
 const currentImageOrdinal = ref(0)
@@ -327,6 +329,7 @@ async function initialize() {
         resumeOrdinal = history.lastOrdinal
       } else {
         try {
+          allowAppLaunchInteraction()
           await dialogs.confirm(
             t('上次看到第 {p0} 张，继续阅读吗？', { p0: history.lastOrdinal }),
             t('继续阅读'),

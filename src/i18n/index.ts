@@ -74,6 +74,7 @@ watch(
   locale,
   (value) => {
     if (typeof document !== 'undefined') document.documentElement.lang = value
+    if (typeof window !== 'undefined') window.__eviewerLaunch?.localize(t)
     try {
       localStorage.setItem('eviewer-locale', value)
     } catch {

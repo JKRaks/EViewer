@@ -66,6 +66,7 @@ export class httpClass {
       // console.log('最终响应状态:', response.status)
       // console.log('最终响应 Cookie:', response.headers['set-cookie'])
 
+      this.checkSourceResponse(response)
       result.data = response.data
       result.isSuccess = true
       if (
@@ -98,6 +99,38 @@ export class httpClass {
             : (error as Error).message
     }
     return result
+  }
+
+  /** The source reports temporary IP bans with HTTP 200 and a short error page. */
+  private static checkSourceResponse(response: AxiosResponse<string>): void {
+    if (typeof response.data !== 'string' || response.data.length > 8192) return
+    const text = response.data
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+    if (!/^(?:(?:this|your)\s+)?IP(?: address)? has been temporarily banned\b/i.test(text)) return
+
+    const cooldown = text.match(/(?:ban expires|try again) in ([\w\s,]+)/i)?.[1] || ''
+    const seconds =
+      Number(cooldown.match(/(\d+)\s*hours?/i)?.[1] || 0) * 3600 +
+      Number(cooldown.match(/(\d+)\s*minutes?/i)?.[1] || 0) * 60 +
+      Number(cooldown.match(/(\d+)\s*seconds?/i)?.[1] || 0)
+    const totalMinutes = Math.ceil(seconds / 60)
+    const hours = Math.floor(totalMinutes / 60)
+    const minutes = totalMinutes % 60
+    const duration =
+      hours && minutes
+        ? formatSystemMessage('{p0} 小时 {p1} 分钟', { p0: hours, p1: minutes })
+        : hours
+          ? formatSystemMessage('{p0} 小时', { p0: hours })
+          : formatSystemMessage('{p0} 分钟', { p0: minutes })
+    throw new Error(
+      seconds > 0
+        ? formatSystemMessage('主站暂时限制了当前代理 IP 的访问，请约 {p0}后重试。', {
+            p0: duration,
+          })
+        : formatSystemMessage('主站暂时限制了当前代理 IP 的访问，请稍后重试。'),
+    )
   }
 
   // 手动处理重定向，确保携带 cookies

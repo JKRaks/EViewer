@@ -25,6 +25,18 @@ export default defineConfig({
   },
   plugins: [
     {
+      name: 'nonblocking-launch-styles',
+      apply: 'build',
+      transformIndexHtml: {
+        order: 'post',
+        handler: (html) =>
+          html.replace(
+            /<link rel="stylesheet"([^>]+)>/g,
+            '<link rel="preload" as="style"$1 data-launch-style onload="this.onload=null;this.rel=\'stylesheet\'" onerror="this.dataset.failed=\'true\';window.__eviewerLaunch?.fail()">',
+          ),
+      },
+    },
+    {
       name: 'deployment-revision',
       apply: 'build',
       async generateBundle() {
@@ -49,7 +61,8 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
-      injectRegister: 'auto',
+      // Register after the first page is revealed, so precaching cannot compete with it.
+      injectRegister: null,
       includeAssets: ['favicon.ico', 'favicon.svg', 'apple-touch-icon.png'],
       manifest: {
         id: '/',
@@ -84,6 +97,13 @@ export default defineConfig({
       },
       workbox: {
         sourcemap: false,
+        // API/script navigations must reach the Worker, including after PWA installation.
+        navigateFallbackDenylist: [
+          /^\/auth(?:\/|$)/,
+          /^\/(?:ehentai|exhentai)(?:\/|$)/,
+          /^\/hentaiverse\//,
+          /^\/(?:image-proxy|health)(?:\/|$)/,
+        ],
         globPatterns: ['**/*.{js,css,html,svg,ico,png,webp,json}'],
         globIgnores: [
           'deployment.json',
