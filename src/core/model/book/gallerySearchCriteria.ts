@@ -1,5 +1,18 @@
 import { categoryEnum } from '@/core/common/enum/categoryEnum'
 
+export const gallerySearchCategories = [
+  ['同人志', categoryEnum.Doujinshi],
+  ['漫画', categoryEnum.Manga],
+  ['艺术家 CG', categoryEnum.ArtistCG],
+  ['游戏 CG', categoryEnum.GameCG],
+  ['西方', categoryEnum.Western],
+  ['非 H', categoryEnum.NonH],
+  ['图像集', categoryEnum.ImageSet],
+  ['Cosplay', categoryEnum.Cosplay],
+  ['亚洲色情', categoryEnum.AsianPorn],
+  ['杂项', categoryEnum.Misc],
+] as const
+
 export interface selectedGalleryTag {
   namespace: string
   master: string
