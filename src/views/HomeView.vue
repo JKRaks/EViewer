@@ -1,23 +1,24 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, defineAsyncComponent, nextTick, onMounted, ref } from 'vue'
 import { Bookmark, ArrowUpRight } from '@lucide/vue'
 import { getLayoutScrollTop, scrollLayoutTo } from '@/composables/layoutScroll'
 import { listReadingHistory } from '@/core/cache/readingHistory'
 import { useIndexedDbCacheSettings } from '@/core/cache/cacheSettings'
 import type { ReadingHistoryRecord } from '@/core/cache/indexedDb'
 import HomeYesterdayPanel from '@/components/HomeYesterdayPanel.vue'
-import HomePopularPanel from '@/components/HomePopularPanel.vue'
-import ToplistOverviewPanel from '@/components/ToplistOverviewPanel.vue'
 defineOptions({ name: 'HomeView' })
 const activePanel = ref('yesterday')
 const latest = ref<ReadingHistoryRecord>()
+const historyLoading = ref(true)
+useAppLaunchReadiness(() => historyLoading.value, 'history')
 const settings = useIndexedDbCacheSettings()
 const panels = {
   yesterday: HomeYesterdayPanel,
-  popular: HomePopularPanel,
-  overview: ToplistOverviewPanel,
+  popular: defineAsyncComponent(() => import('@/components/HomePopularPanel.vue')),
+  overview: defineAsyncComponent(() => import('@/components/ToplistOverviewPanel.vue')),
 }
 const activePanelComponent = computed(() => panels[activePanel.value as keyof typeof panels])
 const sections = [
@@ -35,8 +36,12 @@ async function selectPanel(key: string) {
   )
 }
 onMounted(async () => {
-  if (settings.enabled && settings.cacheReadingHistory)
-    latest.value = (await listReadingHistory())[0]
+  try {
+    if (settings.enabled && settings.cacheReadingHistory)
+      latest.value = (await listReadingHistory())[0]
+  } finally {
+    historyLoading.value = false
+  }
 })
 </script>
 <template>

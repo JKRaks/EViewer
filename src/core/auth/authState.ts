@@ -10,7 +10,7 @@ interface AuthState {
   lastLoginAt?: number
 }
 
-interface AuthResponse {
+export interface AuthResponse {
   success: boolean
   message?: string
   memberId?: string
@@ -29,7 +29,11 @@ function loadAuthState(): AuthState {
     if (!stored) return { ...defaultState }
 
     const parsed = JSON.parse(stored) as Partial<AuthState>
-    if (!parsed.loggedIn || !parsed.memberId || (parsed.expiresAt ?? 0) <= Date.now()) {
+    if (
+      !parsed.loggedIn ||
+      !parsed.memberId ||
+      (parsed.expiresAt !== undefined && parsed.expiresAt <= Date.now())
+    ) {
       localStorage.removeItem(storageKey)
       return { ...defaultState }
     }
@@ -47,10 +51,14 @@ function loadAuthState(): AuthState {
 export const authState = reactive(loadAuthState())
 
 export async function saveAuthCookies(memberId: string, passHash: string) {
-  const previousMemberId = authState.memberId
   const response = await requestAuth('/auth/cookies', { memberId, passHash })
-  const now = Date.now()
-  const nextMemberId = response.memberId ?? memberId
+  applyAuthState({ ...response, memberId: response.memberId ?? memberId }, true)
+}
+
+/** Shared by manual import, browser authorization and cookie-state restoration. */
+function applyAuthState(response: Pick<AuthResponse, 'memberId' | 'expiresAt'>, updated = false) {
+  const previousMemberId = authState.memberId
+  const nextMemberId = response.memberId || ''
   if (previousMemberId && previousMemberId !== nextMemberId) {
     clearUserConfigCache()
     void import('@/core/hentaiverse/hentaiVerseStore').then(({ clearHentaiVerseState }) => {
@@ -60,10 +68,39 @@ export async function saveAuthCookies(memberId: string, passHash: string) {
   Object.assign(authState, {
     loggedIn: true,
     memberId: nextMemberId,
-    expiresAt: response.expiresAt,
-    lastLoginAt: now,
+    expiresAt:
+      response.expiresAt ?? (previousMemberId === nextMemberId ? authState.expiresAt : undefined),
+    lastLoginAt:
+      updated || !authState.lastLoginAt || previousMemberId !== nextMemberId
+        ? Date.now()
+        : authState.lastLoginAt,
   })
   persistAuthState()
+}
+
+/** Reads only presence/identity metadata; never exports credential values. */
+export async function refreshAuthState(signal?: AbortSignal, saved?: AuthResponse) {
+  const proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
+  const response = await fetch(new URL('/ehentai/auth/status', proxyOrigin), {
+    credentials: 'include',
+    cache: 'no-store',
+    signal,
+  })
+  const result = (await response.json()) as AuthResponse & { credentialReady: boolean }
+  if (!response.ok || !result.success) throw new Error(result.message || '检查登录凭据失败')
+  if (result.credentialReady && result.memberId) {
+    if (saved && saved.memberId !== result.memberId)
+      throw new Error(formatSystemMessage('浏览器未保存登录凭据，请检查 Cookie 权限后重试'))
+    applyAuthState({ ...result, expiresAt: saved?.expiresAt }, Boolean(saved))
+  } else if (authState.loggedIn) {
+    clearUserConfigCache()
+    void import('@/core/hentaiverse/hentaiVerseStore').then(({ clearHentaiVerseState }) =>
+      clearHentaiVerseState(),
+    )
+    Object.assign(authState, defaultState, { expiresAt: undefined, lastLoginAt: undefined })
+    localStorage.removeItem(storageKey)
+  }
+  return result
 }
 
 export async function clearAuthCookies() {

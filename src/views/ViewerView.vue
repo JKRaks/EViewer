@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { allowAppLaunchInteraction, useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
 import ActionButton from '@/components/primitives/ActionButton.vue'
@@ -8,6 +9,8 @@ import MediaImage from '@/components/primitives/MediaImage.vue'
 import IconFrame from '@/components/primitives/IconFrame.vue'
 import ProgressMeter from '@/components/primitives/ProgressMeter.vue'
 import Notice from '@/components/primitives/Notice.vue'
+import TextField from '@/components/primitives/TextField.vue'
+import { PopoverRoot, PopoverTrigger, PopoverPortal, PopoverContent } from 'reka-ui'
 import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import {
@@ -23,7 +26,7 @@ import { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import { bookImageBusi } from '@/core/books/bookImgBusi'
 import { bookImgInput } from '@/core/model/book/bookImgInput'
 import { bookInfoInput } from '@/core/model/book/bookInfoInput'
-import { LoaderCircle as Loading, RotateCw as RefreshRight } from '@lucide/vue'
+import { ArrowRight, LoaderCircle as Loading, RotateCw as RefreshRight } from '@lucide/vue'
 import { dialogs } from '@/components/primitives/feedback'
 import {
   cacheImageUrl,
@@ -92,17 +95,23 @@ const pageData = reactive({
   pageIndex: 0,
   noMore: false,
 })
+useAppLaunchReadiness(() => pageData.loading)
 const bookImages = ref<ViewerImageItem[]>([])
 const totalImages = ref(0)
 const currentImageOrdinal = ref(0)
-const compactProgress = ref(false)
 const isSmallPortrait = ref(false)
+const pageJumpOpen = ref(false)
+const pageJumpValue = ref('')
+const pageJumpError = ref('')
+const pageJumpLoading = ref(false)
+const readerBusy = computed(
+  () => pageData.loading || pageData.loadingMore || pageData.pageRendering || loadingPrevious.value,
+)
 const progressPercentage = computed(() =>
   totalImages.value
     ? Math.min(100, Math.round((currentImageOrdinal.value / totalImages.value) * 100))
     : 0,
 )
-const showLineProgress = computed(() => isSmallPortrait.value !== compactProgress.value)
 let imageObserver: IntersectionObserver | null = null
 let visibleImageFrame = 0
 let viewportQuery: MediaQueryList | null = null
@@ -110,6 +119,8 @@ let viewportQuery: MediaQueryList | null = null
 const infiniteScrollDisabled = computed(() => {
   return (
     pageData.loading ||
+    pageJumpOpen.value ||
+    pageJumpLoading.value ||
     Boolean(readerError.value || moreError.value) ||
     loadingPrevious.value ||
     pageData.loadingMore ||
@@ -255,6 +266,80 @@ function updateViewportMode() {
   isSmallPortrait.value = viewportQuery?.matches ?? false
 }
 
+function openPageJump() {
+  pageJumpValue.value = String(currentImageOrdinal.value || 1)
+  pageJumpError.value = ''
+  pageJumpOpen.value = true
+}
+
+async function jumpToPage() {
+  if (!bookId || readerBusy.value || pageJumpLoading.value || isViewUnmounted) return
+  const value = String(pageJumpValue.value).trim()
+  const ordinal = Number(value)
+  if (
+    !/^\d+$/.test(value) ||
+    !Number.isSafeInteger(ordinal) ||
+    ordinal < 1 ||
+    ordinal > totalImages.value
+  ) {
+    pageJumpError.value = t('请输入 1 到 {p0} 之间的整数页码', { p0: totalImages.value })
+    return
+  }
+
+  pageJumpLoading.value = true
+  pageJumpError.value = ''
+  try {
+    if (!bookImages.value.some((image) => image.ordinal === ordinal)) {
+      const pageIndex = Math.floor((ordinal - 1) / 20)
+      const imageIndex = (ordinal - 1) % 20
+      const targetPage = await fetchBookInfo(bookId, pageIndex)
+      if (isViewUnmounted) return
+      if (!targetPage.isSuccess || !getPageImageIds(targetPage)[imageIndex]) {
+        throw new Error(targetPage.msg || t('跳转失败，请重试。'))
+      }
+
+      pageData.loading = true
+      retainedAnchor = undefined
+      upwardIntentUntil = 0
+      readerError.value = ''
+      moreError.value = ''
+      previousError.value = ''
+      bookImages.value = []
+      currentPageQueue = null
+      bookInfo = targetPage
+      pageData.pageIndex = targetPage.pageIndex
+      pageData.noMore = false
+      await appendPageInOrder(targetPage, imageIndex)
+      if (isViewUnmounted) return
+    }
+
+    retainedAnchor = undefined
+    upwardIntentUntil = 0
+    pageJumpOpen.value = false
+    await nextTick()
+    if (isViewUnmounted) return
+    const target = document.querySelector<HTMLElement>(
+      `.viewer-view .image-block[data-ordinal="${ordinal}"]`,
+    )
+    if (target) {
+      scrollLayoutTo(
+        getLayoutScrollTop() + target.getBoundingClientRect().top - getLayoutScrollViewport().top,
+      )
+      lastMainScrollTop = getLayoutScrollTop()
+    }
+    currentImageOrdinal.value = ordinal
+  } catch (error) {
+    if (!isViewUnmounted)
+      pageJumpError.value = error instanceof Error ? error.message : t('跳转失败，请重试。')
+  } finally {
+    if (!isViewUnmounted) {
+      pageJumpLoading.value = false
+      pageData.loading = false
+      refreshNoMoreState()
+    }
+  }
+}
+
 async function observeVisibleImages() {
   await nextTick()
   if (isViewUnmounted) return
@@ -327,6 +412,7 @@ async function initialize() {
         resumeOrdinal = history.lastOrdinal
       } else {
         try {
+          allowAppLaunchInteraction()
           await dialogs.confirm(
             t('上次看到第 {p0} 张，继续阅读吗？', { p0: history.lastOrdinal }),
             t('继续阅读'),
@@ -454,6 +540,8 @@ async function loadPreviousImages() {
   if (
     !bookId ||
     loadingPrevious.value ||
+    pageJumpOpen.value ||
+    pageJumpLoading.value ||
     pageData.loading ||
     pageData.loadingMore ||
     pageData.pageRendering ||
@@ -816,28 +904,78 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
       {{ t('没有更多图片了') }}
     </div>
 
-    <button
+    <PopoverRoot
       v-if="totalImages && currentImageOrdinal"
-      type="button"
-      class="reader-progress"
-      :class="{ 'reader-progress--line': showLineProgress }"
-      :aria-label="
-        t('阅读进度 {p0} / {p1}，点击切换样式', { p0: currentImageOrdinal, p1: totalImages })
-      "
-      @click="compactProgress = !compactProgress"
+      :open="pageJumpOpen"
+      :modal="false"
+      @update:open="$event ? openPageJump() : (pageJumpOpen = false)"
     >
-      <template v-if="showLineProgress">
-        <span class="reader-progress__count">{{ currentImageOrdinal }}/{{ totalImages }}</span>
-        <ProgressMeter :percentage="progressPercentage" :show-text="false" :stroke-width="7" />
-      </template>
-      <ProgressMeter
-        v-else
-        type="dashboard"
-        :percentage="progressPercentage"
-        :width="112"
-        :stroke-width="9"
-      />
-    </button>
+      <PopoverTrigger as-child>
+        <button
+          type="button"
+          class="reader-progress"
+          :class="{ 'reader-progress--line': isSmallPortrait }"
+          :aria-label="
+            t('阅读进度 {p0} / {p1}，点击跳转页码', { p0: currentImageOrdinal, p1: totalImages })
+          "
+        >
+          <template v-if="isSmallPortrait">
+            <span class="reader-progress__count">{{ currentImageOrdinal }}/{{ totalImages }}</span>
+            <ProgressMeter :percentage="progressPercentage" :show-text="false" :stroke-width="7" />
+          </template>
+          <ProgressMeter
+            v-else
+            type="dashboard"
+            :percentage="progressPercentage"
+            :width="112"
+            :stroke-width="9"
+          />
+        </button>
+      </PopoverTrigger>
+      <PopoverPortal>
+        <PopoverContent as-child side="top" align="start" :side-offset="12" :collision-padding="14">
+          <form
+            class="page-jump-form"
+            :aria-label="t('跳转页码')"
+            novalidate
+            @submit.prevent="jumpToPage"
+          >
+            <TextField
+              id="reader-page-jump"
+              v-model="pageJumpValue"
+              class="page-jump-input"
+              inputmode="numeric"
+              pattern="[0-9]*"
+              enterkeyhint="go"
+              autocomplete="off"
+              :disabled="pageJumpLoading"
+              :aria-label="t('页码')"
+              :aria-invalid="Boolean(pageJumpError)"
+              :aria-describedby="pageJumpError ? 'reader-page-jump-error' : undefined"
+              @focus="($event.target as HTMLInputElement).select()"
+              @update:model-value="pageJumpError = ''"
+            >
+              <template #suffix>
+                <span class="page-jump-total">/{{ totalImages }}</span>
+              </template>
+            </TextField>
+            <ActionButton
+              type="submit"
+              size="icon"
+              variant="default"
+              class="page-jump-submit"
+              :icon="ArrowRight"
+              :aria-label="t('跳转')"
+              :loading="pageJumpLoading"
+              :disabled="readerBusy"
+            />
+            <p v-if="pageJumpError" id="reader-page-jump-error" class="field-error" role="alert">
+              {{ pageJumpError }}
+            </p>
+          </form>
+        </PopoverContent>
+      </PopoverPortal>
+    </PopoverRoot>
   </div>
 </template>
 
@@ -1007,6 +1145,40 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.page-jump-form {
+  z-index: 1501;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 44px;
+  align-items: center;
+  gap: 8px;
+  width: min(240px, calc(100vw - 28px));
+}
+
+.page-jump-input {
+  border-radius: 999px;
+}
+
+.page-jump-total {
+  flex: none;
+  color: var(--muted-foreground);
+  font-variant-numeric: tabular-nums;
+}
+
+.page-jump-submit {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+}
+
+.page-jump-form .field-error {
+  grid-column: 1 / -1;
+  margin: 0;
+  padding: 6px 10px;
+  border-radius: 8px;
+  color: var(--danger);
+  background: var(--surface);
 }
 
 @media (max-width: 768px) {

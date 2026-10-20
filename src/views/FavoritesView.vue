@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
 import StatusPanel from '@/components/primitives/StatusPanel.vue'
@@ -64,6 +65,7 @@ const books = ref<favoriteBookItem[]>([])
 const selectedGalleryIds = ref<string[]>([])
 const moveTarget = ref<number>()
 const loading = ref(false)
+useAppLaunchReadiness(() => loading.value)
 const loadingMore = ref(false)
 const sorting = ref(false)
 const updating = ref(false)

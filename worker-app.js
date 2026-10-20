@@ -1,4 +1,5 @@
 import proxy from './proxy-server.workers.js'
+export { AuthBridgeSession } from './worker/auth-bridge-session.js'
 
 // Keep these patterns aligned with assets.run_worker_first in wrangler.jsonc.
 export const API_ROUTES = [

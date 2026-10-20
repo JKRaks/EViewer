@@ -1,11 +1,11 @@
 <script setup lang="ts">
 import { t, locale } from '@/i18n'
 
-import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, useId, watch } from 'vue'
 import { Search, Plus, Minus, Check } from '@lucide/vue'
 import TextField from './primitives/TextField.vue'
 import SegmentedControl from './primitives/SegmentedControl.vue'
-import TagChip from './primitives/TagChip.vue'
+import SearchConditionChip from './SearchConditionChip.vue'
 import EmptyState from './primitives/EmptyState.vue'
 import ActionButton from './primitives/ActionButton.vue'
 import {
@@ -28,6 +28,7 @@ const namespaces = ref<TagNamespaceSummary[]>([])
 const activeNamespace = ref('')
 const searchScope = ref('all')
 const keyword = ref('')
+const searchId = useId()
 const loadingNamespaces = ref(false)
 const loadingSearch = ref(false)
 const pendingPages = ref(0)
@@ -47,6 +48,11 @@ let disposed = false
 const searching = computed(() => !!keyword.value.trim())
 const activeNamespaceInfo = computed(() =>
   namespaces.value.find((item) => item.namespace === activeNamespace.value),
+)
+const activeNamespaceLabel = computed(() =>
+  locale.value === 'en'
+    ? activeNamespaceInfo.value?.namespace
+    : activeNamespaceInfo.value?.displayName,
 )
 const visibleRows = computed(() => {
   if (searching.value) return searchResults.value.map((tag, index) => ({ index, tag }))
@@ -183,22 +189,48 @@ onBeforeUnmount(() => {
 </script>
 <template>
   <div class="tag-picker">
+    <div class="tag-search">
+      <label :for="searchId">{{ t('搜索标签') }}</label>
+      <TextField
+        :id="searchId"
+        v-model="keyword"
+        clearable
+        :placeholder="t('搜索中文、原名或别名')"
+        :aria-label="t('搜索标签')"
+      >
+        <template #prefix><Search :size="16" /></template>
+      </TextField>
+      <div v-if="searching" class="tag-search-scope">
+        <span>{{ t('查找范围') }}</span>
+        <SegmentedControl
+          v-model="searchScope"
+          :aria-label="t('标签查找范围')"
+          :options="[
+            { label: t('所有标签分组'), value: 'all' },
+            {
+              label: t('仅 {p0}', { p0: activeNamespaceLabel || t('当前分组') }),
+              value: 'current',
+              disabled: !activeNamespace,
+            },
+          ]"
+        />
+      </div>
+    </div>
     <div class="selected-trays">
       <details open>
         <summary>
           {{ t('包含') }}<span>{{ includeTags.length }}</span>
         </summary>
         <div class="selected-tray">
-          <TagChip
+          <SearchConditionChip
             v-for="tag in includeTags"
             :key="galleryTagKey(tag)"
-            closable
-            @close="remove(tag, 'include')"
-            ><span :title="t(`${tag.namespace}:${tag.master}`)"
-              >{{ locale === 'en' ? tag.master : tag.displayName }}
-              <small>{{ tag.namespace }}</small></span
-            ></TagChip
-          ><span v-if="!includeTags.length" class="tray-placeholder">{{ t('想看到的标签') }}</span>
+            :label="locale === 'en' ? tag.master : tag.displayName"
+            :title="t('包含 {p0}', { p0: `${tag.namespace}:${tag.master}` })"
+            removable
+            @remove="remove(tag, 'include')"
+          />
+          <span v-if="!includeTags.length" class="tray-placeholder">{{ t('想看到的标签') }}</span>
         </div>
       </details>
       <details open>
@@ -206,36 +238,18 @@ onBeforeUnmount(() => {
           {{ t('排除') }}<span>{{ excludeTags.length }}</span>
         </summary>
         <div class="selected-tray">
-          <TagChip
+          <SearchConditionChip
             v-for="tag in excludeTags"
             :key="galleryTagKey(tag)"
-            tone="danger"
-            closable
-            @close="remove(tag, 'exclude')"
-            ><span :title="t(`${tag.namespace}:${tag.master}`)"
-              >{{ locale === 'en' ? tag.master : tag.displayName }}
-              <small>{{ tag.namespace }}</small></span
-            ></TagChip
-          ><span v-if="!excludeTags.length" class="tray-placeholder">{{
-            t('不想看到的标签')
-          }}</span>
+            :label="locale === 'en' ? tag.master : tag.displayName"
+            :title="t('排除 {p0}', { p0: `${tag.namespace}:${tag.master}` })"
+            excluded
+            removable
+            @remove="remove(tag, 'exclude')"
+          />
+          <span v-if="!excludeTags.length" class="tray-placeholder">{{ t('不想看到的标签') }}</span>
         </div>
       </details>
-    </div>
-    <div class="tag-search">
-      <TextField
-        v-model="keyword"
-        clearable
-        :placeholder="t('搜索中文、原名或别名')"
-        :aria-label="t('搜索标签')"
-        ><template #prefix><Search :size="16" /></template></TextField
-      ><SegmentedControl
-        v-model="searchScope"
-        :options="[
-          { label: t('全部分类'), value: 'all' },
-          { label: t('当前分类'), value: 'current' },
-        ]"
-      />
     </div>
     <p v-if="error" class="field-error" role="alert">
       {{ t(error) }}
@@ -260,13 +274,7 @@ onBeforeUnmount(() => {
       </nav>
       <section class="tag-results">
         <header>
-          <span>{{
-            searching
-              ? t('查找结果')
-              : (locale === 'en'
-                  ? activeNamespaceInfo?.namespace
-                  : activeNamespaceInfo?.displayName) || t('加载标签索引…')
-          }}</span
+          <span>{{ searching ? t('查找结果') : activeNamespaceLabel || t('加载标签索引…') }}</span
           ><small>{{
             searching ? t('最多显示 50 条，可继续输入缩小范围') : t('{p0} 个主标签', { p0: total })
           }}</small
@@ -357,26 +365,31 @@ onBeforeUnmount(() => {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 7px;
+  gap: 16px 8px;
   min-height: 40px;
   padding-top: 8px;
-}
-.selected-tray small {
-  opacity: 0.8;
-  font-size: 10px;
 }
 .tray-placeholder {
   font-size: 12px;
   color: var(--muted-foreground);
 }
 .tag-search {
-  display: flex;
-  gap: 12px;
-  align-items: center;
-  margin-bottom: 14px;
+  display: grid;
+  gap: 8px;
 }
-.tag-search :deep(.ui-input) {
-  flex: 1;
+.tag-search > label {
+  color: var(--text);
+  font-size: 13px;
+}
+.tag-search-scope {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.tag-search-scope > span {
+  color: var(--muted-foreground);
+  font-size: 12px;
 }
 .picker-body {
   display: grid;
@@ -502,10 +515,6 @@ onBeforeUnmount(() => {
 @media (max-width: 767px) {
   .selected-trays {
     gap: 12px;
-  }
-  .tag-search {
-    flex-direction: column;
-    align-items: stretch;
   }
   .picker-body {
     display: block;

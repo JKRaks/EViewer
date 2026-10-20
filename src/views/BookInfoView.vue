@@ -1,4 +1,5 @@
 <script lang="ts" setup>
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t, getDisplayLocale } from '@/i18n'
 
 import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
@@ -68,6 +69,7 @@ const funcData = reactive({
   loading: true,
   readMode: false,
 })
+useAppLaunchReadiness(() => funcData.loading)
 const pageData = ref(new bookInfoOutput())
 const readingHistory = ref<ReadingHistoryRecord>()
 let readingRequestVersion = 0

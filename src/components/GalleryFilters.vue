@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { t } from '@/i18n'
+import { t, locale } from '@/i18n'
 
-import { computed } from 'vue'
+import { computed, ref } from 'vue'
 import SearchTagPicker from './SearchTagPicker.vue'
+import SearchConditionChip from './SearchConditionChip.vue'
 import ActionButton from './primitives/ActionButton.vue'
 import Field from './primitives/Field.vue'
 import TextField from './primitives/TextField.vue'
@@ -12,12 +13,14 @@ import CheckField from './primitives/CheckField.vue'
 import CheckGroup from './primitives/CheckGroup.vue'
 import ToggleField from './primitives/ToggleField.vue'
 import SegmentedControl from './primitives/SegmentedControl.vue'
-import { categoryEnum } from '@/core/common/enum/categoryEnum'
+import { galleryTagKey } from '@/core/books/gallerySearchState'
 import {
   createGallerySearchCriteria,
+  gallerySearchCategories,
   type gallerySearchCriteria,
 } from '@/core/model/book/gallerySearchCriteria'
 const draft = defineModel<gallerySearchCriteria>({ required: true })
+const tagsExpanded = ref(false)
 defineProps<{ error?: string }>()
 const emit = defineEmits<{ apply: []; cancel: [] }>()
 const title = computed({
@@ -32,18 +35,6 @@ const allCategories = computed({
     if (value) draft.value.categories = []
   },
 })
-const categories = [
-  ['同人志', categoryEnum.Doujinshi],
-  ['漫画', categoryEnum.Manga],
-  ['艺术家 CG', categoryEnum.ArtistCG],
-  ['游戏 CG', categoryEnum.GameCG],
-  ['西方', categoryEnum.Western],
-  ['非 H', categoryEnum.NonH],
-  ['图像集', categoryEnum.ImageSet],
-  ['Cosplay', categoryEnum.Cosplay],
-  ['亚洲色情', categoryEnum.AsianPorn],
-  ['杂项', categoryEnum.Misc],
-] as const
 function reset() {
   draft.value = createGallerySearchCriteria({ freeText: draft.value.freeText })
 }
@@ -58,9 +49,60 @@ function reset() {
         </div>
         <ActionButton variant="ghost" size="sm" @click="reset">{{ t('重置筛选') }}</ActionButton>
       </header>
-      <section>
+      <Field :label="t('关键词')" class="keyword-field">
+        <TextField
+          v-model="draft.freeText"
+          clearable
+          :placeholder="t('标题、标签或关键词')"
+          :aria-label="t('筛选关键词')"
+          @keydown.enter.prevent="emit('apply')"
+        />
+      </Field>
+      <section class="filter-section category-filter">
+        <div class="category-heading">
+          <h3>{{ t('分类') }}</h3>
+          <Field :label="t('最低评分')" class="rating-field">
+            <SelectField
+              v-model="draft.minRating"
+              clearable
+              :placeholder="t('不限')"
+              :aria-label="t('最低评分')"
+            >
+              <option v-for="rating in [2, 3, 4, 5]" :key="rating" :value="rating">
+                {{ t('{p0} 星及以上', { p0: rating }) }}
+              </option>
+            </SelectField>
+          </Field>
+        </div>
+        <div class="filter-categories">
+          <CheckField v-model="allCategories">{{ t('全部分类') }}</CheckField>
+          <CheckGroup v-model="draft.categories">
+            <CheckField
+              v-for="[label, value] in gallerySearchCategories"
+              :key="value"
+              :value="value"
+            >
+              {{ t(label) }}
+            </CheckField>
+          </CheckGroup>
+        </div>
+      </section>
+      <details
+        class="filter-details tag-filter-details"
+        :open="tagsExpanded"
+        @toggle="tagsExpanded = ($event.target as HTMLDetailsElement).open"
+      >
+        <summary>
+          <span>{{ t('标签筛选') }}</span>
+          <small>{{
+            t('包含 {p0} · 排除 {p1}', {
+              p0: draft.includeTags.length,
+              p1: draft.excludeTags.length,
+            })
+          }}</small>
+        </summary>
         <div class="filter-heading">
-          <h3>{{ t('标签') }}</h3>
+          <span>{{ t('匹配方式') }}</span>
           <SegmentedControl
             v-model="draft.tagMode"
             :options="[
@@ -73,7 +115,38 @@ function reset() {
           v-model:include-tags="draft.includeTags"
           v-model:exclude-tags="draft.excludeTags"
         />
-      </section>
+      </details>
+      <div
+        v-if="!tagsExpanded && (draft.includeTags.length || draft.excludeTags.length)"
+        class="collapsed-tag-selection"
+        :aria-label="t('已选标签')"
+      >
+        <SearchConditionChip
+          v-for="tag in draft.includeTags"
+          :key="'include-' + galleryTagKey(tag)"
+          :label="locale === 'en' ? tag.master : tag.displayName"
+          :title="t('包含 {p0}', { p0: `${tag.namespace}:${tag.master}` })"
+          removable
+          @remove="
+            draft.includeTags = draft.includeTags.filter(
+              (item) => galleryTagKey(item) !== galleryTagKey(tag),
+            )
+          "
+        />
+        <SearchConditionChip
+          v-for="tag in draft.excludeTags"
+          :key="'exclude-' + galleryTagKey(tag)"
+          :label="locale === 'en' ? tag.master : tag.displayName"
+          :title="t('排除 {p0}', { p0: `${tag.namespace}:${tag.master}` })"
+          excluded
+          removable
+          @remove="
+            draft.excludeTags = draft.excludeTags.filter(
+              (item) => galleryTagKey(item) !== galleryTagKey(tag),
+            )
+          "
+        />
+      </div>
       <details class="filter-details" open>
         <summary>{{ t('内容条件') }}</summary>
         <div class="filter-field-grid">
@@ -86,16 +159,6 @@ function reset() {
               v-model="draft.uploaderUid"
               inputmode="numeric"
               :aria-label="t('上传者 UID')" /></Field
-          ><Field :label="t('最低评分')"
-            ><SelectField
-              v-model="draft.minRating"
-              clearable
-              :placeholder="t('不限')"
-              :aria-label="t('最低评分')"
-              ><option v-for="rating in [2, 3, 4, 5]" :key="rating" :value="rating">
-                {{ t('{p0} 星及以上', { p0: rating }) }}
-              </option></SelectField
-            ></Field
           ><Field :label="t('页数范围')" class="page-range-field"
             ><div class="page-range">
               <NumberField
@@ -112,17 +175,9 @@ function reset() {
               /></div
           ></Field>
         </div>
-        <div class="filter-categories">
-          <CheckField v-model="allCategories">{{ t('全部分类') }}</CheckField
-          ><CheckGroup v-model="draft.categories"
-            ><CheckField v-for="[label, value] in categories" :key="value" :value="value">{{
-              t(label)
-            }}</CheckField></CheckGroup
-          >
-        </div>
       </details>
       <details class="filter-details">
-        <summary>{{ t('源站过滤选项') }}</summary>
+        <summary>{{ t('源站过滤') }}</summary>
         <div class="filter-switches">
           <ToggleField v-model="draft.requireTorrent" :label="t('存在种子')" /><ToggleField
             v-model="draft.browseExpunged"
@@ -171,14 +226,54 @@ function reset() {
   color: var(--muted-foreground);
   font-size: 12px;
 }
-.filter-heading h3 {
+.filter-heading > span {
   font-size: 13px;
+  color: var(--muted-foreground);
+}
+.filter-section {
+  padding: 14px 0;
+  border-top: 1px solid var(--border-soft);
+}
+.category-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 10px;
+}
+.category-heading h3 {
   margin: 0;
+  font-size: 13px;
+}
+.rating-field {
+  flex-direction: row;
+  align-items: center;
+  margin: 0;
+}
+.rating-field :deep(label) {
+  font-size: 12px;
+  color: var(--muted-foreground);
+}
+.rating-field :deep(.ui-select) {
+  min-width: 135px;
+}
+.filter-details > summary {
+  min-height: 44px;
+  align-content: center;
+}
+.tag-filter-details summary small {
+  margin-left: 12px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+}
+.tag-filter-details .filter-heading {
+  margin: 12px 0 16px;
 }
 .filter-details {
   border-top: 1px solid var(--border-soft);
-  margin-top: 20px;
-  padding: 14px 0;
+  margin-top: 0;
+  padding: 0;
 }
 .filter-details summary {
   cursor: pointer;
@@ -189,7 +284,14 @@ function reset() {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 8px 16px;
-  margin-top: 20px;
+  margin-top: 10px;
+}
+.collapsed-tag-selection {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px 8px;
+  padding: 8px 0 16px;
 }
 .page-range {
   display: flex;

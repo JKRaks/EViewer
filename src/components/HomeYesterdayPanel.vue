@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
 import IconFrame from '@/components/primitives/IconFrame.vue'
@@ -8,7 +9,7 @@ import Notice from '@/components/primitives/Notice.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import EmptyState from '@/components/primitives/EmptyState.vue'
 import { computed, onMounted, ref } from 'vue'
-import { ArrowRight, RefreshCw as Refresh, Trophy, TriangleAlert as Warning } from '@lucide/vue'
+import { ArrowRight, RefreshCw as Refresh, Trophy } from '@lucide/vue'
 import { RouterLink } from 'vue-router'
 import BookItem from '@/components/BookItem.vue'
 import { toplistBusi } from '@/core/books/toplistBusi'
@@ -19,6 +20,7 @@ defineOptions({ name: 'HomeYesterdayPanel' })
 
 const entries = ref<galleryToplistEntry[]>([])
 const loading = ref(false)
+useAppLaunchReadiness(() => loading.value)
 const errorMessage = ref('')
 let requestVersion = 0
 
@@ -76,11 +78,14 @@ onMounted(() => void fetchYesterday())
         </div>
       </template>
     </SkeletonBlock>
-    <Notice v-else-if="errorMessage && entries.length === 0" tone="error" :closable="false">
-      <template #title
-        ><IconFrame><Warning /></IconFrame> {{ t(errorMessage) }}</template
-      >
-      <ActionButton size="sm" :icon="Refresh" @click="fetchYesterday">{{
+    <Notice
+      v-else-if="errorMessage && entries.length === 0"
+      class="load-error"
+      tone="error"
+      :title="t('暂时无法加载')"
+      :description="t(errorMessage)"
+    >
+      <ActionButton class="retry-button" size="sm" :icon="Refresh" @click="fetchYesterday">{{
         t('重新加载')
       }}</ActionButton>
     </Notice>
@@ -102,6 +107,17 @@ onMounted(() => void fetchYesterday())
   display: flex;
   flex-direction: column;
   gap: 18px;
+}
+.load-error :deep(> div) {
+  min-width: 0;
+}
+.load-error :deep(p) {
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+.load-error .retry-button {
+  min-height: 44px;
+  margin: 8px 0 0;
 }
 .panel-header {
   display: flex;
