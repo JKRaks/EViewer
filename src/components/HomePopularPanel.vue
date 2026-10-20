@@ -67,10 +67,18 @@ onMounted(() => void fetchPopularBooks())
 
     <SkeletonBlock v-if="loading && books.length === 0">
       <template #template>
-        <div class="skeleton-grid">
-          <div v-for="index in 9" :key="index" class="skeleton-item">
+        <div class="popular-grid skeleton-grid" aria-hidden="true">
+          <div v-for="index in 12" :key="index" class="skeleton-item">
             <SkeletonLine variant="image" class="skeleton-cover" />
-            <SkeletonLine variant="text" />
+            <div class="skeleton-info">
+              <div class="skeleton-title">
+                <SkeletonLine />
+                <SkeletonLine class="skeleton-title-short" />
+              </div>
+              <div class="skeleton-meta"><SkeletonLine /><SkeletonLine /></div>
+              <div class="skeleton-tags"><SkeletonLine /><SkeletonLine /><SkeletonLine /></div>
+              <SkeletonLine class="skeleton-date" />
+            </div>
           </div>
         </div>
       </template>
@@ -154,24 +162,49 @@ onMounted(() => void fetchPopularBooks())
   width: 100%;
   margin: 0;
 }
-.skeleton-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 12px;
-}
 .skeleton-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: 148px;
-  padding: 10px;
-  border: 1px solid var(--border-soft);
-  border-radius: 8px;
+  min-width: 0;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--border-soft);
+}
+.skeleton-item :deep(.ui-skeleton__item) {
+  margin-bottom: 0;
 }
 .skeleton-cover {
-  width: 92px;
-  height: 126px;
-  flex-shrink: 0;
+  width: 100%;
+  height: auto;
+  min-height: 0;
+  aspect-ratio: 3 / 4;
+  border-radius: 3px 7px 7px 3px;
+}
+.skeleton-info {
+  display: grid;
+  gap: 8px;
+  padding-top: 13px;
+}
+.skeleton-title {
+  display: grid;
+  align-content: space-around;
+  min-height: 42px;
+}
+.skeleton-title-short {
+  width: 72%;
+}
+.skeleton-meta,
+.skeleton-tags {
+  display: flex;
+  gap: 6px;
+}
+.skeleton-meta > div {
+  width: 44px;
+}
+.skeleton-tags > div {
+  width: 22%;
+  height: 22px;
+}
+.skeleton-date {
+  width: 34%;
+  height: 12px;
 }
 @media (max-width: 1050px) {
   .popular-grid {
@@ -191,6 +224,13 @@ onMounted(() => void fetchPopularBooks())
   .popular-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 22px 14px;
+  }
+  .skeleton-info {
+    gap: 7px;
+    padding-top: 10px;
+  }
+  .skeleton-title {
+    min-height: 39px;
   }
 }
 </style>

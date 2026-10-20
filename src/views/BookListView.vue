@@ -6,7 +6,7 @@ import TextField from '@/components/primitives/TextField.vue'
 import IconFrame from '@/components/primitives/IconFrame.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import Hint from '@/components/primitives/Hint.vue'
-import TagChip from '@/components/primitives/TagChip.vue'
+import SearchConditionChip from '@/components/SearchConditionChip.vue'
 import CheckField from '@/components/primitives/CheckField.vue'
 import ModalPanel from '@/components/primitives/ModalPanel.vue'
 import ProgressMeter from '@/components/primitives/ProgressMeter.vue'
@@ -45,6 +45,7 @@ import {
 import { gallerySimilaritySearchInput } from '@/core/model/book/galleryFileSearchInput'
 import {
   createGallerySearchCriteria,
+  gallerySearchCategories,
   type gallerySearchCriteria,
   type selectedGalleryTag,
 } from '@/core/model/book/gallerySearchCriteria'
@@ -71,22 +72,25 @@ const mobileQuery = window.matchMedia('(max-width: 767px)')
 const syncViewport = () => {
   isMobile.value = mobileQuery.matches
 }
-const activeSummary = computed(() => {
+const activeConditions = computed(() => {
   const value = appliedCriteria.value
   return [
-    value.titleTerms.length ? t('标题限定') : '',
-    value.uploader || value.uploaderUid ? t('上传者限定') : '',
-    value.categories.length ? value.categories.length + t(' 个分类') : '',
-    value.minRating !== undefined ? value.minRating + t(' 星及以上') : '',
+    value.titleTerms.length ? t('标题：{p0}', { p0: value.titleTerms.join(' ') }) : '',
+    value.uploader ? t('上传者：{p0}', { p0: value.uploader }) : '',
+    value.uploaderUid ? t('上传者 UID：{p0}', { p0: value.uploaderUid }) : '',
+    ...value.categories.map((category) =>
+      t(gallerySearchCategories.find(([, value]) => value === category)?.[0] || String(category)),
+    ),
+    value.minRating !== undefined ? t('{p0} 星及以上', { p0: value.minRating }) : '',
     value.minPages !== undefined || value.maxPages !== undefined
       ? (value.minPages ?? 0) + '–' + (value.maxPages ?? t('不限')) + t(' 页')
       : '',
     value.requireTorrent ? t('存在种子') : '',
     value.browseExpunged ? t('包含已移除') : '',
-    Object.values(value.disableCustomFilters).some(Boolean) ? t('已调整账户过滤') : '',
-  ]
-    .filter(Boolean)
-    .join(' · ')
+    value.disableCustomFilters.language ? t('忽略账户语言过滤') : '',
+    value.disableCustomFilters.uploader ? t('忽略账户上传者过滤') : '',
+    value.disableCustomFilters.tags ? t('忽略账户标签过滤') : '',
+  ].filter(Boolean)
 })
 const activeInput = ref<bookInput>(new bookInput())
 const bookOutputs = ref<bookOutput>()
@@ -284,7 +288,10 @@ async function loadMore(retry = false) {
 }
 
 function openFilters() {
-  filterDraft.value = cloneGalleryCriteria(appliedCriteria.value)
+  filterDraft.value = cloneGalleryCriteria({
+    ...appliedCriteria.value,
+    freeText: criteria.value.freeText,
+  })
   filterError.value = ''
   showAdvanced.value = true
 }
@@ -505,30 +512,38 @@ onDeactivated(() => {
       </form>
       <div
         v-if="
-          appliedCriteria.includeTags.length || appliedCriteria.excludeTags.length || activeSummary
+          appliedCriteria.includeTags.length ||
+          appliedCriteria.excludeTags.length ||
+          activeConditions.length
         "
         class="query-summary"
       >
-        <span v-if="appliedCriteria.includeTags.length">{{
-          t('包含{p0}', { p0: appliedCriteria.tagMode === 'all' ? t('全部') : t('任意') })
-        }}</span
-        ><TagChip
+        <SearchConditionChip
+          v-if="appliedCriteria.includeTags.length"
+          :label="t('包含{p0}', { p0: appliedCriteria.tagMode === 'all' ? t('全部') : t('任意') })"
+        />
+        <SearchConditionChip
           v-for="tag in appliedCriteria.includeTags"
           :key="'include-' + galleryTagKey(tag)"
-          closable
-          @close="removeAppliedTag('include', tag)"
-          >{{ locale === 'en' ? tag.master : tag.displayName }}
-          <small>{{ tag.namespace }}</small></TagChip
-        ><span v-if="appliedCriteria.excludeTags.length">{{ t('排除') }}</span
-        ><TagChip
+          :label="locale === 'en' ? tag.master : tag.displayName"
+          :title="t('包含 {p0}', { p0: `${tag.namespace}:${tag.master}` })"
+          removable
+          @remove="removeAppliedTag('include', tag)"
+        />
+        <SearchConditionChip
           v-for="tag in appliedCriteria.excludeTags"
           :key="'exclude-' + galleryTagKey(tag)"
-          tone="danger"
-          closable
-          @close="removeAppliedTag('exclude', tag)"
-          >{{ locale === 'en' ? tag.master : tag.displayName }}
-          <small>{{ tag.namespace }}</small></TagChip
-        ><small v-if="activeSummary">{{ activeSummary }}</small>
+          :label="locale === 'en' ? tag.master : tag.displayName"
+          :title="t('排除 {p0}', { p0: `${tag.namespace}:${tag.master}` })"
+          excluded
+          removable
+          @remove="removeAppliedTag('exclude', tag)"
+        />
+        <SearchConditionChip
+          v-for="(condition, index) in activeConditions"
+          :key="index"
+          :label="condition"
+        />
       </div>
       <Transition name="disclosure"
         ><section
@@ -700,16 +715,13 @@ onDeactivated(() => {
 }
 .query-summary {
   display: flex;
-  gap: 8px;
+  gap: 16px 8px;
   align-items: center;
   flex-wrap: wrap;
   padding: 14px 0;
   border-bottom: 1px solid var(--border-soft);
   font-size: 12px;
   color: var(--muted-foreground);
-}
-.query-summary small {
-  font-size: 11px;
 }
 .advanced-search {
   margin: 18px 0 24px;
