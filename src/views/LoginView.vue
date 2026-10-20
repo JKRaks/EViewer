@@ -19,6 +19,7 @@ import Notice from '@/components/primitives/Notice.vue'
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import {
   ArrowRight,
+  ChevronDown,
   KeyRound as Key,
   RotateCw as RefreshRight,
   LogOut as SwitchButton,
@@ -161,6 +162,7 @@ const activeTab = ref<AccountTab>(authState.loggedIn ? 'overview' : 'authenticat
 const authInputMode = ref<AuthInputMode>('cookie')
 const submitting = ref(false)
 const bridgeBusy = ref(false)
+const sourceLoginExpanded = ref(false)
 const bridgeRestoring = ref(authState.loggedIn)
 const bridgeRestoreController = new AbortController()
 const loggingOut = ref(false)
@@ -978,69 +980,88 @@ onBeforeUnmount(resetAccountData)
           </div>
         </section>
 
-        <AuthBridgePanel
-          class="account-section"
-          :disabled="submitting || loggingOut"
-          @busy="bridgeBusy = $event"
-        />
+        <details class="account-section auth-method" open>
+          <summary>
+            <h2>{{ t('Cookie 手动维护') }}</h2>
+            <IconFrame class="auth-method-chevron" aria-hidden="true"><ChevronDown /></IconFrame>
+          </summary>
+          <div class="auth-method-body">
+            <form class="cookie-form" @submit.prevent="submitCookies">
+              <ChoiceGroup
+                v-model="authInputMode"
+                class="auth-input-mode"
+                :aria-label="t('认证信息输入方式')"
+              >
+                <RadioChoice value="cookie">{{ t('Cookie 字符串') }}</RadioChoice>
+                <RadioChoice value="fields">{{ t('仅输入所需值') }}</RadioChoice>
+              </ChoiceGroup>
 
-        <section class="account-section">
-          <h2>{{ authState.loggedIn ? t('更换认证 Cookie') : t('认证 Cookie') }}</h2>
-          <form class="cookie-form" @submit.prevent="submitCookies">
-            <ChoiceGroup
-              v-model="authInputMode"
-              class="auth-input-mode"
-              :aria-label="t('认证信息输入方式')"
-            >
-              <RadioChoice value="cookie">{{ t('Cookie 字符串') }}</RadioChoice>
-              <RadioChoice value="fields">{{ t('仅输入所需值') }}</RadioChoice>
-            </ChoiceGroup>
-
-            <Field v-if="authInputMode === 'cookie'" :label="t('Cookie 字符串')">
-              <TextField
-                v-model="form.cookieText"
-                type="textarea"
-                :rows="4"
-                resize="vertical"
-                autocomplete="off"
-                placeholder="ipb_member_id=...; ipb_pass_hash=..."
-              />
-            </Field>
-            <template v-else>
-              <Field label="ipb_member_id">
+              <Field v-if="authInputMode === 'cookie'" :label="t('Cookie 字符串')">
                 <TextField
-                  v-model="form.memberId"
+                  v-model="form.cookieText"
+                  type="textarea"
+                  :rows="4"
+                  resize="vertical"
                   autocomplete="off"
-                  :placeholder="t('输入 ipb_member_id')"
+                  placeholder="ipb_member_id=...; ipb_pass_hash=..."
                 />
               </Field>
-              <Field label="ipb_pass_hash">
-                <TextField
-                  v-model="form.passHash"
-                  type="password"
-                  autocomplete="off"
-                  :placeholder="t('输入 ipb_pass_hash')"
-                  show-password
-                />
-              </Field>
-            </template>
-            <ActionButton
-              class="save-button"
-              variant="default"
-              type="submit"
-              :icon="Key"
-              :loading="submitting"
-              :disabled="bridgeBusy"
-              >{{ t('保存 Cookie') }}</ActionButton
-            >
-          </form>
-          <Notice
-            class="cookie-tip"
-            :title="t('认证值将由代理写入浏览器 HttpOnly Cookie，不会保存到 EViewer 本地数据中。')"
-            tone="info"
-            :closable="false"
+              <template v-else>
+                <Field label="ipb_member_id">
+                  <TextField
+                    v-model="form.memberId"
+                    autocomplete="off"
+                    :placeholder="t('输入 ipb_member_id')"
+                  />
+                </Field>
+                <Field label="ipb_pass_hash">
+                  <TextField
+                    v-model="form.passHash"
+                    type="password"
+                    autocomplete="off"
+                    :placeholder="t('输入 ipb_pass_hash')"
+                    show-password
+                  />
+                </Field>
+              </template>
+              <ActionButton
+                class="save-button"
+                variant="default"
+                type="submit"
+                :icon="Key"
+                :loading="submitting"
+                :disabled="bridgeBusy"
+                >{{ t('保存 Cookie') }}</ActionButton
+              >
+            </form>
+            <Notice
+              class="cookie-tip"
+              :title="
+                t('认证值将由代理写入浏览器 HttpOnly Cookie，不会保存到 EViewer 本地数据中。')
+              "
+              tone="info"
+              :closable="false"
+            />
+          </div>
+        </details>
+
+        <details
+          class="account-section auth-method"
+          :open="sourceLoginExpanded"
+          @toggle="sourceLoginExpanded = ($event.target as HTMLDetailsElement).open"
+        >
+          <summary>
+            <h2>{{ t('源站登录') }}</h2>
+            <span class="auth-method-badge">bata</span>
+            <IconFrame class="auth-method-chevron" aria-hidden="true"><ChevronDown /></IconFrame>
+          </summary>
+          <AuthBridgePanel
+            class="auth-method-body"
+            :disabled="submitting || loggingOut"
+            @busy="bridgeBusy = $event"
+            @pending="sourceLoginExpanded = true"
           />
-        </section>
+        </details>
       </SectionTab>
     </SectionTabs>
   </main>
@@ -1102,6 +1123,62 @@ onBeforeUnmount(resetAccountData)
   color: var(--muted-foreground);
   font-size: 15px;
   font-weight: 600;
+}
+
+.auth-method {
+  padding-top: 8px;
+}
+
+.auth-method > summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 8px 0;
+  list-style: none;
+  cursor: pointer;
+}
+
+.auth-method > summary::-webkit-details-marker {
+  display: none;
+}
+
+.auth-method > summary::marker {
+  content: '';
+}
+
+.auth-method > summary h2 {
+  margin: 0;
+  color: var(--foreground);
+}
+
+.auth-method > summary:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+
+.auth-method-chevron {
+  margin-left: auto;
+  color: var(--muted-foreground);
+  transform: rotate(-90deg);
+}
+
+.auth-method[open] > summary .auth-method-chevron {
+  transform: rotate(0);
+}
+
+.auth-method-badge {
+  border: 1px solid var(--border-soft);
+  border-radius: 4px;
+  padding: 0 5px;
+  color: var(--muted-foreground);
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.auth-method-body {
+  padding: 8px 0 16px;
 }
 
 .account-status {

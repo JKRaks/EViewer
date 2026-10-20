@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { ArrowUpRight, Copy, Download, Link, RefreshCw } from '@lucide/vue'
+import { ArrowUpRight, Copy, Download, Link, Monitor, RefreshCw } from '@lucide/vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
+import { Button } from '@/components/ui/button'
 import Notice from '@/components/primitives/Notice.vue'
 import TextField from '@/components/primitives/TextField.vue'
 import { notify } from '@/components/primitives/feedback'
@@ -15,9 +16,83 @@ import {
 } from '@/core/auth/authBridge'
 import { refreshAuthState, useAuthState } from '@/core/auth/authState'
 import { t } from '@/i18n'
+import { detectAuthInstallEnvironment, type AuthInstallContext } from '@/lib/authInstallEnvironment'
+import windowsIcon from '@/assets/platform-icons/windows.svg?raw'
+import appleIcon from '@/assets/platform-icons/apple.svg?raw'
+import androidIcon from '@/assets/platform-icons/android.svg?raw'
+import linuxIcon from '@/assets/platform-icons/linux.svg?raw'
+
+const browserNavigator = navigator as Navigator &
+  Pick<AuthInstallContext, 'userAgentData' | 'standalone'>
+const installEnvironment = detectAuthInstallEnvironment({
+  userAgent: browserNavigator.userAgent,
+  platform: browserNavigator.platform,
+  maxTouchPoints: browserNavigator.maxTouchPoints,
+  userAgentData: browserNavigator.userAgentData,
+  standalone:
+    window.matchMedia('(display-mode: standalone)').matches || browserNavigator.standalone,
+})
+const platformIcons = {
+  windows: windowsIcon,
+  macos: appleIcon,
+  ios: appleIcon,
+  ipados: appleIcon,
+  android: androidIcon,
+  linux: linuxIcon,
+  unknown: undefined,
+}
+const environmentLabel = computed(() =>
+  [
+    t(installEnvironment.osLabel),
+    t(installEnvironment.browserLabel),
+    ...(installEnvironment.standalone ? ['PWA'] : []),
+  ].join(' · '),
+)
+const installationOptions = computed(() =>
+  [
+    {
+      id: 'tampermonkey',
+      label: t('安装 Tampermonkey'),
+      href: installEnvironment.tampermonkeyUrl,
+      icons:
+        installEnvironment.manager === 'tampermonkey'
+          ? [{ svg: platformIcons[installEnvironment.os], label: installEnvironment.osLabel }]
+          : [
+              { svg: windowsIcon, label: 'Windows' },
+              { svg: androidIcon, label: 'Android' },
+              { svg: appleIcon, label: 'macOS' },
+              { svg: linuxIcon, label: 'Linux' },
+            ],
+      description:
+        installEnvironment.os === 'android'
+          ? t('在支持扩展的 Android 浏览器中安装 Tampermonkey，再安装下方授权脚本。')
+          : t(
+              '在 Chrome、Edge、Firefox 等支持扩展的桌面浏览器中安装 Tampermonkey，再安装下方授权脚本。',
+            ),
+    },
+    {
+      id: 'userscripts',
+      label: t('安装 Userscripts'),
+      href: 'https://apps.apple.com/app/userscripts/id1463298887',
+      icons: [{ svg: appleIcon, label: 'iOS / iPadOS / macOS' }],
+      description: t(
+        '适用于 iPhone、iPad 和 Mac Safari。安装后启用扩展，将授权脚本加入 Userscripts，并允许访问 e-hentai.org。',
+      ),
+    },
+  ]
+    .map((option) => ({ ...option, recommended: option.id === installEnvironment.manager }))
+    .sort((a, b) => Number(b.recommended) - Number(a.recommended)),
+)
+const helperBrowserHint = computed(() =>
+  installEnvironment.manager === 'userscripts'
+    ? t('请在 Safari 中完成安装和授权，再返回本页。')
+    : installEnvironment.os === 'android'
+      ? t('请在支持扩展的 Firefox 或 Edge 中完成安装和授权，再返回本页。')
+      : t('请在支持扩展的浏览器中完成安装和授权，再返回本页。'),
+)
 
 const props = defineProps<{ disabled?: boolean }>()
-const emit = defineEmits<{ busy: [value: boolean] }>()
+const emit = defineEmits<{ busy: [value: boolean]; pending: [] }>()
 const status = ref<BridgeStatus>({ success: true, state: 'idle' })
 const starting = ref(false)
 const claiming = ref(false)
@@ -36,6 +111,9 @@ let controller = new AbortController()
 let disposed = false
 const waiting = computed(() => ['waiting', 'ready', 'claimed'].includes(status.value.state))
 const blocked = computed(() => props.disabled || starting.value || claiming.value)
+watch(waiting, (pending) => {
+  if (pending) emit('pending')
+})
 
 function schedule() {
   clearTimeout(timer)
@@ -192,38 +270,65 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <section class="auth-bridge" :aria-label="t('通过原站登录')">
-    <h2>{{ t('通过原站登录') }}</h2>
+  <section class="auth-bridge" :aria-label="t('源站登录')">
     <p class="bridge-description">
       {{ t('在原站登录并授权，即可同步登录凭据，无需复制 Cookie。') }}
     </p>
     <details class="bridge-help">
-      <summary>{{ t('首次使用：安装授权脚本') }}</summary>
-      <ol>
-        <li>{{ t('桌面及 Android 支持扩展的浏览器：启用 Tampermonkey，再安装脚本。') }}</li>
-        <li>
-          {{
-            t(
-              'iPhone、iPad、Mac Safari：安装 Userscripts，下载脚本到指定目录，并允许访问 e-hentai.org。',
-            )
-          }}
-        </li>
-        <li>
-          {{
-            t('PWA 或不支持扩展的浏览器：将授权链接复制到已安装脚本的辅助浏览器，完成后返回这里。')
-          }}
-        </li>
-      </ol>
-      <div class="bridge-actions">
-        <a href="https://www.tampermonkey.net/" target="_blank" rel="noopener noreferrer"
-          >Tampermonkey</a
+      <summary>
+        {{ t('首次使用：安装授权脚本') }}
+        <small v-if="installEnvironment.manager">{{
+          installEnvironment.manager === 'userscripts' ? 'Userscripts' : 'Tampermonkey'
+        }}</small>
+      </summary>
+      <p class="bridge-environment">
+        <span
+          v-if="platformIcons[installEnvironment.os]"
+          class="platform-icon"
+          aria-hidden="true"
+          v-html="platformIcons[installEnvironment.os]"
+        ></span>
+        <Monitor v-else :size="16" aria-hidden="true" />
+        {{ t('当前环境：{p0}', { p0: environmentLabel }) }}
+      </p>
+      <p v-if="installEnvironment.helperRequired" class="bridge-helper-hint">
+        {{ helperBrowserHint }}
+      </p>
+      <div class="bridge-installations">
+        <div
+          v-for="option in installationOptions"
+          :key="option.id"
+          class="bridge-installation"
+          :class="{ 'is-recommended': option.recommended }"
         >
-        <a
-          href="https://apps.apple.com/app/userscripts/id1463298887"
-          target="_blank"
-          rel="noopener noreferrer"
-          >Userscripts</a
-        >
+          <div class="bridge-installation-actions">
+            <Button
+              as="a"
+              class="ui-button bridge-install-button"
+              :variant="option.recommended ? 'default' : 'outline'"
+              :href="option.href"
+              target="_blank"
+              rel="noopener noreferrer"
+              :aria-describedby="`bridge-install-${option.id}`"
+            >
+              <span class="platform-icons" aria-hidden="true">
+                <span
+                  v-for="icon in option.icons"
+                  :key="icon.label"
+                  class="platform-icon"
+                  v-html="icon.svg"
+                ></span>
+              </span>
+              {{ option.label }}
+            </Button>
+            <span v-if="option.recommended" class="bridge-install-recommendation">{{
+              t('适合当前设备')
+            }}</span>
+          </div>
+          <p :id="`bridge-install-${option.id}`" class="bridge-description">
+            {{ option.description }}
+          </p>
+        </div>
       </div>
       <div class="bridge-actions">
         <a :href="bridgeUrl('script.user.js')" target="_blank" rel="noopener noreferrer">{{
@@ -318,22 +423,17 @@ onBeforeUnmount(() => {
   gap: 14px;
   min-width: 0;
 }
-.auth-bridge h2,
 .auth-bridge p {
   margin: 0;
 }
-.auth-bridge h2 {
-  font-size: 18px;
-  font-weight: 600;
-}
 .bridge-description {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-size: 14px;
   line-height: 1.6;
 }
 .bridge-help {
   padding: 12px 0;
-  border-block: 1px solid var(--el-border-color-lighter);
+  border-block: 1px solid var(--border-soft);
 }
 .bridge-help summary {
   cursor: pointer;
@@ -341,10 +441,75 @@ onBeforeUnmount(() => {
   display: list-item;
   align-content: center;
 }
-.bridge-help ol {
-  padding-left: 22px;
-  line-height: 1.8;
-  margin-block: 8px 14px;
+.bridge-help summary small {
+  margin-left: 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.bridge-environment,
+.bridge-installation-actions,
+.platform-icons {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.bridge-environment {
+  padding-top: 8px;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.platform-icon {
+  display: inline-block;
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+.platform-icon :deep(svg) {
+  display: block;
+  width: 100%;
+  height: 100%;
+  fill: currentColor;
+}
+.platform-icons {
+  flex-wrap: nowrap;
+  gap: 6px;
+}
+.bridge-helper-hint {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.bridge-installations {
+  display: grid;
+  gap: 12px;
+}
+.bridge-installation {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-left: 2px solid var(--border-soft);
+}
+.bridge-installation.is-recommended {
+  background: var(--accent-soft);
+  border-left-color: var(--accent);
+}
+.bridge-install-recommendation {
+  color: var(--accent);
+  font-size: 12px;
+}
+.bridge-install-button {
+  min-height: 44px;
+  height: auto;
+  max-width: 100%;
+  white-space: normal;
+  text-align: center;
+  color: var(--foreground);
+  text-decoration: none;
+}
+.bridge-install-button[data-variant='default'] {
+  color: var(--accent-foreground);
 }
 .bridge-actions {
   display: flex;
@@ -357,7 +522,7 @@ onBeforeUnmount(() => {
   align-items: center;
   gap: 6px;
   min-height: 44px;
-  color: var(--el-color-primary);
+  color: var(--accent);
   text-decoration: underline;
   text-underline-offset: 3px;
 }
@@ -365,7 +530,7 @@ onBeforeUnmount(() => {
   display: grid;
   gap: 12px;
   padding: 14px;
-  border: 1px solid var(--el-border-color);
+  border: 1px solid var(--border);
   border-radius: 8px;
   min-width: 0;
 }
