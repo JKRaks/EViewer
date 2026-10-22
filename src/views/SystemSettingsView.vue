@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { t, locale, setLocale, getDisplayLocale } from '@/i18n'
 import SelectField from '@/components/primitives/SelectField.vue'
+import AppearanceSettings from '@/components/settings/AppearanceSettings.vue'
 
 import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
 import RadioChoice from '@/components/primitives/RadioChoice.vue'
@@ -246,6 +247,11 @@ function formatDate(timestamp?: number) {
     <header class="settings-header">
       <h1>{{ t('系统设置') }}</h1>
     </header>
+
+    <section class="settings-section">
+      <h2>{{ t('外观与配色') }}</h2>
+      <AppearanceSettings />
+    </section>
 
     <section class="settings-section">
       <h2>{{ t('分享设置') }}</h2>

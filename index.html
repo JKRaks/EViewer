@@ -12,13 +12,27 @@
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="EViewer">
   <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="theme-color" content="#f1f3f4">
   <title>EViewer</title>
   <script>
     // Match the saved theme before the application bundle paints.
     try {
       const theme = localStorage.getItem('eviewer-theme')
-      document.documentElement.classList.toggle('dark',
-        theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches))
+      const dark = theme === 'dark' || (theme !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)
+      const root = document.documentElement
+      root.classList.toggle('dark', dark)
+      root.style.colorScheme = dark ? 'dark' : 'light'
+      const saved = JSON.parse(localStorage.getItem('eviewer:theme-settings') || 'null')
+      const colors = saved?.tokens?.[dark ? 'dark' : 'light'] || {}
+      const defaults = dark
+        ? { '--background': '#20272D', '--foreground': '#E3E8EC', '--accent': '#A9BAC9' }
+        : { '--background': '#F1F3F4', '--foreground': '#30383F', '--accent': '#5D6F80' }
+      for (const key of ['--background', '--surface', '--foreground', '--muted-foreground', '--border', '--accent', '--accent-foreground']) {
+        const color = /^#[0-9a-f]{6}$/i.test(colors[key] || '') ? colors[key] : defaults[key]
+        if (color) root.style.setProperty(key, color)
+      }
+      document.querySelector('meta[name="theme-color"]').content = colors['--background'] && /^#[0-9a-f]{6}$/i.test(colors['--background'])
+        ? colors['--background'] : defaults['--background']
     } catch { /* Theme detection must not block the first paint. */ }
   </script>
   <style>
@@ -35,12 +49,12 @@
       --launch-hint: #9aa2a6;
       --launch-hint-shine: #758087;
       --launch-action: #697479;
-      background: var(--background, #fafafa);
-      color: var(--foreground, #292f31);
+      background: var(--background, #f1f3f4);
+      color: var(--foreground, #30383f);
     }
     html.dark #app-launch {
-      background: var(--background, #1e2224);
-      color: var(--foreground, #eceeed);
+      background: var(--background, #20272d);
+      color: var(--foreground, #e3e8ec);
       --launch-hint: #69747a;
       --launch-hint-shine: #919ca2;
       --launch-action: #96a0a5;
@@ -100,8 +114,8 @@
     .launch-action[hidden] { display: none; }
     .launch-action:focus-visible { outline: 2px solid currentColor; outline-offset: 2px; }
     #app[aria-hidden="true"] { visibility: hidden; }
-    .launch-dot { fill: var(--accent, #285f8c); }
-    html.dark .launch-dot { fill: var(--accent, #99c7e5); }
+    .launch-dot { fill: var(--accent, #5d6f80); }
+    html.dark .launch-dot { fill: var(--accent, #a9bac9); }
     .launch-stroke {
       opacity: 0;
       stroke-dasharray: 1;
@@ -111,14 +125,14 @@
     .launch-bloom {
       position: absolute;
       border-radius: 50%;
-      background: var(--accent, #285f8c);
+      background: var(--accent, #5d6f80);
       visibility: hidden;
     }
-    html.dark .launch-bloom { background: var(--accent, #99c7e5); }
+    html.dark .launch-bloom { background: var(--accent, #a9bac9); }
     #app.is-revealing {
       position: relative;
       z-index: 2001;
-      background: var(--background, #fafafa);
+      background: var(--background, #f1f3f4);
     }
     @keyframes launch-write {
       from { opacity: 0; stroke-dashoffset: 1; }
