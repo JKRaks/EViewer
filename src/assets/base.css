@@ -43,11 +43,11 @@ button {
 button:disabled {
   cursor: not-allowed;
 }
-a {
+a:where(:not([data-slot='button'])) {
   color: var(--accent);
   text-decoration: none;
 }
-a:hover {
+a:where(:not([data-slot='button'])):hover {
   text-decoration: underline;
 }
 button:focus-visible,
