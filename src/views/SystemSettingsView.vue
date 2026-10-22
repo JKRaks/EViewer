@@ -2,6 +2,7 @@
 import { t, locale, setLocale, getDisplayLocale } from '@/i18n'
 import SelectField from '@/components/primitives/SelectField.vue'
 import AppearanceSettings from '@/components/settings/AppearanceSettings.vue'
+import BrowserAssistantSettings from '@/components/settings/BrowserAssistantSettings.vue'
 
 import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
 import RadioChoice from '@/components/primitives/RadioChoice.vue'
@@ -248,6 +249,8 @@ function formatDate(timestamp?: number) {
       <h1>{{ t('系统设置') }}</h1>
     </header>
 
+    <BrowserAssistantSettings />
+
     <section class="settings-section">
       <h2>{{ t('外观与配色') }}</h2>
       <AppearanceSettings />
@@ -320,7 +323,7 @@ function formatDate(timestamp?: number) {
       </div>
     </section>
 
-    <section class="settings-section">
+    <section v-if="authState.source === 'server'" class="settings-section">
       <h2>{{ t('用户配置缓存') }}</h2>
       <div class="setting-row setting-row--primary">
         <div>

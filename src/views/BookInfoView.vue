@@ -318,7 +318,7 @@ function resetBookActions() {
 }
 
 async function refreshGalleryFavoriteState(bookId: string, showError = false) {
-  if (!authState.loggedIn || !authState.memberId || bookId !== getRouteBookId()) return false
+  if (!authState.loggedIn || bookId !== getRouteBookId()) return false
 
   const requestVersion = ++favoriteRequestVersion
   favoriteLoading.value = true
