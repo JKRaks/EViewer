@@ -1262,5 +1262,14 @@
   "先检查扩展已启用及网站权限，也可复制地址，在 Tampermonkey 的“实用工具”中从 URL 安装。": "Check that the extension is enabled and has site access. You can also copy the URL and install it in Tampermonkey’s Utilities tab.",
   "助手通过当前浏览器访问 E-Hentai，仅处理你在本站发起的请求。": "The assistant accesses E-Hentai through this browser and only handles requests you initiate on this site.",
   "本机模式使用源站会话；仅在你确认服务代理的源站登录授权时，同步登录凭据。": "Local mode uses your source session. Credentials are synced only when you confirm source login authorization for the server proxy.",
-  "安装与权限需手动确认。脚本管理器负责自动更新，EViewer 启动时检查线上版本。": "Confirm installation and permissions manually. The script manager handles automatic updates; EViewer checks the deployed version on startup."
+  "安装与权限需手动确认。脚本管理器负责自动更新，EViewer 启动时检查线上版本。": "Confirm installation and permissions manually. The script manager handles automatic updates; EViewer checks the deployed version on startup.",
+  "常用设置": "General settings",
+  "存储与维护": "Storage and maintenance",
+  "外观与语言": "Appearance and language",
+  "缓存偏好": "Cache preferences",
+  "缓存维护": "Cache maintenance",
+  "数据清理": "Clear data",
+  "关闭目录": "Close navigation",
+  "展开目录": "Open navigation",
+  "设置章节": "Settings sections"
 }
