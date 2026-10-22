@@ -26,9 +26,45 @@ const opened = ref(false)
 const active = ref('appearance')
 const navigation = ref<HTMLElement>()
 const trigger = ref<HTMLButtonElement>()
+const dragTop = ref<number>()
+const dragging = ref(false)
+let pointer: { id: number; y: number; top: number } | undefined
+let suppressClick = false
 let sections: HTMLElement[] = []
 let frame = 0
 let observer: ResizeObserver | undefined
+
+function handleDrag(event: PointerEvent) {
+  const button = trigger.value
+  if (!button) return
+  if (event.type === 'pointerdown') {
+    if (!event.isPrimary || event.button !== 0) return
+    pointer = { id: event.pointerId, y: event.clientY, top: button.getBoundingClientRect().top }
+    suppressClick = false
+    button.setPointerCapture(event.pointerId)
+    return
+  }
+  if (!pointer || pointer.id !== event.pointerId) return
+  if (event.type === 'pointermove') {
+    const delta = event.clientY - pointer.y
+    if (!dragging.value && Math.abs(delta) < 6) return
+    dragging.value = true
+    suppressClick = true
+    opened.value = false
+    dragTop.value = Math.min(
+      Math.max(12, pointer.top + delta),
+      Math.max(12, window.innerHeight - 84),
+    )
+    return
+  }
+  pointer = undefined
+  dragging.value = false
+  if (button.hasPointerCapture(event.pointerId)) button.releasePointerCapture(event.pointerId)
+}
+function toggleDirectory(event: MouseEvent) {
+  if (!suppressClick || event.detail === 0) opened.value = !opened.value
+  suppressClick = false
+}
 
 function updateActive() {
   cancelAnimationFrame(frame)
@@ -80,7 +116,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <aside ref="navigation" class="settings-navigation" :class="{ 'is-open': opened }">
+  <aside
+    ref="navigation"
+    class="settings-navigation"
+    :class="{ 'is-open': opened, 'is-dragging': dragging }"
+    :style="dragTop === undefined ? undefined : { '--navigation-y': `${dragTop}px` }"
+  >
     <button
       ref="trigger"
       type="button"
@@ -88,7 +129,12 @@ onBeforeUnmount(() => {
       :aria-label="opened ? t('关闭目录') : t('展开目录')"
       :aria-expanded="opened"
       aria-controls="settings-navigation-links"
-      @click="opened = !opened"
+      @pointerdown="handleDrag"
+      @pointermove="handleDrag"
+      @pointerup="handleDrag"
+      @pointercancel="handleDrag"
+      @lostpointercapture="handleDrag"
+      @click="toggleDirectory"
     >
       <component :is="opened ? ChevronLeft : ChevronRight" :size="20" aria-hidden="true" />
     </button>
@@ -170,7 +216,11 @@ nav a[aria-current] {
   .settings-navigation {
     position: fixed;
     left: 0;
-    top: max(120px, 24dvh);
+    top: clamp(
+      max(12px, env(safe-area-inset-top)),
+      var(--navigation-y, max(120px, 24dvh)),
+      calc(100dvh - 84px - env(safe-area-inset-bottom))
+    );
     z-index: 40;
   }
   .navigation-trigger {
@@ -186,13 +236,23 @@ nav a[aria-current] {
     background: var(--background);
     color: var(--accent);
     box-shadow: 0 2px 10px rgb(0 0 0 / 10%);
-    cursor: pointer;
+    cursor: grab;
+    touch-action: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+  .is-dragging .navigation-trigger {
+    cursor: grabbing;
   }
   nav {
     display: none;
-    position: absolute;
+    position: fixed;
     left: calc(44px + env(safe-area-inset-left));
-    top: -48px;
+    top: clamp(
+      max(12px, env(safe-area-inset-top)),
+      calc(var(--navigation-y, max(120px, 24dvh)) - 48px),
+      calc(100dvh - min(520px, 70dvh) - 12px - env(safe-area-inset-bottom))
+    );
     width: min(260px, calc(100vw - 76px));
     max-height: min(520px, 70dvh);
     overflow-y: auto;
