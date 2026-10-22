@@ -21,7 +21,7 @@ withDefaults(
   { dismissible: true, outsideDismissible: true },
 )
 const open = defineModel<boolean>({ default: false })
-const emit = defineEmits<{ closed: []; open: [] }>()
+const emit = defineEmits<{ closed: []; open: []; 'close-auto-focus': [event: Event] }>()
 let returnFocus: HTMLElement | null = null
 watch(
   open,
@@ -32,6 +32,8 @@ watch(
   { immediate: true },
 )
 function restoreFocus(event: Event) {
+  emit('close-auto-focus', event)
+  if (event.defaultPrevented) return
   if (returnFocus?.isConnected) {
     event.preventDefault()
     returnFocus.focus({ preventScroll: true })
