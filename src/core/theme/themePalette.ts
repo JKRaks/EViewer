@@ -1,7 +1,7 @@
 export const themeModes = ['auto', 'dark', 'light'] as const
 export type ThemeMode = (typeof themeModes)[number]
 export type ThemeScheme = Exclude<ThemeMode, 'auto'>
-export type ThemePresetId = 'mist' | 'violet' | 'oat' | 'custom'
+export type ThemePresetId = 'mist' | 'violet' | 'oat' | 'classic' | 'custom'
 
 export const themeColorFields = [
   { key: 'accent', label: '主色' },
@@ -82,6 +82,28 @@ export const themePresets: readonly ThemePreset[] = [
       muted: '#BDB09E',
       border: '#5A5045',
       onAccent: '#30291F',
+    },
+  },
+  {
+    id: 'classic',
+    name: '经典蓝',
+    light: {
+      accent: '#285F8C',
+      background: '#FAFAFA',
+      surface: '#FFFFFF',
+      text: '#292F31',
+      muted: '#626D70',
+      border: '#DDE2E3',
+      onAccent: '#FFFFFF',
+    },
+    dark: {
+      accent: '#99C7E5',
+      background: '#1E2224',
+      surface: '#272C2E',
+      text: '#ECEEED',
+      muted: '#A7B2B4',
+      border: '#475153',
+      onAccent: '#173145',
     },
   },
 ]

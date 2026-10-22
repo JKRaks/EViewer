@@ -77,6 +77,40 @@ html.dark {
   --shadow-soft: 0 3px 12px #0002;
   --shadow-strong: 0 20px 64px #0006;
 }
+/* Preserve the original theme's secondary tones as well as its palette colors. */
+:root[data-theme-preset='classic']:not(.dark) {
+  --surface-raised: #fff;
+  --text: #495457;
+  --placeholder: #6b7476;
+  --border-soft: #e9edee;
+  --muted: #f1f4f5;
+  --muted-soft: #f7f9f9;
+  --accent-strong: #1e4c72;
+  --accent-soft: #eaf1f7;
+  --accent-ring: #688ba7;
+  --input: #879194;
+  --overlay: #13252e60;
+  --glass: #ffffffdb;
+  --glass-edge: #ffffffd9;
+  --shadow: 0 12px 36px #1b344413;
+  --shadow-soft: 0 3px 12px #1b34440c;
+  --shadow-strong: 0 20px 64px #122b4229;
+}
+:root.dark[data-theme-preset='classic'] {
+  --surface-raised: #2d3436;
+  --text: #ccd3d3;
+  --placeholder: #939fa1;
+  --border-soft: #374144;
+  --muted: #30383b;
+  --muted-soft: #252c2e;
+  --accent-strong: #b3d7ed;
+  --accent-soft: #2b4050;
+  --accent-ring: #6893b0;
+  --input: #758387;
+  --overlay: #080e13a3;
+  --glass: #283135e6;
+  --glass-edge: #60737866;
+}
 .hv-theme {
   --primary: var(--accent);
   --primary-foreground: var(--accent-foreground);
