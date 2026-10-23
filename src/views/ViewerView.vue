@@ -99,7 +99,6 @@ useAppLaunchReadiness(() => pageData.loading)
 const bookImages = ref<ViewerImageItem[]>([])
 const totalImages = ref(0)
 const currentImageOrdinal = ref(0)
-const isSmallPortrait = ref(false)
 const pageJumpOpen = ref(false)
 const pageJumpValue = ref('')
 const pageJumpError = ref('')
@@ -114,7 +113,6 @@ const progressPercentage = computed(() =>
 )
 let imageObserver: IntersectionObserver | null = null
 let visibleImageFrame = 0
-let viewportQuery: MediaQueryList | null = null
 
 const infiniteScrollDisabled = computed(() => {
   return (
@@ -131,9 +129,6 @@ const infiniteScrollDisabled = computed(() => {
 
 onMounted(() => {
   isViewUnmounted = false
-  viewportQuery = window.matchMedia('(max-width: 767px) and (orientation: portrait)')
-  isSmallPortrait.value = viewportQuery.matches
-  viewportQuery.addEventListener('change', updateViewportMode)
   bindReaderScroll()
   window.addEventListener(layoutScrollModeChange, handleReaderScrollModeChange)
   window.addEventListener('resize', requestVisibleImageUpdate)
@@ -155,7 +150,6 @@ onUnmounted(() => {
   imageObserver?.disconnect()
   layoutObserver?.disconnect()
   cancelAnimationFrame(visibleImageFrame)
-  viewportQuery?.removeEventListener('change', updateViewportMode)
   unbindReaderScroll()
   window.removeEventListener(layoutScrollModeChange, handleReaderScrollModeChange)
   window.removeEventListener('resize', requestVisibleImageUpdate)
@@ -261,10 +255,6 @@ watch(
   () => void observeVisibleImages(),
   { flush: 'post' },
 )
-
-function updateViewportMode() {
-  isSmallPortrait.value = viewportQuery?.matches ?? false
-}
 
 function openPageJump() {
   pageJumpValue.value = String(currentImageOrdinal.value || 1)
@@ -914,22 +904,12 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
         <button
           type="button"
           class="reader-progress"
-          :class="{ 'reader-progress--line': isSmallPortrait }"
           :aria-label="
             t('阅读进度 {p0} / {p1}，点击跳转页码', { p0: currentImageOrdinal, p1: totalImages })
           "
         >
-          <template v-if="isSmallPortrait">
-            <span class="reader-progress__count">{{ currentImageOrdinal }}/{{ totalImages }}</span>
-            <ProgressMeter :percentage="progressPercentage" :show-text="false" :stroke-width="7" />
-          </template>
-          <ProgressMeter
-            v-else
-            type="dashboard"
-            :percentage="progressPercentage"
-            :width="112"
-            :stroke-width="9"
-          />
+          <span class="reader-progress__count">{{ currentImageOrdinal }}/{{ totalImages }}</span>
+          <ProgressMeter :percentage="progressPercentage" :show-text="false" :stroke-width="7" />
         </button>
       </PopoverTrigger>
       <PopoverPortal>
@@ -1084,20 +1064,24 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
 .reader-progress {
   position: fixed;
   bottom: calc(18px + env(safe-area-inset-bottom));
-  left: calc(14px + env(safe-area-inset-left));
+  left: calc(48px + env(safe-area-inset-left));
   z-index: 1500;
-  display: grid;
-  place-items: center;
-  width: 136px;
-  height: 136px;
+  display: flex;
+  align-items: center;
+  flex-direction: row-reverse;
+  gap: 5px;
+  width: clamp(88px, 16.67dvh, 150px);
+  height: 34px;
   padding: 6px;
   border: 0;
-  border-radius: 50%;
+  border-radius: 12px;
   color: var(--foreground);
   background: var(--glass);
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
   cursor: pointer;
+  transform: rotate(-90deg);
+  transform-origin: left bottom;
 }
 
 .reader-progress::before {
@@ -1108,40 +1092,14 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
   content: '';
 }
 
-.reader-progress:not(.reader-progress--line)::before {
-  mask-image:
-    radial-gradient(circle closest-side, transparent 0 14%, #000 44% 78%, transparent 100%),
-    conic-gradient(#000 0deg 215deg, transparent 235deg 305deg, #000 325deg 360deg);
-  -webkit-mask-image:
-    radial-gradient(circle closest-side, transparent 0 14%, #000 44% 78%, transparent 100%),
-    conic-gradient(#000 0deg 215deg, transparent 235deg 305deg, #000 325deg 360deg);
-  mask-composite: intersect;
-  -webkit-mask-composite: source-in;
-}
-
-.reader-progress :deep(.ui-progress),
-.reader-progress__count {
+.reader-progress :deep(.ui-progress) {
   position: relative;
-}
-
-.reader-progress--line {
-  left: calc(48px + env(safe-area-inset-left));
-  display: flex;
-  width: clamp(88px, 16.67dvh, 150px);
-  height: 34px;
-  border-radius: 12px;
-  flex-direction: row-reverse;
-  gap: 5px;
-  transform: rotate(-90deg);
-  transform-origin: left bottom;
-}
-
-.reader-progress--line :deep(.ui-progress) {
   flex: 1;
   min-width: 0;
 }
 
 .reader-progress__count {
+  position: relative;
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
