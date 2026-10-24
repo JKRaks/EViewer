@@ -225,5 +225,7 @@
   "页面已隐藏，自动战斗已暂停": "Page hidden. Auto-fight paused.",
   "未能确认下一轮，请恢复战斗状态": "Next wave could not be confirmed. Recover the battle state.",
   "每步确认战况后等待三秒；开启轮间自动继续后，等待五秒进入下一轮。自动战斗不使用消耗品。": "Waits three seconds after each confirmed action, and five seconds between waves when enabled. No consumables are used.",
-  "自动战斗中，点击展开": "Auto-fighting. Click to expand"
+  "自动战斗中，点击展开": "Auto-fighting. Click to expand",
+  "当前无法治疗，使用防御等待恢复": "Healing is unavailable. Defending until recovery is possible.",
+  "当前无法治疗且防御不可用，已暂停等待接管": "Healing and defense are unavailable. Paused for manual control."
 }

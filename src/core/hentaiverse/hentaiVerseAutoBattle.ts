@@ -57,6 +57,7 @@ export function canUseAutomaticBattleAction(
 ): boolean {
   if (action.available !== true || battle.completed || battle.roundCompleted) return false
   if (action.mode === 'attack') return action.skill === 0 && action.target === 'enemy'
+  if (action.mode === 'defend') return action.skill === 0 && action.target !== 'enemy'
   if (action.mode === 'focus') return (battle.overcharge ?? 0) >= 25 && action.skill === 0
   if (action.mode !== 'magic' || !action.kind || action.kind === 'other') return false
   if (action.target !== (action.kind === 'offense' ? 'enemy' : 'self')) return false
@@ -89,9 +90,11 @@ export function decideAutoBattleAction(
     return { action: fullCure, target: 0, reason: '生命危急，准备完全治疗' }
   if (health.percent <= settings.healAt) {
     const recovery = cure || fullCure
-    return recovery
-      ? { action: recovery, target: 0, reason: '生命偏低，准备治疗' }
-      : { reason: '当前无法治疗，已暂停等待接管' }
+    if (recovery) return { action: recovery, target: 0, reason: '生命偏低，准备治疗' }
+    const defend = actions.find((action) => action.mode === 'defend')
+    return defend
+      ? { action: defend, target: 0, reason: '当前无法治疗，使用防御等待恢复' }
+      : { reason: '当前无法治疗且防御不可用，已暂停等待接管' }
   }
 
   const mana = battle.vitals.find((vital) => vital.key === 'magic')?.current
