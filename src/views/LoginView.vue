@@ -27,6 +27,10 @@ import {
 import { notify } from '@/components/primitives/feedback'
 import UserConfigPanel from '@/components/UserConfigPanel.vue'
 import AuthBridgePanel from '@/components/AuthBridgePanel.vue'
+import { RouterLink } from 'vue-router'
+import { ASSISTANT_SETTINGS } from '@/core/connector/connectorProtocol'
+import { connectionSettings } from '@/core/connector/connectionSettings'
+import { localSession, refreshLocalAuthState } from '@/core/auth/authState'
 import { requestBridge } from '@/core/auth/authBridge'
 import {
   clearAuthCookies,
@@ -178,7 +182,9 @@ const moduleStates = reactive<Record<AccountDataSection, ModuleState>>({
   hathPerks: { loading: false, error: '', requestId: 0 },
 })
 useAppLaunchReadiness(
-  () => bridgeRestoring.value || Object.values(moduleStates).some((state) => state.loading),
+  () =>
+    (connectionSettings.mode === 'server' && bridgeRestoring.value) ||
+    Object.values(moduleStates).some((state) => state.loading),
   'account',
 )
 const form = reactive({
@@ -190,6 +196,10 @@ const form = reactive({
 // A suspended PWA may reopen on the overview tab using the previous account hint.
 // Bring its pending authorization back into view so the panel can finish receiving it.
 onMounted(async () => {
+  if (connectionSettings.mode === 'local') {
+    bridgeRestoring.value = false
+    return
+  }
   if (activeTab.value === 'authentication') return
   try {
     const status = await requestBridge('status', bridgeRestoreController.signal)
@@ -335,7 +345,13 @@ async function logout() {
   try {
     await clearAuthCookies()
     activeTab.value = 'authentication'
-    notify.success(t('认证 Cookie 已清除'))
+    notify.success(
+      t(
+        connectionSettings.mode === 'local'
+          ? '已暂停本机会话，源站登录仍保留'
+          : '认证 Cookie 已清除',
+      ),
+    )
   } catch (error) {
     console.error(t('清除认证 Cookie 失败:'), error)
     notify.error(error instanceof Error ? error.message : t('清除认证 Cookie 失败'))
@@ -495,7 +511,11 @@ onBeforeUnmount(resetAccountData)
           <div class="data-section-header">
             <div>
               <h2>{{ t('账户总览') }}</h2>
-              <p>{{ t('会员 ID') }} {{ authState.memberId }}</p>
+              <p>
+                {{
+                  authState.memberId ? t('会员 ID') + ' ' + authState.memberId : t('本机源站会话')
+                }}
+              </p>
             </div>
             <ActionButton
               size="icon"
@@ -621,7 +641,11 @@ onBeforeUnmount(resetAccountData)
           <div class="data-section-header">
             <div>
               <h2>{{ t('捐赠信息') }}</h2>
-              <p>{{ t('会员 ID') }} {{ authState.memberId }}</p>
+              <p>
+                {{
+                  authState.memberId ? t('会员 ID') + ' ' + authState.memberId : t('本机源站会话')
+                }}
+              </p>
             </div>
             <ActionButton
               size="icon"
@@ -743,7 +767,11 @@ onBeforeUnmount(resetAccountData)
           <div class="data-section-header">
             <div>
               <h2>{{ t('Hath 特权') }}</h2>
-              <p>{{ t('会员 ID') }} {{ authState.memberId }}</p>
+              <p>
+                {{
+                  authState.memberId ? t('会员 ID') + ' ' + authState.memberId : t('本机源站会话')
+                }}
+              </p>
             </div>
             <ActionButton
               size="icon"
@@ -930,23 +958,55 @@ onBeforeUnmount(resetAccountData)
 
       <SectionTab :label="t('用户配置')" name="userConfig" :disabled="!authState.loggedIn" lazy>
         <section class="data-section">
-          <UserConfigPanel :key="authState.memberId" />
+          <UserConfigPanel
+            :key="`${authState.source}:${authState.memberId}:${authState.lastLoginAt}`"
+          />
         </section>
       </SectionTab>
 
       <SectionTab :label="t('认证信息')" name="authentication">
+        <section v-if="connectionSettings.mode === 'local'" class="account-section">
+          <h2>{{ t('本机源站登录') }}</h2>
+          <p>
+            {{
+              t(
+                '在同一浏览器登录 E-Hentai，再检测登录状态。本机请求使用源站会话，不向服务代理同步 Cookie。',
+              )
+            }}
+          </p>
+          <div class="auth-status-actions">
+            <a
+              href="https://e-hentai.org/bounce_login.php?b=d&amp;bt=1-1"
+              target="_blank"
+              rel="noopener noreferrer"
+              >{{ t('先登录原站') }}</a
+            >
+            <ActionButton :loading="localSession.checking" @click="refreshLocalAuthState(true)">{{
+              t('检测源站登录')
+            }}</ActionButton>
+            <RouterLink :to="ASSISTANT_SETTINGS">{{
+              t('前往设置安装或更新浏览器助手')
+            }}</RouterLink>
+          </div>
+          <Notice v-if="localSession.error" tone="warning" :title="localSession.error" />
+        </section>
         <section class="account-section">
           <h2>{{ t('登录态') }}</h2>
           <div v-if="authState.loggedIn" class="account-status">
             <div>
               <div class="status-line">
-                <TagChip tone="success" effect="plain">{{ t('已保存') }}</TagChip>
-                <strong>{{ t('会员 ID') }} {{ authState.memberId }}</strong>
+                <TagChip tone="success" effect="plain">{{
+                  t(connectionSettings.mode === 'local' ? '已验证' : '已保存')
+                }}</TagChip>
+                <strong>{{
+                  authState.memberId ? t('会员 ID') + ' ' + authState.memberId : t('本机源站会话')
+                }}</strong>
               </div>
               <div class="status-meta">{{ t('保存时间 {p0}', { p0: loginTime }) }}</div>
             </div>
             <div class="auth-status-actions">
               <ActionButton
+                v-if="connectionSettings.mode === 'server'"
                 :loading="extracting"
                 :disabled="submitting || loggingOut || bridgeBusy"
                 @click="extractCurrentCookie"
@@ -958,7 +1018,9 @@ onBeforeUnmount(resetAccountData)
                 :loading="loggingOut"
                 :disabled="bridgeBusy"
                 @click="logout"
-                >{{ t('退出') }}</ActionButton
+                >{{
+                  t(connectionSettings.mode === 'local' ? '暂停本机会话' : '退出')
+                }}</ActionButton
               >
             </div>
           </div>
@@ -980,7 +1042,11 @@ onBeforeUnmount(resetAccountData)
           </div>
         </section>
 
-        <details class="account-section auth-method" open>
+        <details
+          v-if="connectionSettings.mode === 'server'"
+          class="account-section auth-method"
+          open
+        >
           <summary>
             <h2>{{ t('Cookie 手动维护') }}</h2>
             <IconFrame class="auth-method-chevron" aria-hidden="true"><ChevronDown /></IconFrame>
@@ -1046,6 +1112,7 @@ onBeforeUnmount(resetAccountData)
         </details>
 
         <details
+          v-if="connectionSettings.mode === 'server'"
           class="account-section auth-method"
           :open="sourceLoginExpanded"
           @toggle="sourceLoginExpanded = ($event.target as HTMLDetailsElement).open"

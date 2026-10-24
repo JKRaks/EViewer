@@ -1,0 +1,89 @@
+<script setup lang="ts">
+import { onMounted, onUnmounted, watch } from 'vue'
+import { RouterLink } from 'vue-router'
+import Notice from '@/components/primitives/Notice.vue'
+import { t } from '@/i18n'
+import { connectorState, startConnector, stopConnector } from '@/core/connector/connectorClient'
+import {
+  connectionSettings,
+  listenForConnectionSettings,
+} from '@/core/connector/connectionSettings'
+import { ASSISTANT_SETTINGS } from '@/core/connector/connectorProtocol'
+import { localSession, refreshLocalAuthState, refreshServerAuthState } from '@/core/auth/authState'
+
+let stopStorage: (() => void) | undefined
+onMounted(() => {
+  startConnector()
+  stopStorage = listenForConnectionSettings()
+  void refreshServerAuthState().catch(() => {
+    /* Existing account hint remains until verification succeeds. */
+  })
+})
+watch(
+  () => [connectionSettings.mode, connectorState.phase] as const,
+  ([mode, phase]) => {
+    if (mode === 'local' && phase === 'ready' && Date.now() - localSession.checkedAt > 5 * 60_000)
+      void refreshLocalAuthState()
+  },
+  { immediate: true },
+)
+onUnmounted(() => {
+  stopConnector()
+  stopStorage?.()
+})
+</script>
+
+<template>
+  <div
+    v-if="
+      connectorState.versionStatus === 'mismatch' &&
+      connectorState.environment === 'production' &&
+      connectorState.identity
+    "
+    class="assistant-notice"
+  >
+    <Notice
+      :key="connectorState.expectedVersion"
+      closable
+      tone="warning"
+      :title="t('浏览器助手版本与 main 线上版本不一致')"
+    >
+      <p>
+        {{
+          t('已安装 {p0}，线上 {p1}。请更新或替换脚本后刷新。', {
+            p0: connectorState.identity.scriptVersion,
+            p1: connectorState.expectedVersion,
+          })
+        }}
+      </p>
+      <RouterLink :to="ASSISTANT_SETTINGS">{{ t('前往设置安装或更新浏览器助手') }}</RouterLink>
+    </Notice>
+  </div>
+  <div
+    v-else-if="
+      connectionSettings.mode === 'local' && !['ready', 'detecting'].includes(connectorState.phase)
+    "
+    class="assistant-notice"
+  >
+    <Notice tone="warning" :title="t('本机助手不可用，请检查脚本或切换请求方式')">
+      <RouterLink :to="ASSISTANT_SETTINGS">{{ t('前往设置安装或更新浏览器助手') }}</RouterLink>
+    </Notice>
+  </div>
+</template>
+
+<style scoped>
+.assistant-notice {
+  max-width: 960px;
+  margin: 12px auto;
+  padding: 0 20px;
+}
+a {
+  color: var(--primary);
+  text-decoration: underline;
+}
+@media (max-width: 560px) {
+  .assistant-notice {
+    padding: 0 68px 0 14px;
+  }
+}
+</style>

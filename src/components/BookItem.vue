@@ -4,11 +4,10 @@ import { t, getDisplayLocale } from '@/i18n'
 import CheckField from '@/components/primitives/CheckField.vue'
 import MediaImage from '@/components/primitives/MediaImage.vue'
 import IconFrame from '@/components/primitives/IconFrame.vue'
-import TagChip from '@/components/primitives/TagChip.vue'
+import BookTagSummary from '@/components/BookTagSummary.vue'
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import type { bookItem } from '@/core/model/book/bookOutput'
-import { getTagDisplayInfo } from '@/core/common/tagTranslations'
 import {
   Image as Picture,
   Star,
@@ -60,47 +59,6 @@ function coverLoaded(event: Event) {
 // 格式化图片数量
 const imageCountText = computed(() => {
   return t('{p0} 张', { p0: props.book.imgCount || 0 })
-})
-
-const displayTags = computed(() => {
-  const officialTags = props.book.tags.flatMap((collection) =>
-    collection.items
-      .filter((tag) => tag.official)
-      .map((tag) => ({
-        key: `${collection.collection}:${tag.name}`,
-        text: getTagDisplayInfo(collection.collection, tag).text,
-      })),
-  )
-  const currentFallbackTags = props.book.tags.flatMap((collection) => {
-    const selectedTag = collection.items.find((tag) => tag.official) ?? collection.items[0]
-    return selectedTag
-      ? [
-          {
-            key: `${collection.collection}:${selectedTag.name}`,
-            text: getTagDisplayInfo(collection.collection, selectedTag).text,
-          },
-        ]
-      : []
-  })
-  const seen = new Set<string>()
-  const candidates =
-    officialTags.length >= 3 ? officialTags : [...officialTags, ...currentFallbackTags]
-
-  return candidates.filter((tag) => {
-    if (!tag.text || seen.has(tag.key)) {
-      return false
-    }
-    seen.add(tag.key)
-    return true
-  })
-})
-
-const visibleTags = computed(() => {
-  return displayTags.value.slice(0, 3)
-})
-
-const hiddenTagCount = computed(() => {
-  return Math.max(displayTags.value.length - visibleTags.value.length, 0)
 })
 
 const scoreText = computed(() => {
@@ -197,29 +155,7 @@ const handleSelectionChange = (value: boolean | string | number) => {
       </div>
 
       <!-- 标签 -->
-      <div class="book-tags" v-if="visibleTags.length > 0">
-        <TagChip
-          v-for="tag in visibleTags"
-          :key="tag.key"
-          size="small"
-          tone="info"
-          class="tag-item"
-          effect="plain"
-        >
-          <span class="tag-text">
-            {{ tag.text }}
-          </span>
-        </TagChip>
-        <TagChip
-          v-if="hiddenTagCount > 0"
-          size="small"
-          tone="info"
-          class="tag-item tag-more"
-          effect="plain"
-        >
-          <span class="tag-text">+{{ hiddenTagCount }}</span>
-        </TagChip>
-      </div>
+      <BookTagSummary :tags="book.tags" />
 
       <!-- 上传时间 -->
       <div v-if="book.publishDate || favoritedTimeText" class="book-time-row">
@@ -346,28 +282,6 @@ const handleSelectionChange = (value: boolean | string | number) => {
 .ranking-score {
   color: var(--accent);
 }
-.book-tags {
-  display: flex;
-  flex-wrap: nowrap;
-  min-width: 0;
-  overflow: hidden;
-  gap: 5px;
-}
-.tag-item {
-  flex: 0 1 auto;
-  min-width: 0;
-  max-width: 110px;
-}
-.tag-text {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  display: block;
-  font-size: 10px;
-}
-.tag-more {
-  flex-shrink: 0;
-}
 .book-time-row {
   display: flex;
   flex-wrap: wrap;
@@ -397,9 +311,6 @@ const handleSelectionChange = (value: boolean | string | number) => {
   }
   .meta-item {
     font-size: 10px;
-  }
-  .tag-item {
-    padding: 3px 5px;
   }
 }
 </style>

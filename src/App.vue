@@ -4,6 +4,8 @@ import { t } from '@/i18n'
 import FeedbackHost from '@/components/primitives/FeedbackHost.vue'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import SiteHeader from '@/components/SiteHeader.vue'
+import BrowserAssistantNotice from '@/components/BrowserAssistantNotice.vue'
+import { connectionSettings } from '@/core/connector/connectionSettings'
 import IconFrame from '@/components/primitives/IconFrame.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -37,6 +39,8 @@ import { useFloatingActions } from '@/composables/useFloatingActions'
 import { useAuthState } from '@/core/auth/authState'
 import { useIndexedDbCacheSettings } from '@/core/cache/cacheSettings'
 import { hentaiVerseState } from '@/core/hentaiverse/hentaiVerseRuntime'
+import { themeModes as themeModeList } from '@/core/theme/themePalette'
+import { initializeThemeSettings, themeSettings } from '@/core/theme/themeSettings'
 
 const EncounterPrompt = defineAsyncComponent(
   () => import('@/components/hentaiverse/EncounterPrompt.vue'),
@@ -68,8 +72,7 @@ let scrollTarget: HTMLElement | Window | null = null
 const { pageFloatingActions, clearFloatingActions } = useFloatingActions()
 const authState = useAuthState()
 const cacheSettings = useIndexedDbCacheSettings()
-const themeModeList = ['auto', 'dark', 'light'] as const
-let systemThemeMedia: MediaQueryList | null = null
+const stopThemeSync = initializeThemeSettings()
 
 const cachedViews = ref<string[]>([
   'HomeView',
@@ -94,10 +97,12 @@ const themeModeMeta = {
 }
 
 const activeMenu = computed(() => route.path)
-const storedTheme = localStorage.getItem('eviewer-theme')
-const activeThemeMode = ref<(typeof themeModeList)[number]>(
-  storedTheme === 'dark' || storedTheme === 'light' ? storedTheme : 'auto',
-)
+const activeThemeMode = computed({
+  get: () => themeSettings.mode,
+  set: (value) => {
+    themeSettings.mode = value
+  },
+})
 const visiblePageActions = computed(() => {
   return pageFloatingActions.value
     .filter((item) => item.show !== false && item.placement !== 'menu')
@@ -136,7 +141,7 @@ const menuItems = computed<FloatingMenuItem[]>(() => [
   },
   {
     key: 'theme',
-    label: themeModeMeta[activeThemeMode.value].label,
+    label: t(themeModeMeta[activeThemeMode.value].label),
     icon: themeModeMeta[activeThemeMode.value].icon,
     active: activeThemeMode.value !== 'auto',
     onClick: toggleThemeMode,
@@ -215,21 +220,6 @@ const toggleMenu = () => {
   menuExpanded.value = !menuExpanded.value
 }
 
-const applyThemeMode = () => {
-  localStorage.setItem('eviewer-theme', activeThemeMode.value)
-  const isDark =
-    activeThemeMode.value === 'dark' ||
-    (activeThemeMode.value === 'auto' && systemThemeMedia?.matches === true)
-
-  document.documentElement.classList.toggle('dark', isDark)
-}
-
-const handleSystemThemeChange = () => {
-  if (activeThemeMode.value === 'auto') {
-    applyThemeMode()
-  }
-}
-
 const toggleThemeMode = () => {
   const currentIndex = themeModeList.indexOf(activeThemeMode.value)
   const nextIndex = (currentIndex + 1) % themeModeList.length
@@ -298,16 +288,11 @@ onMounted(() => {
     history.scrollRestoration = 'manual'
   }
 
-  systemThemeMedia = window.matchMedia('(prefers-color-scheme: dark)')
-  systemThemeMedia.addEventListener('change', handleSystemThemeChange)
-  applyThemeMode()
   checkViewport()
   window.addEventListener('resize', checkViewport)
   window.addEventListener('orientationchange', checkViewport)
   void restoreRouteScroll()
 })
-
-watch(activeThemeMode, applyThemeMode)
 
 watch(
   () => route.fullPath,
@@ -326,7 +311,7 @@ onUnmounted(() => {
   stopScrollModeSync()
   scrollTarget?.removeEventListener('scroll', handleMainScroll)
   window.removeEventListener(layoutScrollModeChange, bindLayoutScroll)
-  systemThemeMedia?.removeEventListener('change', handleSystemThemeChange)
+  stopThemeSync()
   window.removeEventListener('resize', checkViewport)
   window.removeEventListener('orientationchange', checkViewport)
 })
@@ -341,10 +326,11 @@ onUnmounted(() => {
       <div class="layout-safe-area" aria-hidden="true" />
       <main class="layout-main">
         <SiteHeader v-if="route.path !== '/viewer'" />
+        <BrowserAssistantNotice />
         <Suspense>
           <template #default>
             <RouterView v-slot="{ Component, route }">
-              <KeepAlive :include="cachedViews">
+              <KeepAlive :key="connectionSettings.mode" :include="cachedViews">
                 <component :is="Component" :key="route.path" />
               </KeepAlive>
             </RouterView>

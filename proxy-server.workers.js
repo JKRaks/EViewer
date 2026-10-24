@@ -8,6 +8,7 @@
  * 可以在 wrangler.toml 或环境变量中配置
  */
 import { handleAuthBridge, cancelAuthBridge, clearBridgeCookie } from './worker/auth-bridge.js'
+import { assistantAssetResponse, isAssistantAsset } from './worker/browser-assistant.js'
 
 const ORIGIN_MAP = [
   {
@@ -1100,6 +1101,10 @@ async function handleRequest(request, env = {}) {
   // 健康检查路由
   if (pathname === '/health') {
     return handleHealthCheck(env)
+  }
+
+  if (request.method === 'GET' && isAssistantAsset(pathname)) {
+    return assistantAssetResponse(request, env, allowedAuthExportOrigins)
   }
 
   if (

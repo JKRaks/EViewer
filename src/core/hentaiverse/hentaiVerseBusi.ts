@@ -202,7 +202,8 @@ export class HentaiVerseBusi {
     const query = encounter ? { s: 'Battle', ss: 'ba', encounter } : {}
     const html = await this.requestText('/hentaiverse/page', { query })
     const battle = parseBattlePage(html)
-    if (!battle.token && !battle.completed) throw new Error('当前没有可恢复的 HentaiVerse 战斗')
+    if (!battle.token && !battle.completed && !battle.roundCompleted)
+      throw new Error('当前没有可恢复的 HentaiVerse 战斗')
     return battle
   }
 
@@ -215,6 +216,7 @@ export class HentaiVerseBusi {
     mode: HentaiVerseBattleMode,
     target: number,
     skill = 0,
+    automatic = false,
   ): Promise<HentaiVerseBattleSnapshot> {
     const payload = await this.requestJson<Record<string, unknown>>('/hentaiverse/action', {
       token: current.token,
@@ -223,6 +225,14 @@ export class HentaiVerseBusi {
       skill,
     })
     const updated = parseBattleResponse(payload, current)
+    // Loading the full page can enter the next wave. Automatic play must stop first.
+    if (
+      automatic &&
+      (updated.roundCompleted ||
+        (updated.monsters.length > 0 && updated.monsters.every((monster) => monster.defeated)))
+    ) {
+      return { ...updated, roundCompleted: true, actions: [] }
+    }
     // The source also uses its completion pane between arena rounds. Confirm
     // the full page before treating the entire challenge as finished.
     let html: string
@@ -255,6 +265,16 @@ export class HentaiVerseBusi {
       completed: true,
       completionText: updated.completionText || '源站已确认本次战斗结束。',
     }
+  }
+
+  /** Continue only after an explicit player input at the wave boundary. */
+  async continueBattleRound(
+    current: HentaiVerseBattleSnapshot,
+  ): Promise<HentaiVerseBattleSnapshot> {
+    const result = await this.getPage({})
+    if (result.battle) return result.battle
+    if (!result.page?.authenticated) throw new Error('HentaiVerse 登录态已失效')
+    return { ...current, completed: true, roundCompleted: true, actions: [] }
   }
 
   private async requestText(
