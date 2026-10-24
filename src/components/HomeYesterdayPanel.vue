@@ -8,7 +8,7 @@ import SkeletonLine from '@/components/primitives/SkeletonLine.vue'
 import Notice from '@/components/primitives/Notice.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import EmptyState from '@/components/primitives/EmptyState.vue'
-import { computed, onMounted, ref } from 'vue'
+import { onMounted, ref } from 'vue'
 import { ArrowRight, RefreshCw as Refresh, Trophy } from '@lucide/vue'
 import { RouterLink } from 'vue-router'
 import BookItem from '@/components/BookItem.vue'
@@ -23,8 +23,6 @@ const loading = ref(false)
 useAppLaunchReadiness(() => loading.value)
 const errorMessage = ref('')
 let requestVersion = 0
-
-const visibleEntries = computed(() => entries.value.slice(0, 12))
 
 async function fetchYesterday() {
   if (loading.value) return
@@ -92,7 +90,7 @@ onMounted(() => void fetchYesterday())
     <EmptyState v-else-if="entries.length === 0" :description="t('暂无昨日榜单数据')" />
     <div v-else class="ranking-grid gallery-masonry" v-busy="loading">
       <BookItem
-        v-for="entry in visibleEntries"
+        v-for="entry in entries"
         :key="entry.book.bookId"
         :book="entry.book"
         :rank="entry.rank"

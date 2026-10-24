@@ -270,7 +270,7 @@ export class HentaiVerseBusi {
     }
   }
 
-  /** Continue only after an explicit player input at the wave boundary. */
+  /** Continue at a confirmed wave boundary, manually or through the enabled auto-fight loop. */
   async continueBattleRound(
     current: HentaiVerseBattleSnapshot,
   ): Promise<HentaiVerseBattleSnapshot> {

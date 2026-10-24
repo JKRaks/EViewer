@@ -88,6 +88,10 @@ export class httpClass {
 
       options.signal?.throwIfAborted()
       this.checkSourceResponse(response)
+      if (response.status < 200 || response.status >= 300)
+        throw new Error(
+          formatSystemMessage('源站请求失败（HTTP {p0}），请重新加载。', { p0: response.status }),
+        )
       if (
         galleryOrigin(param.url()) === 'https://exhentai.org' &&
         !/<(?:html|body|div|table|form)\b/i.test(response.data)

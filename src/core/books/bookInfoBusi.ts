@@ -4,6 +4,7 @@ import { httpClass } from '../common/httpClass'
 import { parserClass } from '../common/parserClass'
 import { parseTagCollections } from '../common/tagParser'
 import type { tagCollection } from '../model/book/tag'
+import { hasAcceptedGalleryWarning, readGalleryContentWarning } from './galleryContentWarning'
 
 export class bookInfoBusi {
   /**
@@ -13,15 +14,23 @@ export class bookInfoBusi {
    */
   async getBookInfo(param: bookInfoInput): Promise<bookInfoOutput> {
     const result: bookInfoOutput = new bookInfoOutput()
+    param.nw = hasAcceptedGalleryWarning(param.bookId) ? 'session' : ''
     const htmlResult = await httpClass.sendRequest(param)
     if (htmlResult.isSuccess) {
       const bodyParser = parserClass.loadBody(htmlResult.data!)
+      result.contentWarning = readGalleryContentWarning(bodyParser.element, param.bookId)
+      if (result.contentWarning) {
+        result.msg = '源站内容警告'
+        return result
+      }
       const bookInfo = bodyParser.getElementBySelector(['div.gm'])
-      if (!bookInfo) {
+      if (bookInfo.invalid || bookInfo.getElementBySelector('h1#gn').invalid) {
         result.isSuccess = false
         result.msg = '解析失败'
+        return result
       }
       result.bookId = param.bookId
+      result.pageIndex = param.page
       result.bookName = bookInfo.getElementBySelector(['div#gd2', 'h1#gn']).text
       result.coverImage =
         bookInfo
@@ -36,8 +45,6 @@ export class bookInfoBusi {
         if (!propertyName || !propertyValue) {
           return
         }
-
-        result.pageIndex = param.page
 
         switch (propertyName) {
           case 'Posted:':
@@ -109,7 +116,8 @@ export class bookInfoBusi {
       result.data = this.getImageIds(bodyParser)
       result.userComments = this.getUserComments(bodyParser)
       result.lastPageIndex = Math.ceil(result.imageCount / 20)
-      result.isSuccess = true
+      result.isSuccess = Boolean(result.bookName && result.imageCount > 0 && result.data.length)
+      if (!result.isSuccess) result.msg = '画册数据不完整，请重新加载。'
     } else {
       result.msg = htmlResult.msg
     }

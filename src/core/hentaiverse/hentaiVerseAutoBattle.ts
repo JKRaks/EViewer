@@ -6,6 +6,7 @@ export interface AutoBattleSettings {
   criticalAt: number
   maintainRegen: boolean
   spell: string
+  continueRounds: boolean
 }
 
 export interface AutoBattleDecision {
@@ -20,6 +21,7 @@ export const defaultAutoBattleSettings: AutoBattleSettings = {
   criticalAt: 30,
   maintainRegen: true,
   spell: '',
+  continueRounds: true,
 }
 
 export function normalizeAutoBattleSettings(value: unknown): AutoBattleSettings | null {
@@ -44,6 +46,7 @@ export function normalizeAutoBattleSettings(value: unknown): AutoBattleSettings 
     criticalAt,
     maintainRegen: settings.maintainRegen,
     spell: settings.spell,
+    continueRounds: settings.continueRounds !== false,
   }
 }
 

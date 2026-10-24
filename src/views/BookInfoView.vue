@@ -2,6 +2,9 @@
 import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t, getDisplayLocale } from '@/i18n'
 
+import GalleryContentWarning from '@/components/GalleryContentWarning.vue'
+import Notice from '@/components/primitives/Notice.vue'
+import { acceptGalleryWarning } from '@/core/books/galleryContentWarning'
 import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
 import SkeletonLine from '@/components/primitives/SkeletonLine.vue'
 import MediaImage from '@/components/primitives/MediaImage.vue'
@@ -251,7 +254,12 @@ onUnmounted(() => {
   unbindScrollListener()
 })
 
-async function fetchBookInfo() {
+async function continueAfterWarning() {
+  acceptGalleryWarning(getRouteBookId())
+  await fetchBookInfo(true)
+}
+
+async function fetchBookInfo(forceRefresh = false) {
   const routeBookId = getRouteBookId()
   if (!routeBookId || loadingBookId === routeBookId) {
     return
@@ -264,13 +272,16 @@ async function fetchBookInfo() {
   try {
     const requestInput = new bookInfoInput()
     requestInput.bookId = routeBookId
-    const result = await getBookInfoWithCache(requestInput, 'detail')
+    const result = await getBookInfoWithCache(requestInput, 'detail', forceRefresh)
     if (requestVersion === bookRequestVersion && getRouteBookId() === routeBookId) {
       pageData.value = result
-      if (authState.loggedIn) void refreshGalleryFavoriteState(routeBookId)
+      if (result.isSuccess && authState.loggedIn) void refreshGalleryFavoriteState(routeBookId)
     }
   } catch (error) {
-    console.error(t('获取书籍信息失败:'), error)
+    if (requestVersion === bookRequestVersion) {
+      pageData.value = new bookInfoOutput()
+      pageData.value.msg = error instanceof Error ? error.message : t('画册加载失败，请重试。')
+    }
   } finally {
     if (requestVersion === bookRequestVersion) {
       loadingBookId = ''
@@ -282,6 +293,7 @@ async function fetchBookInfo() {
 
 function consumeFavoriteIntent() {
   if (
+    !pageData.value.isSuccess ||
     route.query.favorite !== '1' ||
     funcData.loading ||
     pageData.value.bookId !== getRouteBookId()
@@ -521,7 +533,19 @@ function toDownload() {
     </template>
   </SkeletonBlock>
   <div class="bookinfo-view" v-busy="funcData.loading">
-    <div class="content-wrapper" v-if="!funcData.loading">
+    <GalleryContentWarning
+      v-if="!funcData.loading && pageData.contentWarning"
+      :paragraphs="pageData.contentWarning"
+      @continue="continueAfterWarning"
+    />
+    <Notice
+      v-else-if="!funcData.loading && !pageData.isSuccess"
+      tone="error"
+      :title="t(pageData.msg || '画册加载失败，请重试。')"
+    >
+      <ActionButton @click="fetchBookInfo(true)">{{ t('重新加载') }}</ActionButton>
+    </Notice>
+    <div class="content-wrapper" v-else-if="!funcData.loading">
       <!-- 头部信息区 -->
       <section class="info-card">
         <div class="header-section">
