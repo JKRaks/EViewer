@@ -1,5 +1,6 @@
 import { HENTAIVERSE_ABILITIES } from './hentaiVerseAbilityTranslations'
 import { rememberSourceText, registerMessages, formatSystemMessage } from '@/i18n'
+import { recordTranslationCandidate, type TranslationDomain } from './hentaiVerseTranslationCapture'
 import interfaceMessages from './hentaiVerseInterface.en.json'
 
 const ATTRIBUTE_LABELS: Record<string, string> = {
@@ -519,6 +520,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Stepping Stones': '垫脚石',
     'A New Beginning': '新的开始',
     Graduation: '毕业',
+    'A Rolling Stone': '滚石',
     'The Test of Faith': '信念的考验',
     'The Long Road': '漫漫长路',
     Dreamfall: '梦陨',
@@ -732,22 +734,38 @@ const LOWERCASE_BATTLE_LOG_TRANSLATIONS = Object.fromEntries(
   Object.entries(BATTLE_TERMS).map(([term, translation]) => [term.toLowerCase(), translation]),
 )
 
-function translateBattleTerms(value: string) {
-  return value.replace(
+function translateBattleTerms(value: string, capture = true) {
+  const translated = value.replace(
     BATTLE_LOG_PATTERN,
     (term) => LOWERCASE_BATTLE_LOG_TRANSLATIONS[term.toLowerCase()] ?? term,
   )
+  if (capture) recordTranslationCandidate('label', value, translated)
+  return translated
 }
 
 export function getAttributeLabel(key: string) {
   return ATTRIBUTE_LABELS[key] ?? key.toUpperCase()
 }
 
+let translationDepth = 0
+function translateAndCapture(
+  domain: TranslationDomain,
+  value: string,
+  translate: (text: string) => string,
+) {
+  translationDepth++
+  try {
+    const translated = translate(value)
+    if (translationDepth === 1 && domain !== 'battleLog')
+      recordTranslationCandidate(domain, value, translated)
+    return rememberSourceText(translated, value.replace(/\s+/g, ' ').trim())
+  } finally {
+    translationDepth--
+  }
+}
+
 export function translateHentaiVerseText(value: string) {
-  return rememberSourceText(
-    translateHentaiVerseTextInChinese(value),
-    value.replace(/\s+/g, ' ').trim(),
-  )
+  return translateAndCapture('label', value, translateHentaiVerseTextInChinese)
 }
 function translateHentaiVerseTextInChinese(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
@@ -761,10 +779,7 @@ function translateHentaiVerseTextInChinese(value: string) {
 }
 
 export function translateHentaiVerseDescription(value: string) {
-  return rememberSourceText(
-    translateHentaiVerseDescriptionInChinese(value),
-    value.replace(/\s+/g, ' ').trim(),
-  )
+  return translateAndCapture('description', value, translateHentaiVerseDescriptionInChinese)
 }
 function translateHentaiVerseDescriptionInChinese(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
@@ -976,10 +991,7 @@ export function getHentaiVerseSettingControl(name: string, value: string, source
 }
 
 export function translateHentaiVerseBattleLog(value: string) {
-  return rememberSourceText(
-    translateHentaiVerseBattleLogInChinese(value),
-    value.replace(/\s+/g, ' ').trim(),
-  )
+  return translateAndCapture('battleLog', value, translateHentaiVerseBattleLogInChinese)
 }
 function translateHentaiVerseBattleLogInChinese(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
@@ -1126,7 +1138,9 @@ function translateBattleEvent(source: string): string {
   const targetParry = source.match(/^(.+?) (parries|blocks|resists) your attack\.$/i)
   if (targetParry)
     return `${targetParry[1]} ${{ parries: '招架', blocks: '格挡', resists: '抵抗' }[targetParry[2]!.toLowerCase()]}了你的攻击。`
-  return translateBattleTerms(source)
+  const translated = translateBattleTerms(source, false)
+  recordTranslationCandidate('battleLog', source, translated)
+  return translated
 }
 
 export function decodeHentaiVerseGlyphs(root: ParentNode) {

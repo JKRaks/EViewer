@@ -13,6 +13,7 @@ import type {
 } from './model/hentaiVerse'
 import {
   isHentaiVerseBattleHtml,
+  isHentaiVerseVerificationHtml,
   parseBattlePage,
   parseBattleResponse,
   parseHentaiVersePage,
@@ -205,7 +206,12 @@ export class HentaiVerseBusi {
     const query = encounter ? { s: 'Battle', ss: 'ba', encounter } : {}
     const html = await this.requestText('/hentaiverse/page', { query })
     const battle = parseBattlePage(html)
-    if (!battle.token && !battle.completed && !battle.roundCompleted)
+    if (
+      !battle.token &&
+      !battle.completed &&
+      !battle.roundCompleted &&
+      !battle.verificationRequired
+    )
       throw new Error('当前没有可恢复的 HentaiVerse 战斗')
     return battle
   }
@@ -221,13 +227,30 @@ export class HentaiVerseBusi {
     skill = 0,
     automatic = false,
   ): Promise<HentaiVerseBattleSnapshot> {
-    const payload = await this.requestJson<Record<string, unknown>>('/hentaiverse/action', {
-      token: current.token,
-      mode,
-      target,
-      skill,
+    const text = await this.requestText('/hentaiverse/action', {
+      method: 'POST',
+      body: { token: current.token, mode, target, skill },
     })
+    if (isHentaiVerseVerificationHtml(text))
+      return {
+        ...current,
+        verificationRequired: true,
+        completed: false,
+        roundCompleted: false,
+        actions: [],
+      }
+    let payload: Record<string, unknown>
+    try {
+      payload = JSON.parse(text)
+    } catch {
+      throw new Error(
+        formatSystemMessage('HentaiVerse 未返回战斗数据，请打开源站确认登录后恢复战斗'),
+      )
+    }
+    if (!payload || typeof payload !== 'object') throw new Error('HentaiVerse 战斗响应无效')
+    if (typeof payload.error === 'string') throw new Error(payload.error)
     const updated = parseBattleResponse(payload, current)
+    if (updated.verificationRequired) return updated
     // Loading the full page can enter the next wave. Automatic play must stop first.
     if (
       automatic &&
@@ -311,20 +334,6 @@ export class HentaiVerseBusi {
     signal.throwIfAborted()
     if (!response.ok) throw new Error(readError(text, response.status))
     return text
-  }
-
-  private async requestJson<T>(path: string, body: unknown): Promise<T> {
-    const text = await this.requestText(path, { method: 'POST', body })
-    let payload: T & { error?: string }
-    try {
-      payload = JSON.parse(text)
-    } catch {
-      throw new Error(
-        formatSystemMessage('HentaiVerse 未返回战斗数据，请打开源站确认登录后恢复战斗'),
-      )
-    }
-    if (payload.error) throw new Error(payload.error)
-    return payload
   }
 }
 

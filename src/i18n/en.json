@@ -1294,5 +1294,21 @@
   "源站已将此画册标记为可能令人不适的内容，请确认是否继续。": "The source has flagged this gallery as potentially disturbing. Please decide whether to continue.",
   "了解警告，继续查看": "Acknowledge and view gallery",
   "画册数据不完整，请重新加载。": "Gallery data is incomplete. Please reload.",
-  "源站请求失败（HTTP {p0}），请重新加载。": "Source request failed (HTTP {p0}). Please reload."
+  "源站请求失败（HTTP {p0}），请重新加载。": "Source request failed (HTTP {p0}). Please reload.",
+  "HentaiVerse 翻译收集": "HentaiVerse translation collection",
+  "HV 翻译收集": "HV translations",
+  "收集未翻译文本": "Collect untranslated text",
+  "使用 HentaiVerse 时，记录未翻译或部分翻译的文本，仅保存在当前浏览器。": "Record untranslated or partially translated HentaiVerse text locally in this browser.",
+  "待补译 {p0} 条，其中部分翻译 {p1} 条；已覆盖 {p2} 条。": "{p0} candidates pending, including {p1} partially translated; {p2} covered.",
+  "按句式去重，最多保留 1000 条候选及每条 3 个脱敏样例。导出后可用于补齐翻译规则。": "Groups by pattern, with up to 1,000 candidates and 3 redacted samples each. Export them to improve translation rules.",
+  "本地存储不可用，本轮仅保存在内存中，请及时导出。": "Local storage is unavailable. Records are kept in memory for this session; export them before leaving.",
+  "导出翻译候选": "Export translation candidates",
+  "重新检查覆盖情况": "Recheck coverage",
+  "清空收集记录": "Clear collected records",
+  "翻译候选已清空": "Translation candidates cleared",
+  "已按当前翻译规则重新检查": "Rechecked against the current translation rules",
+  "翻译候选操作失败，请重试": "Could not process translation candidates. Please retry.",
+  "收集开关独立于缓存设置。": "Collection is independent of the cache settings.",
+  "确定完全清理 IndexedDB 中的标签翻译、画册详情、图片信息、浏览历史和翻译收集记录吗？": "Delete all IndexedDB data, including tag translations, gallery details, image information, reading history and collected translation candidates?",
+  "标签翻译、画册详情、图片信息、浏览历史和翻译收集记录": "Tag translations, gallery details, image information, reading history and collected translation candidates"
 }

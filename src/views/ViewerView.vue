@@ -216,7 +216,14 @@ function requestVisibleImageUpdate() {
   if (visibleImageFrame) return
   visibleImageFrame = requestAnimationFrame(() => {
     visibleImageFrame = 0
-    if (!scrollRoot || isViewUnmounted || pageData.loading || loadingPrevious.value) return
+    if (
+      !scrollRoot ||
+      isViewUnmounted ||
+      pageData.loading ||
+      pageJumpLoading.value ||
+      loadingPrevious.value
+    )
+      return
     const { top, bottom } = getLayoutScrollViewport()
     const center = (top + bottom) / 2
     const atEnd =
@@ -301,7 +308,6 @@ async function jumpToPage() {
       previousError.value = ''
       bookImages.value = []
       bookInfo = null
-      bookMetadata = null
       currentPageQueue = null
       bookInfo = targetPage
       pageData.pageIndex = targetPage.pageIndex
@@ -377,6 +383,8 @@ async function initialize(forceRefresh = false) {
   try {
     pageData.loading = true
     bookImages.value = []
+    bookInfo = null
+    bookMetadata = null
     currentPageQueue = null
     cachedImagePages = new Map()
     cachedImageUrls = new Map()

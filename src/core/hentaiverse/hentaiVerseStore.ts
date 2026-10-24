@@ -57,7 +57,7 @@ export async function performHentaiVerseBattleAction(
   automatic = false,
 ) {
   const current = hentaiVerseState.battle
-  if (!current || current.completed || current.roundCompleted)
+  if (!current || current.completed || current.roundCompleted || current.verificationRequired)
     throw new Error('当前没有可执行的战斗动作')
   if (hentaiVerseState.actionPending) throw new Error('前一战斗动作尚未完成')
   if (automatic) {
@@ -81,7 +81,10 @@ export async function performHentaiVerseBattleAction(
   hentaiVerseState.error = ''
   try {
     const next = await busi.sendBattleAction(current, mode, target, skill, automatic)
-    if (hentaiVerseState.battle === current) hentaiVerseState.battle = next
+    if (hentaiVerseState.battle === current) {
+      hentaiVerseState.battle = next
+      if (next.verificationRequired) hentaiVerseState.battleVisible = true
+    }
   } catch (error) {
     if (hentaiVerseState.battle === current)
       hentaiVerseState.error =
@@ -106,7 +109,10 @@ export async function continueHentaiVerseBattleRound() {
   hentaiVerseState.error = ''
   try {
     const next = await busi.continueBattleRound(current)
-    if (hentaiVerseState.battle === current) hentaiVerseState.battle = next
+    if (hentaiVerseState.battle === current) {
+      hentaiVerseState.battle = next
+      if (next.verificationRequired) hentaiVerseState.battleVisible = true
+    }
   } catch (error) {
     if (hentaiVerseState.battle === current)
       hentaiVerseState.error = error instanceof Error ? error.message : '继续战斗失败'
