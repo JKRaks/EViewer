@@ -181,6 +181,10 @@ watch([battle, () => hentaiVerseState.error], ([current, error], [previous, prev
   if (!current) {
     pauseAutoBattle()
     clearFloatingLogs()
+  } else if (current.verificationRequired) {
+    pauseAutoBattle('源站需要手动验证，自动战斗已暂停')
+    clearFloatingLogs()
+    hentaiVerseState.battleVisible = true
   } else if (error) pauseAutoBattle('战斗状态待确认，请从服务器恢复')
   else if (current.completed) {
     pauseAutoBattle('本次战斗已结束')
@@ -277,6 +281,7 @@ async function startAutoBattle() {
     hentaiVerseState.battleLoading ||
     hentaiVerseState.error ||
     battle.value.completed ||
+    battle.value.verificationRequired ||
     document.hidden
   )
     return
@@ -286,7 +291,7 @@ async function startAutoBattle() {
   try {
     while (runId === autoRunId) {
       const current = battle.value
-      if (!current || current.completed || document.hidden) return
+      if (!current || current.completed || current.verificationRequired || document.hidden) return
       if (current.roundCompleted) {
         if (!autoSettings.value.continueRounds) {
           autoReason.value = '本轮已结束，等待手动继续'
@@ -400,7 +405,8 @@ function closeLocalBattle() {
       <header class="battle-header">
         <div>
           <strong>{{ t(battle.title) }}</strong>
-          <span v-if="battle.completed">{{ t('战斗已结束') }}</span>
+          <span v-if="battle.verificationRequired">{{ t('等待手动验证') }}</span>
+          <span v-else-if="battle.completed">{{ t('战斗已结束') }}</span>
           <span v-else-if="battle.roundCompleted">{{ t('本轮已结束') }}</span>
           <span v-else>{{ t('回合进行中') }}</span>
         </div>
@@ -423,7 +429,11 @@ function closeLocalBattle() {
               @click="closeLocalBattle"
             />
           </div>
-          <div v-if="!battle.completed" class="battle-auto-indicator" :title="t(autoReason)">
+          <div
+            v-if="!battle.completed && !battle.verificationRequired"
+            class="battle-auto-indicator"
+            :title="t(autoReason)"
+          >
             <span>{{ t(autoRunning ? '自动战斗中' : '手动操作') }}</span>
             <div
               class="auto-countdown-line"
@@ -458,7 +468,12 @@ function closeLocalBattle() {
         </div>
 
         <div
-          v-if="battle.monsters.length && !battle.roundCompleted && !battle.completed"
+          v-if="
+            battle.monsters.length &&
+            !battle.roundCompleted &&
+            !battle.completed &&
+            !battle.verificationRequired
+          "
           class="battle-monsters"
         >
           <button
@@ -529,7 +544,23 @@ function closeLocalBattle() {
           }}</ActionButton>
         </Notice>
 
-        <div v-if="battle.completed" class="battle-completion" role="status">
+        <Notice v-if="battle.verificationRequired" tone="warning" :title="t('源站需要手动验证')">
+          <p>{{ t('自动战斗已暂停。请在源站完成图片选择或答题，再返回恢复战斗。') }}</p>
+          <p>{{ t('请使用与当前连接方式相同的账号登录源站。') }}</p>
+          <div class="verification-actions">
+            <a
+              class="ui-button"
+              href="https://hentaiverse.org/"
+              target="_blank"
+              rel="noopener noreferrer"
+              >{{ t('打开源站完成验证') }}</a
+            >
+            <ActionButton :loading="hentaiVerseState.battleLoading" @click="recover">{{
+              t('我已完成验证，恢复战斗')
+            }}</ActionButton>
+          </div>
+        </Notice>
+        <div v-else-if="battle.completed" class="battle-completion" role="status">
           <IconFrame :size="30"><CircleCheck /></IconFrame>
           <div>
             <strong>{{ t('本次战斗已结束') }}</strong>
@@ -586,6 +617,7 @@ function closeLocalBattle() {
             !autoRunning &&
             autoReason &&
             !battle.completed &&
+            !battle.verificationRequired &&
             !['自动战斗已暂停', '已切换为手动操作', '本轮已结束，等待手动继续'].includes(autoReason)
           "
           class="battle-stop-reason"
@@ -614,7 +646,7 @@ function closeLocalBattle() {
           </div>
         </div>
       </div>
-      <footer v-if="!battle.completed" class="battle-footer">
+      <footer v-if="!battle.completed && !battle.verificationRequired" class="battle-footer">
         <p>{{ t('轮间自动继续') }} · {{ t(autoSettings.continueRounds ? '已开启' : '已关闭') }}</p>
         <div class="battle-footer-actions">
           <ActionButton
@@ -1023,6 +1055,13 @@ function closeLocalBattle() {
 }
 .round-countdown small {
   font-size: 13px;
+}
+.verification-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
 }
 .auto-settings {
   display: grid;

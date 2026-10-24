@@ -121,14 +121,49 @@ export function parseBattlePage(html: string): HentaiVerseBattleSnapshot {
   return parseBattleDocument(document, token)
 }
 
+function isVerificationDocument(document: Document): boolean {
+  const heading = Array.from(document.querySelectorAll('title, h1, h2, h3')).some((node) =>
+    /\briddle\s*master\b/i.test(cleanText(node.textContent)),
+  )
+  const instructions = cleanText(document.body?.textContent)
+  return (
+    heading ||
+    /select all ponies you see in the image|choose the right answer based on the image below/i.test(
+      instructions,
+    )
+  )
+}
+
+export function isHentaiVerseVerificationHtml(html: string): boolean {
+  return (
+    /riddle|select all ponies|choose the right answer/i.test(html) &&
+    isVerificationDocument(parser.parseFromString(html, 'text/html'))
+  )
+}
+
 export function isHentaiVerseBattleHtml(html: string) {
-  return /battle_token\s*=/.test(html) || /id=["']pane_(?:battle|monster|completion)["']/.test(html)
+  return (
+    /battle_token\s*=/.test(html) ||
+    /id=["']pane_(?:battle|monster|completion)["']/.test(html) ||
+    isHentaiVerseVerificationHtml(html)
+  )
 }
 
 export function parseBattleResponse(
   payload: Record<string, unknown>,
   previous: HentaiVerseBattleSnapshot,
 ): HentaiVerseBattleSnapshot {
+  const verification = Object.values(payload).find(
+    (value) => typeof value === 'string' && isHentaiVerseVerificationHtml(value),
+  )
+  if (typeof verification === 'string')
+    return {
+      ...previous,
+      verificationRequired: true,
+      completed: false,
+      roundCompleted: false,
+      actions: [],
+    }
   const document = parser.parseFromString('<!doctype html><body></body>', 'text/html')
   const paneNames = [
     'pane_completion',
@@ -979,6 +1014,21 @@ function readSectionDescription(document: Document, pageSection: HentaiVersePage
 }
 
 function parseBattleDocument(document: Document, token: string): HentaiVerseBattleSnapshot {
+  if (isVerificationDocument(document)) {
+    return {
+      token,
+      title: 'HentaiVerse 战斗',
+      verificationRequired: true,
+      vitals: [],
+      effects: [],
+      monsters: [],
+      actions: [],
+      log: [],
+      completed: false,
+      roundCompleted: false,
+      completionText: '',
+    }
+  }
   const completionPane = document.querySelector<HTMLElement>('#pane_completion')
   const completionText = readBattleCompletion(completionPane)
   // Active battles keep an empty completion pane in the DOM as an AJAX target.
