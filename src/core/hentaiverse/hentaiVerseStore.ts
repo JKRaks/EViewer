@@ -12,7 +12,7 @@ export { hentaiVerseState } from './hentaiVerseRuntime'
 const busi = new HentaiVerseBusi()
 let generation = 0
 watch(
-  () => [authState.source, authState.loggedIn, authState.memberId],
+  () => [authState.source, authState.site, authState.loggedIn, authState.memberId],
   () => clearHentaiVerseState(),
   { flush: 'sync' },
 )

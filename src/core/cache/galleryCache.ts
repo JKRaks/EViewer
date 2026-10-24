@@ -4,6 +4,7 @@ import {
   connectionSettings,
   currentTransportSignal,
   type RequestMode,
+  type GallerySite,
 } from '../connector/connectionSettings'
 import { bookInfoInput } from '../model/book/bookInfoInput'
 import { bookInfoOutput, userComment } from '../model/book/bookInfoOutput'
@@ -18,7 +19,7 @@ import {
 
 const pendingRequests = new Map<string, Promise<bookInfoOutput>>()
 watch(
-  () => connectionSettings.mode,
+  () => [connectionSettings.mode, connectionSettings.site],
   () => pendingRequests.clear(),
   { flush: 'sync' },
 )
@@ -60,6 +61,7 @@ export async function getBookInfoWithCache(
   forceRefresh = false,
 ): Promise<bookInfoOutput> {
   const mode = connectionSettings.mode
+  const site = connectionSettings.site
   const signal = currentTransportSignal()
   const bookId = normalizeBookId(input.bookId)
   const pageIndex = input.page ?? 0
@@ -71,7 +73,12 @@ export async function getBookInfoWithCache(
       if (purpose === 'detail' && indexedDbCacheSettings.cacheBookDetails && pageIndex === 0) {
         staleDetail = await database.get('galleryDetails', bookId)
         signal.throwIfAborted()
-        if (staleDetail && (staleDetail.requestMode || 'server') !== mode) staleDetail = undefined
+        if (
+          staleDetail &&
+          ((staleDetail.requestMode || 'server') !== mode ||
+            (staleDetail.gallerySite || 'eh') !== site)
+        )
+          staleDetail = undefined
         if (
           staleDetail &&
           !forceRefresh &&
@@ -83,7 +90,11 @@ export async function getBookInfoWithCache(
       if (purpose === 'viewer' && indexedDbCacheSettings.cacheBookImageInfo && !forceRefresh) {
         const cachedPage = await database.get('galleryImagePages', [bookId, pageIndex])
         signal.throwIfAborted()
-        if (cachedPage && (cachedPage.requestMode || 'server') === mode) {
+        if (
+          cachedPage &&
+          (cachedPage.requestMode || 'server') === mode &&
+          (cachedPage.gallerySite || 'eh') === site
+        ) {
           return hydrateImagePage(cachedPage)
         }
       }
@@ -94,7 +105,7 @@ export async function getBookInfoWithCache(
   }
 
   signal.throwIfAborted()
-  const requestKey = `${mode}\u0000${bookId}\u0000${pageIndex}`
+  const requestKey = `${mode}:${site}\u0000${bookId}\u0000${pageIndex}`
   let request = pendingRequests.get(requestKey)
   if (!request) {
     const networkInput = new bookInfoInput()
@@ -109,7 +120,7 @@ export async function getBookInfoWithCache(
     const result = await request
     signal.throwIfAborted()
     if (result.isSuccess && indexedDbCacheSettings.enabled) {
-      await persistBookInfo(result, purpose, mode)
+      await persistBookInfo(result, purpose, mode, site)
     } else if (!result.isSuccess && staleDetail) {
       return hydrateBookInfo(staleDetail.payload)
     }
@@ -125,6 +136,7 @@ export async function getBookInfoWithCache(
 
 export async function getCachedImagePages(bookId: string): Promise<GalleryImagePageRecord[]> {
   const mode = connectionSettings.mode
+  const site = connectionSettings.site
   if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo) {
     return []
   }
@@ -136,7 +148,10 @@ export async function getCachedImagePages(bookId: string): Promise<GalleryImageP
       normalizeBookId(bookId),
     )
     return records
-      .filter((record) => (record.requestMode || 'server') === mode)
+      .filter(
+        (record) =>
+          (record.requestMode || 'server') === mode && (record.gallerySite || 'eh') === site,
+      )
       .sort((left, right) => left.pageIndex - right.pageIndex)
   } catch (error) {
     console.warn('读取图片分页缓存失败:', error)
@@ -156,7 +171,11 @@ export async function updateImagePageProgress(
     const database = await openCacheDatabase()
     const key: [string, number] = [normalizeBookId(bookId), pageIndex]
     const record = await database.get('galleryImagePages', key)
-    if (record) {
+    if (
+      record &&
+      (record.gallerySite || 'eh') === connectionSettings.site &&
+      (record.requestMode || 'server') === connectionSettings.mode
+    ) {
       record.nextImageIndex = Math.min(Math.max(nextImageIndex, 0), record.imageIds.length)
       record.updatedAt = Date.now()
       await database.put('galleryImagePages', record)
@@ -168,6 +187,7 @@ export async function updateImagePageProgress(
 
 export async function getCachedImageUrls(bookId: string) {
   const mode = connectionSettings.mode
+  const site = connectionSettings.site
   if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo) {
     return new Map<string, string>()
   }
@@ -181,7 +201,8 @@ export async function getCachedImageUrls(bookId: string) {
     const validRecords: typeof records = []
     const expiredRecords: typeof records = []
     for (const record of records) {
-      if ((record.requestMode || 'server') !== mode) continue
+      if ((record.requestMode || 'server') !== mode || (record.gallerySite || 'eh') !== site)
+        continue
       if (isCachedImageUrlValid(record.url)) {
         validRecords.push(record)
       } else {
@@ -214,6 +235,7 @@ export function isCachedImageUrlValid(url: string, now = Date.now()): boolean {
 
 export async function cacheImageUrl(bookId: string, imageId: string, url: string) {
   const requestMode = connectionSettings.mode
+  const gallerySite = connectionSettings.site
   if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo || !url) {
     return
   }
@@ -221,6 +243,7 @@ export async function cacheImageUrl(bookId: string, imageId: string, url: string
     const database = await openCacheDatabase()
     await database.put('galleryImageUrls', {
       requestMode,
+      gallerySite,
       bookId: normalizeBookId(bookId),
       imageId,
       url,
@@ -255,6 +278,7 @@ async function persistBookInfo(
   result: bookInfoOutput,
   purpose: BookInfoCachePurpose,
   requestMode: RequestMode,
+  gallerySite: GallerySite,
 ) {
   try {
     const database = await openCacheDatabase()
@@ -264,6 +288,7 @@ async function persistBookInfo(
       tasks.push(
         database.put('galleryDetails', {
           requestMode,
+          gallerySite,
           bookId,
           payload: serializeBookInfo(result),
           updatedAt: Date.now(),
@@ -275,11 +300,14 @@ async function persistBookInfo(
       const key: [string, number] = [bookId, result.pageIndex]
       const existing = await database.get('galleryImagePages', key)
       const sameImages =
+        existing?.gallerySite === gallerySite &&
+        existing?.requestMode === requestMode &&
         existing?.imageIds.length === imageIds.length &&
         existing.imageIds.every((imageId, index) => imageId === imageIds[index])
       tasks.push(
         database.put('galleryImagePages', {
           requestMode,
+          gallerySite,
           bookId,
           pageIndex: result.pageIndex,
           imageIds,

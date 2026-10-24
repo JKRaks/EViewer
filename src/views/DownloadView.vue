@@ -15,6 +15,7 @@ import { notify } from '@/components/primitives/feedback'
 import { useRoute } from 'vue-router'
 import { bookFileBusi } from '@/core/books/bookFileBusi'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
+import { galleryDownloadUrl } from '@/core/connector/connectionSettings'
 import { galleryTorrentsInput } from '@/core/model/file/galleryTorrentsInput'
 import type { galleryTorrentItem } from '@/core/model/file/galleryTorrentsOutput'
 
@@ -91,12 +92,7 @@ function formatDate(date?: Date) {
 }
 
 function resolveDownloadUrl(url: string) {
-  if (/^https?:\/\//i.test(url)) return url
-
-  const proxyBase = new URL(eurlEnum.EH, window.location.origin)
-  const proxyPath = proxyBase.pathname.replace(/\/$/, '')
-  const relativePath = url.startsWith('/') ? url : `/${url}`
-  return new URL(`${proxyPath}${relativePath}`, proxyBase.origin).toString()
+  return galleryDownloadUrl(url, eurlEnum.EH)
 }
 
 async function handleTorrentDownload(event: MouseEvent, item: galleryTorrentItem) {

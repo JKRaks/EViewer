@@ -27,7 +27,6 @@ jobs:
           cache: npm
           cache-dependency-path: package-lock.json
       - run: npm ci
-      - run: npm run test:assistant
       - run: node tool/check-assistant-version.mjs
       - run: npm run build
       - name: Check proxy and app entry

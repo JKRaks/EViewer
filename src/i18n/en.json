@@ -1279,5 +1279,15 @@
   "HentaiVerse 未返回战斗数据，请打开源站确认登录后恢复战斗": "HentaiVerse did not return battle data. Open the source site to check your login, then restore the battle",
   "安装或更新浏览器助手": "Install or update browser assistant",
   "请先在账号信息中完成当前连接模式的登录验证。": "Verify your login for the current connection mode in Account first.",
-  "画廊和 HentaiVerse 均使用所选连接方式。本机请求失败后不会自动切回服务代理。": "Galleries and HentaiVerse use the selected connection. Local request failures do not switch to the server proxy."
+  "画廊和 HentaiVerse 均使用所选连接方式。本机请求失败后不会自动切回服务代理。": "Galleries and HentaiVerse use the selected connection. Local request failures do not switch to the server proxy.",
+  "在同一浏览器登录所选画廊站点，再检测登录状态。本机请求使用源站会话，不向服务代理同步 Cookie。": "Sign in to the selected gallery site in the same browser, then check your session. Local requests do not sync cookies to the server proxy.",
+  "允许扩展访问本站及所选源站，刷新本页后点击“重新检测”；连接成功即可选择“本机助手”。": "Allow the extension to access this site and the selected source site, refresh, then check the connection and choose Local assistant.",
+  "本机模式通过脚本从当前浏览器访问所选画廊站点。": "Local mode accesses the selected gallery site through a userscript in this browser.",
+  "画廊站点": "Gallery site",
+  "ExHentai 需要账号已有访问权限。本机模式请先在同一浏览器打开源站。": "ExHentai requires an account with access. In local mode, first open the source site in the same browser.",
+  "服务代理如需 igneous，请在账号信息中通过 Cookie 字符串一并导入。账号总览、排行榜与捐赠信息仍由 E-Hentai 提供。": "If the server proxy needs igneous, include it in the Cookie string in Account. Account overview, toplists and donation information remain on E-Hentai.",
+  "无法访问 ExHentai，请在同一浏览器打开 ExHentai 确认账号权限和登录状态": "Cannot access ExHentai. Open it in the same browser to check account access and login status",
+  "请前往设置更新浏览器助手，以支持 ExHentai 本机请求": "Update the browser assistant in Settings to enable local ExHentai requests",
+  "ExHentai 未返回可用页面，请确认账号访问权限及当前连接方式的登录凭据": "ExHentai did not return a usable page. Check account access and credentials for the selected connection",
+  "直接前往所选源站画册页面": "Open the gallery on the selected source site"
 }

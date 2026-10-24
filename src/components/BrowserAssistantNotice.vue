@@ -20,7 +20,13 @@ onMounted(() => {
   })
 })
 watch(
-  () => [connectionSettings.mode, connectorState.phase] as const,
+  () =>
+    [
+      connectionSettings.mode,
+      connectorState.phase,
+      connectionSettings.site,
+      localSession.checking,
+    ] as const,
   ([mode, phase]) => {
     if (mode === 'local' && phase === 'ready' && Date.now() - localSession.checkedAt > 5 * 60_000)
       void refreshLocalAuthState()

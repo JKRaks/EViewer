@@ -1,5 +1,6 @@
 import type { bookInfoOutput } from '@/core/model/book/bookInfoOutput'
 import type { ShareQrSource } from '@/core/share/shareSettings'
+import { connectionSettings, galleryOrigin } from '@/core/connector/connectionSettings'
 
 export interface BookShareLink {
   type: ShareQrSource
@@ -14,6 +15,7 @@ export function buildBookShareLinks(book: Pick<bookInfoOutput, 'bookId'>): BookS
   const normalizedBookId = bookId.replace('-', '/')
   const siteUrl = new URL(`${normalizedBasePath()}bookinfo`, window.location.origin)
   siteUrl.searchParams.set('bookId', bookId)
+  siteUrl.searchParams.set('site', connectionSettings.site)
 
   return [
     {
@@ -25,8 +27,8 @@ export function buildBookShareLinks(book: Pick<bookInfoOutput, 'bookId'>): BookS
     {
       type: 'source',
       label: '源站链接',
-      description: '直接前往 E-Hentai 画册页面',
-      url: `https://e-hentai.org/g/${normalizedBookId}`,
+      description: '直接前往所选源站画册页面',
+      url: `${galleryOrigin()}/g/${normalizedBookId}`,
     },
   ]
 }

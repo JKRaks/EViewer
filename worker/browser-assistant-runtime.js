@@ -17,7 +17,7 @@ export default String.raw`
     buildVersion: config.version,
     protocolVersion: config.protocolVersion, origin: location.origin,
     manager: info?.scriptHandler || '', managerVersion: info?.version || '',
-    available: Boolean(invoke), capabilities: ['text', 'binary', 'multipart', 'abort', 'hentaiverse'],
+    available: Boolean(invoke), capabilities: ['text', 'binary', 'multipart', 'abort', 'hentaiverse', 'exhentai'],
   }
   const active = new Map()
   const send = (data) => window.postMessage({ channel, direction: 'assistant', instance, ...data }, location.origin)
@@ -30,7 +30,7 @@ export default String.raw`
     const url = new URL(value)
     if (url.protocol !== 'https:' || url.port || url.username || url.password || url.hash) throw new Error('TARGET_NOT_ALLOWED')
     if (binary) {
-      if (method !== 'GET' || !(url.hostname === 'ehgt.org' || url.hostname.endsWith('.ehgt.org'))) throw new Error('TARGET_NOT_ALLOWED')
+      if (method !== 'GET' || !(url.hostname === 'ehgt.org' || url.hostname.endsWith('.ehgt.org') || (url.hostname === 'exhentai.org' && url.pathname.startsWith('/t/')))) throw new Error('TARGET_NOT_ALLOWED')
       return url.href
     }
     if (url.hostname === 'upload.e-hentai.org' && url.pathname === '/image_lookup.php' && method === 'POST') return url.href
@@ -43,7 +43,7 @@ export default String.raw`
       if ((method === 'GET' && (page || asset)) || (method === 'POST' && (page || url.pathname === '/json'))) return url.href
       throw new Error('TARGET_NOT_ALLOWED')
     }
-    if (url.hostname !== 'e-hentai.org') throw new Error('TARGET_NOT_ALLOWED')
+    if (!['e-hentai.org', 'exhentai.org'].includes(url.hostname)) throw new Error('TARGET_NOT_ALLOWED')
     const read = /^(\/|\/popular\/?|\/(home|uconfig|favorites|gallerypopups|gallerytorrents|toplist|bitcoin|hathperks)\.php|\/g\/\d+\/[a-z0-9]+\/?|\/s\/[a-z0-9]+\/\d+-\d+)$/.test(url.pathname)
     const write = /^\/(favorites|gallerypopups|uconfig)\.php$/.test(url.pathname)
     if (!(method === 'GET' && read) && !(method === 'POST' && write)) throw new Error('TARGET_NOT_ALLOWED')

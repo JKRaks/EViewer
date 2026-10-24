@@ -63,7 +63,7 @@ let equipmentDetailsRequestId = 0
 
 watch(page, (nextPage) => void loadEquipmentDetails(nextPage))
 watch(
-  () => [authState.source, authState.loggedIn, authState.memberId],
+  () => [authState.source, authState.site, authState.loggedIn, authState.memberId],
   () => {
     requestId++
     page.value = undefined

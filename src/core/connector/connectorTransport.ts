@@ -1,6 +1,7 @@
 import type { requestEncoding } from '@/core/model/R'
 import { formatSystemMessage } from '@/i18n'
 import { requestConnector } from './connectorClient'
+import { galleryOrigin } from './connectionSettings'
 import { galleryTarget, type ConnectorRequest, type MultipartEntry } from './connectorProtocol'
 
 function base64(bytes: Uint8Array) {
@@ -65,7 +66,11 @@ export async function requestLocalGallery(
   // Read the resulting search once with that selector; never repeat the upload.
   if (path === '/image-lookup' && response.status === 200) {
     const resultUrl = new URL(response.finalUrl)
-    if (resultUrl.origin === 'https://e-hentai.org' && resultUrl.pathname === '/') {
+    if (
+      ['https://e-hentai.org', 'https://exhentai.org'].includes(resultUrl.origin) &&
+      resultUrl.pathname === '/'
+    ) {
+      resultUrl.hostname = new URL(galleryOrigin()).hostname
       resultUrl.searchParams.set('inline_set', 'dm_e')
       response = await requestConnector(
         { url: resultUrl.href, method: 'GET', timeout: options.timeout },

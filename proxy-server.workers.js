@@ -27,7 +27,7 @@ const IMAGE_PROXY_MAX_BYTES = 15 * 1024 * 1024
 const IMAGE_LOOKUP_MAX_BYTES = IMAGE_PROXY_MAX_BYTES + 1024 * 1024
 const AUTH_COOKIE_MAX_AGE = 365 * 24 * 60 * 60
 const AUTH_COOKIE_NAMES = ['ipb_member_id', 'ipb_pass_hash']
-const AUTH_COOKIE_PATHS = ['/ehentai', '/hentaiverse']
+const AUTH_COOKIE_PATHS = ['/ehentai', '/hentaiverse', '/exhentai']
 const HENTAIVERSE_ORIGIN = 'https://hentaiverse.org'
 const REQUEST_LOGS = new WeakMap()
 const LOG_LEVELS = { debug: 0, info: 1, warn: 2, error: 3 }
@@ -168,13 +168,16 @@ export function isTrustedAuthExportOrigin(origin, requestOrigin, configuredOrigi
   return origin === requestOrigin || configuredOrigins.includes(origin)
 }
 
-function parseAllowedImageUrl(value) {
+function parseAllowedImageUrl(value, allowEx = false) {
   if (!value) {
     throw new Error('缺少图片 URL')
   }
 
   const targetUrl = new URL(value)
-  const allowedHost = targetUrl.hostname === 'ehgt.org' || targetUrl.hostname.endsWith('.ehgt.org')
+  const allowedHost =
+    targetUrl.hostname === 'ehgt.org' ||
+    targetUrl.hostname.endsWith('.ehgt.org') ||
+    (allowEx && targetUrl.hostname === 'exhentai.org' && targetUrl.pathname.startsWith('/t/'))
   if (
     targetUrl.protocol !== 'https:' ||
     !allowedHost ||
@@ -210,7 +213,10 @@ function buildUpstreamHeaders(request) {
     const value = request.headers.get(name)
     if (value) headers.set(name, value)
   }
-  const cookie = getAllowedAuthCookieHeader(request.headers.get('cookie') || '')
+  const cookie = getAllowedAuthCookieHeader(
+    request.headers.get('cookie') || '',
+    new URL(request.url).pathname.startsWith('/exhentai/'),
+  )
   // EH redirects inline_set=dm_e after setting sl=dm_2. Keep the Extended
   // layout required by gallery parsers without persisting upstream cookies.
   headers.set('Cookie', [cookie, 'sl=dm_2'].filter(Boolean).join('; '))
@@ -227,8 +233,8 @@ function appendOriginVary(headers) {
 // Clear every scope produced by older proxy versions before installing a new
 // host-only credential. A leading dot and no dot identify the same Domain scope.
 function clearLegacyAuthCookies(requestUrl) {
-  return ['/', ...AUTH_COOKIE_PATHS, '/exhentai'].flatMap((path) =>
-    AUTH_COOKIE_NAMES.flatMap((name) => {
+  return ['/', ...AUTH_COOKIE_PATHS].flatMap((path) =>
+    [...AUTH_COOKIE_NAMES, 'igneous'].flatMap((name) => {
       const cookie = buildAuthCookie(name, '', requestUrl, path, true)
       return [cookie, `${cookie}; Domain=${requestUrl.hostname}`]
     }),
@@ -289,6 +295,9 @@ function jsonResponse(request, payload, status = 200, cookies = []) {
 function installAuthCookies(request, requestUrl, body) {
   const memberId = normalizeAuthInput(body?.memberId, 'ipb_member_id')
   const passHash = normalizeAuthInput(body?.passHash, 'ipb_pass_hash')
+  const igneous = normalizeAuthInput(body?.igneous, 'igneous')
+  if (igneous && !/^[A-Za-z0-9_-]{1,256}$/.test(igneous))
+    return jsonResponse(request, { success: false, message: 'igneous 格式不正确' }, 400)
   if (!/^[1-9]\d{0,19}$/.test(memberId)) {
     return jsonResponse(request, { success: false, message: 'ipb_member_id 格式不正确' }, 400)
   }
@@ -306,6 +315,7 @@ function installAuthCookies(request, requestUrl, body) {
     200,
     [
       ...clearLegacyAuthCookies(requestUrl),
+      ...(igneous ? [buildAuthCookie('igneous', igneous, requestUrl, '/exhentai')] : []),
       ...AUTH_COOKIE_PATHS.flatMap((path) => [
         buildAuthCookie('ipb_member_id', memberId, requestUrl, path),
         buildAuthCookie('ipb_pass_hash', passHash, requestUrl, path),
@@ -378,7 +388,10 @@ function handleAuthExport(request, requestUrl, allowedAuthExportOrigins) {
       trustedOrigin,
     )
   }
-  const cookie = getAllowedAuthCookieHeader(request.headers.get('Cookie') || '')
+  const cookie = getAllowedAuthCookieHeader(
+    request.headers.get('Cookie') || '',
+    requestUrl.pathname === '/exhentai/auth/export',
+  )
   const values = new Map(
     cookie.split('; ').map((part) => {
       const separator = part.indexOf('=')
@@ -396,13 +409,13 @@ function handleAuthExport(request, requestUrl, allowedAuthExportOrigins) {
   return authExportJsonResponse(request, { success: true, cookie }, 200, trustedOrigin)
 }
 
-function getAllowedAuthCookieHeader(cookieHeader = '') {
+function getAllowedAuthCookieHeader(cookieHeader = '', includeIgneous = false) {
   const allowed = new Map()
   cookieHeader.split(';').forEach((part) => {
     const separator = part.indexOf('=')
     if (separator <= 0) return
     const name = part.slice(0, separator).trim()
-    if (!AUTH_COOKIE_NAMES.includes(name)) return
+    if (!AUTH_COOKIE_NAMES.includes(name) && !(includeIgneous && name === 'igneous')) return
     const value = part.slice(separator + 1).trim()
     if (allowed.has(name) && allowed.get(name) !== value) {
       throw new Error('认证 Cookie 冲突，请退出后重新登录')
@@ -757,6 +770,9 @@ function handleHealthCheck(env) {
  * 处理封面图片代理请求
  */
 async function handleImageProxy(request, requestUrl) {
+  const ex = requestUrl.pathname === '/exhentai/image-proxy'
+  if (ex && !isAllowedRequesterOrigin(request))
+    return jsonResponse(request, { error: '不允许的请求来源' }, 403)
   if (request.method !== 'GET') {
     return new Response(JSON.stringify({ error: 'Method not allowed' }), {
       status: 405,
@@ -766,7 +782,7 @@ async function handleImageProxy(request, requestUrl) {
 
   let targetUrl
   try {
-    targetUrl = parseAllowedImageUrl(requestUrl.searchParams.get('url'))
+    targetUrl = parseAllowedImageUrl(requestUrl.searchParams.get('url'), ex)
   } catch (error) {
     return new Response(JSON.stringify({ error: error.message }), {
       status: 400,
@@ -777,8 +793,11 @@ async function handleImageProxy(request, requestUrl) {
   const response = await fetchUpstream(request, targetUrl, {
     headers: {
       Accept: 'image/avif,image/webp,image/apng,image/*,*/*;q=0.8',
+      ...(ex && targetUrl.hostname === 'exhentai.org'
+        ? { Cookie: getAllowedAuthCookieHeader(request.headers.get('cookie') || '', true) }
+        : {}),
       'Accept-Language': 'en-US,en;q=0.5',
-      Referer: 'https://e-hentai.org/',
+      Referer: ex ? 'https://exhentai.org/' : 'https://e-hentai.org/',
       'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
     },
     redirect: 'manual',
@@ -814,7 +833,9 @@ async function handleImageProxy(request, requestUrl) {
   }
 
   const headers = new Headers({
-    'Cache-Control': 'public, max-age=86400, stale-while-revalidate=604800',
+    'Cache-Control': ex
+      ? 'private, no-store'
+      : 'public, max-age=86400, stale-while-revalidate=604800',
     'Content-Type': contentType,
     'Cross-Origin-Resource-Policy': 'cross-origin',
     'X-Content-Type-Options': 'nosniff',
@@ -825,6 +846,7 @@ async function handleImageProxy(request, requestUrl) {
     appendOriginVary(headers)
   }
 
+  if (ex && requesterOrigin) headers.set('Access-Control-Allow-Credentials', 'true')
   return new Response(body, { status: 200, headers })
 }
 
@@ -875,7 +897,8 @@ async function handleImageLookup(request) {
     return jsonResponse(request, { error: '上传图片体积超过限制' }, 413)
   }
 
-  const allowedHosts = new Set(['upload.e-hentai.org', 'e-hentai.org'])
+  const ex = new URL(request.url).pathname.startsWith('/exhentai/')
+  const allowedHosts = new Set(['upload.e-hentai.org', 'e-hentai.org', 'exhentai.org'])
   let targetUrl = new URL('https://upload.e-hentai.org/image_lookup.php')
   let method = 'POST'
   let body = request.body
@@ -883,6 +906,13 @@ async function handleImageLookup(request) {
 
   for (let redirectCount = 0; redirectCount <= 6; redirectCount++) {
     const headers = buildUpstreamHeaders(request)
+    if (targetUrl.hostname !== 'exhentai.org')
+      headers.set(
+        'Cookie',
+        [getAllowedAuthCookieHeader(request.headers.get('cookie') || ''), 'sl=dm_2']
+          .filter(Boolean)
+          .join('; '),
+      )
     headers.delete('origin')
     headers.set('Host', targetUrl.host)
     headers.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
@@ -912,6 +942,8 @@ async function handleImageLookup(request) {
       return jsonResponse(request, { error: '图片搜索返回了不允许的重定向地址' }, 502)
     }
     method = 'GET'
+    if (ex && targetUrl.hostname === 'e-hentai.org' && targetUrl.pathname === '/')
+      targetUrl.hostname = 'exhentai.org'
     body = undefined
   }
 
@@ -1044,10 +1076,9 @@ async function handleProxyRequest(request, config, pathname) {
  */
 function handleCorsPreFlight(request, requestUrl, allowedAuthExportOrigins) {
   const requesterOrigin = getRequesterOrigin(request)
-  const allowed =
-    requestUrl.pathname === '/ehentai/auth/export'
-      ? isTrustedAuthExportOrigin(requesterOrigin, requestUrl.origin, allowedAuthExportOrigins)
-      : isAllowedRequesterOrigin(request)
+  const allowed = ['/ehentai/auth/export', '/exhentai/auth/export'].includes(requestUrl.pathname)
+    ? isTrustedAuthExportOrigin(requesterOrigin, requestUrl.origin, allowedAuthExportOrigins)
+    : isAllowedRequesterOrigin(request)
   if (!requesterOrigin || !allowed) {
     return new Response('Forbidden', { status: 403 })
   }
@@ -1176,7 +1207,10 @@ async function handleRequest(request, env = {}) {
     })
   }
 
-  if (request.method === 'POST' && pathname === '/ehentai/auth/export') {
+  if (
+    request.method === 'POST' &&
+    ['/ehentai/auth/export', '/exhentai/auth/export'].includes(pathname)
+  ) {
     return handleAuthExport(request, url, allowedAuthExportOrigins)
   }
 
@@ -1194,7 +1228,7 @@ async function handleRequest(request, env = {}) {
     return handleHentaiVerseRequest(request, url)
   }
 
-  if (pathname === '/image-proxy') {
+  if (pathname === '/image-proxy' || pathname === '/exhentai/image-proxy') {
     try {
       return await handleImageProxy(request, url)
     } catch (error) {
@@ -1206,7 +1240,7 @@ async function handleRequest(request, env = {}) {
     }
   }
 
-  if (pathname === '/ehentai/image-lookup') {
+  if (pathname === '/ehentai/image-lookup' || pathname === '/exhentai/image-lookup') {
     try {
       return await handleImageLookup(request)
     } catch (error) {

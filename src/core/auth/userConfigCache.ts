@@ -37,7 +37,7 @@ export async function getUserConfigWithCache(
   memberId: string,
   forceRefresh = false,
 ): Promise<userConfigOutput> {
-  const normalizedMemberId = memberId.trim()
+  const normalizedMemberId = memberId.trim() ? `${connectionSettings.site}:${memberId.trim()}` : ''
   const cached = readCache(normalizedMemberId)
   if (!forceRefresh && cached?.data) {
     if (Date.now() - cached.updatedAt > cacheTtlMs) {
@@ -56,7 +56,7 @@ export async function getUserConfigWithCache(
 export async function getFavoriteCategoryOptionsCached(
   memberId: string,
 ): Promise<FavoriteCategoryOption[]> {
-  const normalizedMemberId = memberId.trim()
+  const normalizedMemberId = memberId.trim() ? `${connectionSettings.site}:${memberId.trim()}` : ''
   const cached = readCache(normalizedMemberId)
   if (cached?.favoriteCategories.length) {
     if (Date.now() - cached.updatedAt > cacheTtlMs) {
@@ -67,7 +67,7 @@ export async function getFavoriteCategoryOptionsCached(
     return cloneCategories(cached.favoriteCategories)
   }
 
-  const result = await getUserConfigWithCache(normalizedMemberId)
+  const result = await getUserConfigWithCache(memberId)
   if (!result.isSuccess || !result.data) {
     throw new Error(result.msg || '收藏分类获取失败')
   }
@@ -75,7 +75,7 @@ export async function getFavoriteCategoryOptionsCached(
 }
 
 export function updateUserConfigCache(memberId: string, data: userConfigData) {
-  const normalizedMemberId = memberId.trim()
+  const normalizedMemberId = memberId.trim() ? `${connectionSettings.site}:${memberId.trim()}` : ''
   if (!normalizedMemberId) return
 
   writeCache({
@@ -89,7 +89,7 @@ export function updateUserConfigCache(memberId: string, data: userConfigData) {
 }
 
 export function seedFavoriteCategoryCache(memberId: string, categories: FavoriteCategoryOption[]) {
-  const normalizedMemberId = memberId.trim()
+  const normalizedMemberId = memberId.trim() ? `${connectionSettings.site}:${memberId.trim()}` : ''
   const normalizedCategories = categories
     .filter((category) => Number.isInteger(category.index) && category.index >= 0)
     .map((category) => ({ index: category.index, name: category.name.trim() }))
@@ -117,15 +117,17 @@ export function seedFavoriteCategoryCache(memberId: string, categories: Favorite
 }
 
 export async function rebuildUserConfigCache(memberId: string): Promise<userConfigOutput> {
-  return refreshUserConfigCache(memberId.trim())
+  return refreshUserConfigCache(
+    memberId.trim() ? `${connectionSettings.site}:${memberId.trim()}` : '',
+  )
 }
 
 export function getUserConfigCacheStatus(memberId: string): UserConfigCacheStatus {
-  const normalizedMemberId = memberId.trim()
+  const normalizedMemberId = memberId.trim() ? `${connectionSettings.site}:${memberId.trim()}` : ''
   const cached = readCache(normalizedMemberId)
   return {
     available: Boolean(cached?.data || cached?.favoriteCategories.length),
-    memberId: normalizedMemberId,
+    memberId: memberId.trim(),
     selectedProfileSlot: cached?.selectedProfileSlot || undefined,
     favoriteCategoryCount: cached?.favoriteCategories.length ?? 0,
     updatedAt: cached?.updatedAt,
@@ -138,6 +140,8 @@ export function clearUserConfigCache(memberId?: string) {
 
   if (memberId?.trim()) {
     const normalizedMemberId = memberId.trim()
+      ? `${connectionSettings.site}:${memberId.trim()}`
+      : ''
     memoryCache.delete(normalizedMemberId)
     try {
       localStorage.removeItem(`${cachePrefix}${normalizedMemberId}`)
@@ -177,7 +181,7 @@ async function refreshUserConfigCache(memberId: string): Promise<userConfigOutpu
     .getUserConfig(new userConfigInput())
     .then((result) => {
       if (result.isSuccess && result.data && requestGeneration === cacheGeneration) {
-        updateUserConfigCache(memberId, result.data)
+        updateUserConfigCache(memberId.replace(/^(eh|ex):/, ''), result.data)
       }
       return result
     })
