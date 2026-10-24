@@ -4,6 +4,8 @@ import { t } from '@/i18n'
 import FeedbackHost from '@/components/primitives/FeedbackHost.vue'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import SiteHeader from '@/components/SiteHeader.vue'
+import BrowserAssistantNotice from '@/components/BrowserAssistantNotice.vue'
+import { connectionSettings } from '@/core/connector/connectionSettings'
 import IconFrame from '@/components/primitives/IconFrame.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import { computed, defineAsyncComponent, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
@@ -324,10 +326,11 @@ onUnmounted(() => {
       <div class="layout-safe-area" aria-hidden="true" />
       <main class="layout-main">
         <SiteHeader v-if="route.path !== '/viewer'" />
+        <BrowserAssistantNotice />
         <Suspense>
           <template #default>
             <RouterView v-slot="{ Component, route }">
-              <KeepAlive :include="cachedViews">
+              <KeepAlive :key="connectionSettings.mode" :include="cachedViews">
                 <component :is="Component" :key="route.path" />
               </KeepAlive>
             </RouterView>

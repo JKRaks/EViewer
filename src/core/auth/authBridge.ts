@@ -42,9 +42,3 @@ export async function requestBridge<T = BridgeStatus>(
 export async function claimBridge(signal?: AbortSignal) {
   return requestBridge<AuthResponse>('claim', signal)
 }
-
-export async function readBridgeScript(signal?: AbortSignal) {
-  const response = await fetch(bridgeUrl('script.user.js'), { cache: 'no-store', signal })
-  if (!response.ok) throw new Error(t('读取授权脚本失败'))
-  return response.text()
-}

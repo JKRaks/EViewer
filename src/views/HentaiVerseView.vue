@@ -40,12 +40,12 @@ import {
   hentaiVerseState,
   showHentaiVerseBattleSnapshot,
 } from '@/core/hentaiverse/hentaiVerseStore'
-import { useAuthState } from '@/core/auth/authState'
+import { useServerAuthState } from '@/core/auth/authState'
 
 defineOptions({ name: 'HentaiVerseView' })
 
 const busi = new HentaiVerseBusi()
-const authState = useAuthState()
+const authState = useServerAuthState()
 const activeSection = ref<HentaiVerseSection>('character')
 const page = ref<HentaiVersePage>()
 const loading = ref(false)
@@ -397,7 +397,9 @@ onMounted(() => {
     <CampScene :compact="activeSection !== 'character'" />
     <Notice
       v-if="!authState.loggedIn"
-      :title="t('请先在账号信息中维护认证 Cookie，HentaiVerse 与主站共用认证信息。')"
+      :title="
+        t('请先在账号信息中维护认证 Cookie，HentaiVerse 使用服务代理凭据，本机会话不适用于此模块。')
+      "
       tone="warning"
       :closable="false"
     />

@@ -1,6 +1,7 @@
 import { userInfoBusi } from './userInfoBusi'
 import { userConfigInput } from '../model/auth/userConfigInput'
 import { userConfigOutput, type userConfigData } from '../model/auth/userConfigOutput'
+import { connectionSettings } from '@/core/connector/connectionSettings'
 
 const cachePrefix = 'eviewer:user-config-cache:v1:'
 const cacheVersion = 1
@@ -161,6 +162,8 @@ export function clearUserConfigCache(memberId?: string) {
 
 async function refreshUserConfigCache(memberId: string): Promise<userConfigOutput> {
   if (!memberId) {
+    if (connectionSettings.mode === 'local')
+      return new userInfoBusi().getUserConfig(new userConfigInput())
     const result = new userConfigOutput()
     result.msg = '当前用户信息无效'
     return result

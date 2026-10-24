@@ -1,4 +1,10 @@
 import { bookInfoBusi } from '../books/bookInfoBusi'
+import { watch } from 'vue'
+import {
+  connectionSettings,
+  currentTransportSignal,
+  type RequestMode,
+} from '../connector/connectionSettings'
 import { bookInfoInput } from '../model/book/bookInfoInput'
 import { bookInfoOutput, userComment } from '../model/book/bookInfoOutput'
 import type { tagCollection } from '../model/book/tag'
@@ -11,6 +17,11 @@ import {
 } from './indexedDb'
 
 const pendingRequests = new Map<string, Promise<bookInfoOutput>>()
+watch(
+  () => connectionSettings.mode,
+  () => pendingRequests.clear(),
+  { flush: 'sync' },
+)
 const imageUrlExpiryBufferMs = 30_000
 
 interface CachedBookInfoPayload {
@@ -48,6 +59,8 @@ export async function getBookInfoWithCache(
   purpose: BookInfoCachePurpose,
   forceRefresh = false,
 ): Promise<bookInfoOutput> {
+  const mode = connectionSettings.mode
+  const signal = currentTransportSignal()
   const bookId = normalizeBookId(input.bookId)
   const pageIndex = input.page ?? 0
   let staleDetail: GalleryDetailRecord | undefined
@@ -57,8 +70,11 @@ export async function getBookInfoWithCache(
       const database = await openCacheDatabase()
       if (purpose === 'detail' && indexedDbCacheSettings.cacheBookDetails && pageIndex === 0) {
         staleDetail = await database.get('galleryDetails', bookId)
+        signal.throwIfAborted()
+        if (staleDetail && (staleDetail.requestMode || 'server') !== mode) staleDetail = undefined
         if (
-          staleDetail && !forceRefresh &&
+          staleDetail &&
+          !forceRefresh &&
           (staleDetail.payload as CachedBookInfoPayload).commentFormatVersion === 1
         ) {
           return hydrateBookInfo(staleDetail.payload)
@@ -66,35 +82,40 @@ export async function getBookInfoWithCache(
       }
       if (purpose === 'viewer' && indexedDbCacheSettings.cacheBookImageInfo && !forceRefresh) {
         const cachedPage = await database.get('galleryImagePages', [bookId, pageIndex])
-        if (cachedPage) {
+        signal.throwIfAborted()
+        if (cachedPage && (cachedPage.requestMode || 'server') === mode) {
           return hydrateImagePage(cachedPage)
         }
       }
     } catch (error) {
+      if (signal.aborted) throw error
       console.warn('读取画册缓存失败，改用网络请求:', error)
     }
   }
 
-  const requestKey = `${bookId}\u0000${pageIndex}`
+  signal.throwIfAborted()
+  const requestKey = `${mode}\u0000${bookId}\u0000${pageIndex}`
   let request = pendingRequests.get(requestKey)
   if (!request) {
     const networkInput = new bookInfoInput()
     Object.assign(networkInput, input, { bookId, page: pageIndex })
     request = new bookInfoBusi().getBookInfo(networkInput).finally(() => {
-      pendingRequests.delete(requestKey)
+      if (pendingRequests.get(requestKey) === request) pendingRequests.delete(requestKey)
     })
     pendingRequests.set(requestKey, request)
   }
 
   try {
     const result = await request
+    signal.throwIfAborted()
     if (result.isSuccess && indexedDbCacheSettings.enabled) {
-      await persistBookInfo(result, purpose)
+      await persistBookInfo(result, purpose, mode)
     } else if (!result.isSuccess && staleDetail) {
       return hydrateBookInfo(staleDetail.payload)
     }
     return result
   } catch (error) {
+    if (signal.aborted) throw error
     if (staleDetail) {
       return hydrateBookInfo(staleDetail.payload)
     }
@@ -103,6 +124,7 @@ export async function getBookInfoWithCache(
 }
 
 export async function getCachedImagePages(bookId: string): Promise<GalleryImagePageRecord[]> {
+  const mode = connectionSettings.mode
   if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo) {
     return []
   }
@@ -113,7 +135,9 @@ export async function getCachedImagePages(bookId: string): Promise<GalleryImageP
       'by-book',
       normalizeBookId(bookId),
     )
-    return records.sort((left, right) => left.pageIndex - right.pageIndex)
+    return records
+      .filter((record) => (record.requestMode || 'server') === mode)
+      .sort((left, right) => left.pageIndex - right.pageIndex)
   } catch (error) {
     console.warn('读取图片分页缓存失败:', error)
     return []
@@ -143,6 +167,7 @@ export async function updateImagePageProgress(
 }
 
 export async function getCachedImageUrls(bookId: string) {
+  const mode = connectionSettings.mode
   if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo) {
     return new Map<string, string>()
   }
@@ -156,6 +181,7 @@ export async function getCachedImageUrls(bookId: string) {
     const validRecords: typeof records = []
     const expiredRecords: typeof records = []
     for (const record of records) {
+      if ((record.requestMode || 'server') !== mode) continue
       if (isCachedImageUrlValid(record.url)) {
         validRecords.push(record)
       } else {
@@ -187,12 +213,14 @@ export function isCachedImageUrlValid(url: string, now = Date.now()): boolean {
 }
 
 export async function cacheImageUrl(bookId: string, imageId: string, url: string) {
+  const requestMode = connectionSettings.mode
   if (!indexedDbCacheSettings.enabled || !indexedDbCacheSettings.cacheBookImageInfo || !url) {
     return
   }
   try {
     const database = await openCacheDatabase()
     await database.put('galleryImageUrls', {
+      requestMode,
       bookId: normalizeBookId(bookId),
       imageId,
       url,
@@ -223,7 +251,11 @@ export async function clearGalleryImageCache() {
   await Promise.all([clearCacheStore('galleryImagePages'), clearCacheStore('galleryImageUrls')])
 }
 
-async function persistBookInfo(result: bookInfoOutput, purpose: BookInfoCachePurpose) {
+async function persistBookInfo(
+  result: bookInfoOutput,
+  purpose: BookInfoCachePurpose,
+  requestMode: RequestMode,
+) {
   try {
     const database = await openCacheDatabase()
     const bookId = normalizeBookId(result.bookId)
@@ -231,6 +263,7 @@ async function persistBookInfo(result: bookInfoOutput, purpose: BookInfoCachePur
     if (purpose === 'detail' && result.pageIndex === 0 && indexedDbCacheSettings.cacheBookDetails) {
       tasks.push(
         database.put('galleryDetails', {
+          requestMode,
           bookId,
           payload: serializeBookInfo(result),
           updatedAt: Date.now(),
@@ -246,6 +279,7 @@ async function persistBookInfo(result: bookInfoOutput, purpose: BookInfoCachePur
         existing.imageIds.every((imageId, index) => imageId === imageIds[index])
       tasks.push(
         database.put('galleryImagePages', {
+          requestMode,
           bookId,
           pageIndex: result.pageIndex,
           imageIds,

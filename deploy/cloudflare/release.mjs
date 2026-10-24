@@ -6,10 +6,52 @@ import { fileURLToPath } from 'node:url'
 import { parseArgs, promisify } from 'node:util'
 import { setTimeout as delay } from 'node:timers/promises'
 import ts from 'typescript'
+import {
+  ASSISTANT_VERSION,
+  ASSISTANT_PROTOCOL,
+  ASSISTANT_FLAVORS,
+} from '../../worker/browser-assistant.js'
 
 const root = fileURLToPath(new URL('../../', import.meta.url))
 const wrangler = path.join(root, 'node_modules/wrangler/bin/wrangler.js')
 const git = promisify(execFile)
+
+export async function verifyAssistant(target, plan, fetcher = fetch) {
+  const response = await fetcher(new URL('/auth/bridge/assistant-manifest.json', target), {
+    cache: 'no-store',
+    signal: AbortSignal.timeout(10_000),
+  })
+  const manifest = await response.json()
+  if (
+    !response.ok ||
+    manifest.schema !== 1 ||
+    manifest.environment !== plan.environment ||
+    manifest.revision !== plan.commit
+  )
+    throw new Error('浏览器助手版本清单与部署不一致')
+  for (const flavor of ASSISTANT_FLAVORS) {
+    const release = manifest.scripts?.[flavor]
+    const expectedPath = `/auth/bridge/eviewer-assistant.${flavor}.user.js`
+    if (
+      release?.version !== ASSISTANT_VERSION ||
+      release.protocolVersion !== ASSISTANT_PROTOCOL ||
+      release.installPath !== expectedPath
+    )
+      throw new Error('浏览器助手版本或安装路径不一致')
+    const scriptResponse = await fetcher(new URL(expectedPath, target), {
+      cache: 'no-store',
+      signal: AbortSignal.timeout(10_000),
+    })
+    const script = await scriptResponse.text()
+    if (
+      !scriptResponse.ok ||
+      !script.startsWith('// ==UserScript==\n') ||
+      !script.includes(`// @version ${ASSISTANT_VERSION}\n`) ||
+      !script.includes('// ==/UserScript==\n')
+    )
+      throw new Error('浏览器助手安装文件无效')
+  }
+}
 
 async function assertCleanCheckout(commit) {
   const head = (await git('git', ['rev-parse', 'HEAD'], { cwd: root })).stdout.trim()
@@ -267,6 +309,7 @@ export async function release(
             continue
           }
           await verifyApp(target, fetcher)
+          await verifyAssistant(target, plan, fetcher)
           if (plan.environment === 'preview')
             await verifyPreviewAlias(event.preview_urls, plan, fetcher)
           console.log(`发布并验证完成：${plan.environment}；revision=${plan.commit}`)

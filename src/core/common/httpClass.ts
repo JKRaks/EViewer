@@ -8,6 +8,8 @@ import axios, {
 } from 'axios'
 import type { R, requestEncoding } from '../model/R'
 import { jsonClass } from './decorator/jsonProperty'
+import { connectionSettings, currentTransportSignal } from '../connector/connectionSettings'
+import { requestLocalGallery } from '../connector/connectorTransport'
 
 export interface HttpRequestOptions {
   signal?: AbortSignal
@@ -38,13 +40,27 @@ export class httpClass {
     const url = this.getUrl(param)
     const method = param.getMethod()
     const result: P<string> = new P<string>()
+    const transportSignal = currentTransportSignal()
+    options = {
+      ...options,
+      signal: options.signal ? AbortSignal.any([options.signal, transportSignal]) : transportSignal,
+    }
 
     try {
-      let response: AxiosResponse<string>
+      let response: { status: number; data: string }
 
-      if (method === 'GET') {
+      if (connectionSettings.mode === 'local') {
+        response = await requestLocalGallery(param.url(), {
+          ...options,
+          method,
+          encoding: param.getRequestEncoding(),
+          query: method === 'GET' ? this.buildParam(param) : undefined,
+          data:
+            method === 'POST' ? (param.getRequestData() ?? jsonClass.serialize(param)) : undefined,
+        })
+      } else if (method === 'GET') {
         const queryString = this.buildParam(param)
-        const fullUrl = queryString ? `${url}?${queryString}` : url
+        const fullUrl = queryString ? `${url}${url.includes('?') ? '&' : '?'}${queryString}` : url
         response = await this.followRedirects(
           fullUrl,
           'GET',
@@ -66,10 +82,12 @@ export class httpClass {
       // console.log('最终响应状态:', response.status)
       // console.log('最终响应 Cookie:', response.headers['set-cookie'])
 
+      options.signal?.throwIfAborted()
       this.checkSourceResponse(response)
       result.data = response.data
       result.isSuccess = true
       if (
+        connectionSettings.mode === 'server' &&
         typeof response.data === 'string' &&
         response.data.includes('eventpane') &&
         response.data.includes('hentaiverse.org')
@@ -81,7 +99,7 @@ export class httpClass {
         )
       }
     } catch (error: unknown) {
-      if (!axios.isCancel(error)) {
+      if (!axios.isCancel(error) && !(error instanceof Error && error.name === 'AbortError')) {
         console.error(
           '请求失败:',
           axios.isAxiosError(error)
@@ -102,7 +120,7 @@ export class httpClass {
   }
 
   /** The source reports temporary IP bans with HTTP 200 and a short error page. */
-  private static checkSourceResponse(response: AxiosResponse<string>): void {
+  private static checkSourceResponse(response: { data: string }): void {
     if (typeof response.data !== 'string' || response.data.length > 8192) return
     const text = response.data
       .replace(/<[^>]*>/g, ' ')
@@ -124,13 +142,23 @@ export class httpClass {
         : hours
           ? formatSystemMessage('{p0} 小时', { p0: hours })
           : formatSystemMessage('{p0} 分钟', { p0: minutes })
-    throw new Error(
+    const local = connectionSettings.mode === 'local'
+    const message =
       seconds > 0
-        ? formatSystemMessage('主站暂时限制了当前代理 IP 的访问，请约 {p0}后重试。', {
-            p0: duration,
-          })
-        : formatSystemMessage('主站暂时限制了当前代理 IP 的访问，请稍后重试。'),
-    )
+        ? formatSystemMessage(
+            local
+              ? '主站暂时限制了当前设备出口 IP 的访问，请约 {p0}后重试。'
+              : '主站暂时限制了当前代理 IP 的访问，请约 {p0}后重试。',
+            {
+              p0: duration,
+            },
+          )
+        : formatSystemMessage(
+            local
+              ? '主站暂时限制了当前设备出口 IP 的访问，请稍后重试。'
+              : '主站暂时限制了当前代理 IP 的访问，请稍后重试。',
+          )
+    throw new Error(message)
   }
 
   // 手动处理重定向，确保携带 cookies

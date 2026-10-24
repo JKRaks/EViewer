@@ -6,6 +6,8 @@ import { resolveTagDisplayInfos } from '@/core/common/tagTranslations'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
 import type { ShareQrSource } from '@/core/share/shareSettings'
 import { getBookShareUrl } from '@/core/share/bookShareLinks'
+import { connectionSettings, currentTransportSignal } from '@/core/connector/connectionSettings'
+import { requestLocalCover } from '@/core/connector/connectorTransport'
 
 export type { ShareQrSource } from '@/core/share/shareSettings'
 
@@ -155,6 +157,8 @@ async function loadCoverImage(
   pageCover?: HTMLImageElement | null,
 ): Promise<CoverDrawable | null> {
   if (!url) return null
+  const mode = connectionSettings.mode
+  const signal = currentTransportSignal()
 
   const pageImageBlob = await extractPageCoverBlob(pageCover)
   if (pageImageBlob) {
@@ -177,6 +181,7 @@ async function loadCoverImage(
 
   try {
     const response = await fetch(url, {
+      signal,
       mode: 'cors',
       credentials: 'omit',
       cache: 'force-cache',
@@ -193,10 +198,21 @@ async function loadCoverImage(
   }
 
   try {
+    signal.throwIfAborted()
+    if (mode === 'local') {
+      const blob = await requestLocalCover(url, signal)
+      const cover = await createCoverDrawable(blob)
+      if (cover) {
+        void cacheCoverBlob(url, blob)
+        return cover
+      }
+      return null
+    }
     const proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
     const proxyUrl = new URL('/image-proxy', proxyOrigin)
     proxyUrl.searchParams.set('url', url)
     const response = await fetch(proxyUrl, {
+      signal,
       credentials: 'omit',
       cache: 'force-cache',
     })
