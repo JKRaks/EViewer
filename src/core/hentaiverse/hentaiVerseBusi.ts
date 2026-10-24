@@ -150,7 +150,12 @@ export class HentaiVerseBusi {
     value: string,
     target: HentaiVersePageTarget,
   ) {
-    return this.submitForm('abilities', { [action]: value }, target)
+    const result = await this.submitForm('abilities', { [action]: value }, target)
+    if (result.battle || !result.page?.authenticated) return result
+
+    // Form responses can show the default tree even when another tab is selected.
+    // Read that tree explicitly so the ability list matches its selected tab.
+    return this.getPage(target)
   }
 
   /** Input: 能力槽位和已解锁能力编号。Output: 更新后的能力页。 */

@@ -1,6 +1,10 @@
 import { HENTAIVERSE_ABILITIES } from './hentaiVerseAbilityTranslations'
 import { rememberSourceText, registerMessages, formatSystemMessage } from '@/i18n'
-import { recordTranslationCandidate, type TranslationDomain } from './hentaiVerseTranslationCapture'
+import {
+  protectTranslationNames,
+  recordTranslationCandidate,
+  type TranslationDomain,
+} from './hentaiVerseTranslationCapture'
 import interfaceMessages from './hentaiVerseInterface.en.json'
 
 const ATTRIBUTE_LABELS: Record<string, string> = {
@@ -119,6 +123,10 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Peerless: '绝世',
     'Plate Helmet': '板甲头盔',
     'of the Thunder-child': '雷霆之子',
+    'of Stoneskin': '石肤',
+    'of the Curse-weaver': '织咒者',
+    'of the Earth-walker': '大地行者',
+    Jade: '翡翠',
     'Main Hand': '主武器',
     Mainhand: '主武器',
     Weapon: '武器',
@@ -135,9 +143,25 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Cotton Armor': '棉布护甲',
     'Cotton Robe': '棉布长袍',
     'Cotton Pants': '棉布长裤',
+    'Cotton Shoes': '棉布鞋',
+    'Cotton Gloves': '棉布手套',
     'Gossamer Cap': '薄纱兜帽',
     'Leather Helmet': '皮甲头盔',
     'Leather Gauntlets': '皮甲护手',
+    'Leather Breastplate': '皮甲胸甲',
+    'Leather Leggings': '皮甲护腿',
+    'Leather Boots': '皮靴',
+    'Plate Cuirass': '板甲胸铠',
+    'Plate Gauntlets': '板甲护手',
+    'Plate Greaves': '板甲护胫',
+    'Chain Gauntlets': '锁子甲护手',
+    'Gossamer Gloves': '薄纱手套',
+    'Ironsilk Pants': '铁丝绸长裤',
+    'Overwhelming Strikes on hit': '命中时可能触发压制打击',
+    'Counter-Attack on block/parry': '格挡或招架时可能触发反击',
+    'Domino Strike on hit': '命中时可能触发连锁打击',
+    '(unavailable with current mainhand)': '（当前主武器不可用）',
+    '(empty)': '（空）',
     'Chain Helmet': '锁子甲头盔',
     'Gossamer Armor': '薄纱护甲',
     'Ironsilk Armor': '铁丝绸护甲',
@@ -393,6 +417,11 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Monster Cuisine': '怪物佳肴',
     'Chaos Token': '混沌令牌',
     'Crystal of Swiftness': '迅捷水晶',
+    'Crystal of Vigor': '活力水晶',
+    'Crystal of Finesse': '灵巧水晶',
+    'Crystal of Knowledge': '知识水晶',
+    'Crystal of Flames': '火焰水晶',
+    'Fire Resistance': '火焰抗性',
     'Crystal of Fortitude': '坚韧水晶',
     'Crystal of Cunning': '机敏水晶',
     'Crystal of Frost': '冰霜水晶',
@@ -432,6 +461,21 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Upgrade to Tier 5': '自动升级至 5 阶',
     'Do Not Upgrade': '不自动升级',
     '(Not Assigned)': '未分配',
+    'Use Custom Font (specify below - this font MUST be installed on your local system to work)':
+      '使用自定义字体（在下方指定；字体必须已安装在本机）',
+    'font-family': '字体族',
+    'font-size': '字号',
+    'font-weight': '字重',
+    'font-style': '字体样式',
+    'vertical adjust': '垂直偏移',
+    'Use Separate Ability Set Assigments': '为每套装备使用独立能力配置',
+    'Use Separate Ability Set Assignments': '为每套装备使用独立能力配置',
+    'Use Separate Battle Item Assigments': '为每套装备使用独立战斗物品配置',
+    'Use Separate Battle Item Assignments': '为每套装备使用独立战斗物品配置',
+    'Use Separate Skillbar/Autocast Assignments': '为每套装备使用独立快捷栏和自动施法配置',
+    Artisan: '巧匠',
+    Expert: '专家',
+    Master: '大师',
     'No Auto-Sell': '不自动出售',
     'No Auto-Salvage': '不自动分解',
     'Sell Crude': '出售粗糙及以下品质',
@@ -456,7 +500,11 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Spirit: '灵力',
     Attack: '攻击',
     Defend: '防御',
+    Defending: '防御中',
     Focus: '专注',
+    Focusing: '专注中',
+    Channeling: '引导',
+    Void: '虚空',
     Flee: '逃跑',
     Scan: '扫描',
     Cure: '治疗',
@@ -508,6 +556,29 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Coalesced Mana': '凝聚魔力',
     'Ether Tap': '以太汲取',
     'Spirit Stance': '灵力姿态',
+    'Fierce Strike': '凶猛打击',
+    'Burning Tail': '烈焰尾击',
+    'Bamboo Spikes': '竹刺',
+    'Rabid Bite': '狂暴撕咬',
+    'Claw Rake': '利爪撕扯',
+    'Talon Swipe': '利爪横扫',
+    'Claw Swipe': '爪击横扫',
+    'Claw Poke': '爪刺',
+    'Judgement Strike': '裁决打击',
+    'Savage Strike': '野蛮打击',
+    'Lumbering Blow': '沉重打击',
+    'Arm Swipe': '挥臂横扫',
+    'Precise Strike': '精准打击',
+    'Lightning Wave': '雷电波',
+    'Fiery Wave': '火焰波',
+    'Horrible Rape': '恐怖侵犯',
+    Squirt: '喷射',
+    Bukkake: '喷溅',
+    Bouip: '布伊普',
+    Jiggle: '蠕动',
+    Haunt: '鬼影侵袭',
+    Smash: '重击',
+    Kick: '踢击',
     Fleeing: '逃离中',
     Victory: '胜利',
     Defeated: '已击败',
@@ -515,6 +586,8 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
   },
   arena: {
     'First Blood': '初次见血',
+    'Fresh Meat': '新鲜血肉',
+    'Dark Skies': '阴暗天空',
     'Learning Curves': '学习曲线',
     'The Road Less Traveled': '少有人走的路',
     'Stepping Stones': '垫脚石',
@@ -551,11 +624,28 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Enter Item World': '进入装备界',
     'There are no available equipment of this type.': '当前分类没有可用装备。',
     'First Blood': '初次见血',
+    'The HentaiVerse': 'HentaiVerse',
+    'persona set': '人格已切换',
   },
 }
 
 const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
   'A ball of fire is hurled at the target.': '向目标投掷一团火球。',
+  'A bolt of lightning strikes the target, causing Elec damage.':
+    '以一道闪电击中目标，造成雷电伤害。',
+  'A blast of wind hits the target, causing Wind damage.': '以一阵疾风击中目标，造成风属性伤害。',
+  'The next magical attack against the target has a chance to be absorbed and partially converted to MP.':
+    '目标受到的下一次魔法攻击有概率被吸收，并将部分伤害转化为魔力。',
+  'Places a heal over time effect on the target.': '为目标施加持续恢复生命的效果。',
+  'Bash an enemy with your shield to stun it, which opens up for devastating strikes with your weapon.':
+    '用盾牌猛击敌人使其眩晕，为后续强力武器攻击创造机会。',
+  'Focus a powerful strike on a single enemy.': '集中力量，对单个敌人发动强力打击。',
+  'Tears through enemy defenses, leaving them vulnerable for followup attacks.':
+    '撕裂敌人的防御，使其更容易受到后续攻击的伤害。',
+  'Follow up with an attack that inflicts internal bleeding and causes a large amount of damage if target is stunned.':
+    '发动后续攻击，造成内出血；若目标处于眩晕状态，则造成大量伤害。',
+  'Speeds up all actions of the target, allowing it to attack more frequently.':
+    '加快目标的所有行动，使其能够更频繁地攻击。',
   'Cold damage.': '对目标造成冰冷伤害。',
   'Inflicts Drain on one target, causing damage over time.':
     '对一个目标施加吸取效果，持续造成伤害。',
@@ -776,6 +866,7 @@ function translateHentaiVerseTextInChinese(value: string) {
     .replace(TERM_PATTERN, (term) => LOWERCASE_TERM_TRANSLATIONS[term.toLowerCase()] ?? term)
     .replace(/\blv\.\s*(\d+)/gi, '等级 $1')
     .replace(/([\d,]+)\s+c\b/gi, '$1 信用点')
+    .replace(/\bAutocast\s+(\d+)\b/gi, '自动施法 $1')
 }
 
 export function translateHentaiVerseDescription(value: string) {
@@ -998,9 +1089,30 @@ function translateHentaiVerseBattleLogInChinese(value: string) {
   if (!source) return ''
   // Completion panes can contain several sentences; translate each event separately.
   return source
-    .split(/(?<=[.!])\s+(?=(?:You\b|The effect\b|Starting\b))/i)
+    .split(/(?<=[.!])\s+(?=(?:You\b|The effect\b|Starting\b|Recovered\b|Cooldown\b))/i)
     .map(translateBattleEvent)
     .join(' ')
+}
+
+function preserveBattleName(value: string) {
+  protectTranslationNames([value])
+  return value
+}
+
+function translateBattleDefense(value: string) {
+  const defenses: Record<string, string> = {
+    block: '格挡',
+    parry: '招架',
+    resist: '抵抗',
+    'partially block': '部分格挡',
+    'partially parry': '部分招架',
+    'partially resist': '部分抵抗',
+  }
+  return value
+    .toLowerCase()
+    .split(' and ')
+    .map((part) => defenses[part] ?? part)
+    .join('并')
 }
 
 function translateBattleEvent(source: string): string {
@@ -1009,18 +1121,68 @@ function translateBattleEvent(source: string): string {
   )
   if (initializing)
     return `正在开始竞技场挑战 #${initializing[1]}（第 ${initializing[2]} / ${initializing[3]} 轮）……`
+  const initializingSeries = source.match(
+    /^Initializing (.+?) \(Round (\d+)\s*\/\s*(\d+)\)\s*\.\.\.$/i,
+  )
+  if (initializingSeries)
+    return `正在开始${translateBattleTerms(initializingSeries[1]!)}（第 ${initializingSeries[2]} / ${initializingSeries[3]} 轮）……`
   const spawned = source.match(
     /^Spawned Monster ([A-Z]): MID=(\d+) \((.+)\) LV=(\d+) HP=([\d,]+)$/i,
   )
-  if (spawned) return `怪物 ${spawned[1]}：${spawned[3]}，等级 ${spawned[4]}，生命 ${spawned[5]}。`
+  if (spawned)
+    return `怪物 ${spawned[1]}：${preserveBattleName(spawned[3]!)}，等级 ${spawned[4]}，生命 ${spawned[5]}。`
+  const powerup = source.match(/^(.+?) drops (?:a |an )?(.+?) powerup!$/i)
+  if (powerup)
+    return `${preserveBattleName(powerup[1]!)} 掉落了强化道具“${translateBattleTerms(powerup[2]!)}”！`
   const dropped = source.match(/^(.+?) dropped (.+?)[.!]?$/i)
-  if (dropped) return `${dropped[1]} 掉落了 ${translateBattleTerms(dropped[2]!)}。`
+  if (dropped)
+    return `${preserveBattleName(dropped[1]!)} 掉落了 ${translateBattleTerms(dropped[2]!)}。`
   const clearBonus = source.match(/^Battle Clear Bonus!\s*(.+)$/i)
   if (clearBonus) return `战斗通关奖励：${translateBattleTerms(clearBonus[1]!)}。`
+  const tokenBonus = source.match(/^Arena Token Bonus!\s*(.+)$/i)
+  if (tokenBonus) return `竞技场代币奖励：${translateBattleTerms(tokenBonus[1]!)}。`
   if (/^Arena challenge cleared[.!]?$/i.test(source)) return '竞技场挑战已通关！'
+  if (/^the grindfest has ended[.!]?$/i.test(source)) return '混战祭已结束。'
+  if (/^Stop beating dead ponies\.$/i.test(source)) return '目标已被击败，请选择其他目标。'
+  const reachedLevel = source.match(/^You have reached Level ([\d,]+)!$/i)
+  if (reachedLevel) return `你的等级提升至 ${reachedLevel[1]}！`
+  const gainedPoint = source.match(/^You gain (one|[\d,]+) (Mastery|Ability) Points?!$/i)
+  if (gainedPoint)
+    return `你获得了 ${/^one$/i.test(gainedPoint[1]!) ? '1' : gainedPoint[1]} 点${gainedPoint[2]!.toLowerCase() === 'mastery' ? '精通点' : '能力点'}。`
+  const obtainedTitle = source.match(/^You have obtained the title: (.+?)!$/i)
+  if (obtainedTitle) return `你获得了称号“${translateBattleTerms(obtainedTitle[1]!)}”！`
+  const expiredCooldown = source.match(/^Cooldown expired for (.+?)[.!]?$/i)
+  if (expiredCooldown) return `“${translateBattleTerms(expiredCooldown[1]!)}”的冷却已结束。`
+  const recovered = source.match(/^Recovered ([\d,.]+) points? of (health|mana|magic|spirit)\.$/i)
+  if (recovered) return `恢复了 ${recovered[1]} 点${translateBattleTerms(recovered[2]!)}。`
+
+  const counter = source.match(/^You counter (.+?) for ([\d,.]+) points? of (.+?) damage\.$/i)
+  if (counter)
+    return `你反击 ${preserveBattleName(counter[1]!)}，造成 ${counter[2]} 点${translateBattleTerms(counter[3]!)}伤害。`
+  const ongoingDamage = source.match(/^(.+?) hits (.+?) for ([\d,.]+) damage\.$/i)
+  if (ongoingDamage)
+    return `“${translateBattleTerms(ongoingDamage[1]!)}”对 ${preserveBattleName(ongoingDamage[2]!)} 造成 ${ongoingDamage[3]} 点伤害。`
+  const enemySkill = source.match(
+    /^(.+?) (casts|uses) (.+?), (?:which (hits|glances|crits)!|but misses the attack\.)$/i,
+  )
+  if (enemySkill) {
+    const skill =
+      LOWERCASE_BATTLE_LOG_TRANSLATIONS[enemySkill[3]!.toLowerCase()] ??
+      preserveBattleName(enemySkill[3]!)
+    const outcome =
+      { hits: '命中！', glances: '擦中！', crits: '暴击命中！' }[
+        enemySkill[4]?.toLowerCase() || ''
+      ] ?? '未命中。'
+    return `${preserveBattleName(enemySkill[1]!)} ${enemySkill[2]!.toLowerCase() === 'casts' ? '施放' : '使用'}“${skill}”，${outcome}`
+  }
+  const directDamage = source.match(
+    /^You (?:((?:partially )?(?:block|parry|resist)(?: and (?:partially )?(?:block|parry|resist))?) the attack, and )?take ([\d,.]+) (?:points? of )?(.+?) damage\.$/i,
+  )
+  if (directDamage)
+    return `你${directDamage[1] ? `${translateBattleDefense(directDamage[1]!.trim())}了攻击，` : ''}受到 ${directDamage[2]} 点${translateBattleTerms(directDamage[3]!)}伤害。`
 
   const receivedDamage = source.match(
-    /^(.+?) (?:(\d+)x-crit|crits?|hits|glances) you(?:, causing|; you partially (block|parry|resist) the attack, and take) ([\d,.]+) points? of (.+?) damage\.$/i,
+    /^(.+?) (?:(\d+)x-crit|crits?|hits|glances) you(?:, causing|; you ((?:partially )?(?:block|parry|resist)(?: and (?:partially )?(?:block|parry|resist))?) the attack, and take) ([\d,.]+) points? of (.+?) damage\.$/i,
   )
   if (receivedDamage) {
     const damageType = translateBattleTerms(receivedDamage[5] || '')
@@ -1032,12 +1194,9 @@ function translateBattleEvent(source: string): string {
           ? '擦中'
           : '命中'
     if (receivedDamage[3]) {
-      const defense = { block: '格挡', parry: '招架', resist: '抵抗' }[
-        receivedDamage[3].toLowerCase() as 'block' | 'parry' | 'resist'
-      ]
-      return `${receivedDamage[1]} ${action}你；你部分${defense}了攻击，受到 ${receivedDamage[4]} 点${damageType}伤害。`
+      return `${preserveBattleName(receivedDamage[1]!)} ${action}你；你${translateBattleDefense(receivedDamage[3])}了攻击，受到 ${receivedDamage[4]} 点${damageType}伤害。`
     }
-    return `${receivedDamage[1]} ${action}你，造成 ${receivedDamage[4]} 点${damageType}伤害。`
+    return `${preserveBattleName(receivedDamage[1]!)} ${action}你，造成 ${receivedDamage[4]} 点${damageType}伤害。`
   }
 
   const dealtDamage = source.match(
@@ -1052,19 +1211,21 @@ function translateBattleEvent(source: string): string {
         : /\bglance\b/i.test(source)
           ? '擦中'
           : '命中'
-    return `你${action} ${dealtDamage[2]}，造成 ${dealtDamage[3]} 点${damageType}伤害。`
+    return `你${action} ${preserveBattleName(dealtDamage[2]!)}，造成 ${dealtDamage[3]} 点${damageType}伤害。`
   }
 
   const evadedAttack = source.match(/^You evade the attack from (.+?)\.$/i)
-  if (evadedAttack) return `你闪避了 ${evadedAttack[1]} 的攻击。`
+  if (evadedAttack) return `你闪避了 ${preserveBattleName(evadedAttack[1]!)} 的攻击。`
 
-  const targetEvaded = source.match(/^(.+?) evades your attack\.$/i)
-  if (targetEvaded) return `${targetEvaded[1]} 闪避了你的攻击。`
+  const targetEvaded = source.match(/^(.+?) (?:evades|dodges) your attack\.$/i)
+  if (targetEvaded) return `${preserveBattleName(targetEvaded[1]!)} 闪避了你的攻击。`
 
   const gainedEffect = source.match(/^(You|.+?) gains? the effect (.+?)\.$/i)
   if (gainedEffect) {
     const effect = translateBattleTerms(gainedEffect[2] || '')
-    const actor = /^You$/i.test(gainedEffect[1]!) ? '你' : `${gainedEffect[1]} `
+    const actor = /^You$/i.test(gainedEffect[1]!)
+      ? '你'
+      : `${preserveBattleName(gainedEffect[1]!)} `
     return `${actor}获得了“${effect}”效果。`
   }
 
@@ -1101,7 +1262,7 @@ function translateBattleEvent(source: string): string {
   if (/^you have run away[.!]?$/i.test(source)) return '你已成功逃离！'
   if (/^you escape from the arena[.!]?$/i.test(source)) return '你已退出竞技场。'
   const defeated = source.match(/^(.+?) has been defeated\.$/i)
-  if (defeated) return `${defeated[1]} 已被击败。`
+  if (defeated) return `${preserveBattleName(defeated[1]!)} 已被击败。`
   const received = source.match(/^You gain ([\d,.]+) (EXP|experience points?|Credits?)[.!]?$/i)
   if (received)
     return `你获得了 ${received[1]} ${/^credits?$/i.test(received[2]!) ? '信用点' : '经验'}。`
@@ -1132,12 +1293,14 @@ function translateBattleEvent(source: string): string {
   )
   if (nextRound) return '进入下一轮战斗。'
   if (/^You are victorious[.!]?$/i.test(source)) return '你赢得了胜利！'
-  const parry = source.match(/^You (parry|block|resist) (?:the )?attack from (.+?)\.$/i)
+  const parry = source.match(
+    /^You ((?:partially )?(?:block|parry|resist)(?: and (?:partially )?(?:block|parry|resist))?) (?:the )?attack(?: from (.+?))?\.$/i,
+  )
   if (parry)
-    return `你${{ parry: '招架', block: '格挡', resist: '抵抗' }[parry[1]!.toLowerCase()]}了 ${parry[2]} 的攻击。`
+    return `你${translateBattleDefense(parry[1]!)}了${parry[2] ? ` ${preserveBattleName(parry[2])} 的` : ''}攻击。`
   const targetParry = source.match(/^(.+?) (parries|blocks|resists) your attack\.$/i)
   if (targetParry)
-    return `${targetParry[1]} ${{ parries: '招架', blocks: '格挡', resists: '抵抗' }[targetParry[2]!.toLowerCase()]}了你的攻击。`
+    return `${preserveBattleName(targetParry[1]!)} ${{ parries: '招架', blocks: '格挡', resists: '抵抗' }[targetParry[2]!.toLowerCase()]}了你的攻击。`
   const translated = translateBattleTerms(source, false)
   recordTranslationCandidate('battleLog', source, translated)
   return translated

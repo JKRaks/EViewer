@@ -1008,6 +1008,17 @@ async function handleProxyRequest(request, config, pathname) {
   // 构建代理请求头
   const proxyHeaders = buildUpstreamHeaders(request)
 
+  // The source persists nw=session as a cookie before redirecting. Apply the
+  // acknowledgement only to this gallery request instead of persisting it globally.
+  if (
+    request.method === 'GET' &&
+    /^\/g\/\d+\/[a-f0-9]+\/?$/i.test(targetUrl.pathname) &&
+    targetUrl.searchParams.get('nw') === 'session'
+  ) {
+    proxyHeaders.set('Cookie', `${proxyHeaders.get('Cookie')}; nw=1`)
+    targetUrl.searchParams.delete('nw')
+  }
+
   // 设置必要的请求头
   proxyHeaders.set('User-Agent', 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36')
   proxyHeaders.set(

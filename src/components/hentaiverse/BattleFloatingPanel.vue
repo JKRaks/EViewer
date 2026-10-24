@@ -42,6 +42,8 @@ import type {
   HentaiVerseBattleVital,
 } from '@/core/hentaiverse/model/hentaiVerse'
 
+defineProps<{ navigationExpanded?: boolean }>()
+
 const selectedTarget = ref(1)
 const battle = computed(() => hentaiVerseState.battle)
 const livingMonsters = computed(
@@ -372,28 +374,26 @@ function closeLocalBattle() {
 </script>
 
 <template>
-  <ActionButton
-    v-if="battle && !hentaiVerseState.battleVisible"
-    class="battle-resume-button hv-theme"
-    :class="{ 'is-auto-running': autoRunning }"
-    :variant="autoRunning ? 'default' : 'destructive'"
-    :aria-label="t(autoRunning ? '自动战斗中，点击展开' : '返回 HentaiVerse 战斗')"
-    size="icon"
-    :icon="Lightning"
-    :title="t('返回 HentaiVerse 战斗')"
-    @click="showHentaiVerseBattle"
-  />
-
   <div
     v-if="battle && !hentaiVerseState.battleVisible"
-    class="battle-floating-logs hv-theme"
-    role="log"
-    aria-live="polite"
-    :aria-label="t('战斗日志')"
+    v-show="!navigationExpanded"
+    class="battle-minimized hv-theme"
   >
-    <TransitionGroup name="battle-log-tip" tag="div" class="battle-log-stack">
-      <p v-for="line in floatingLogs" :key="line.id">{{ t(line.text) }}</p>
-    </TransitionGroup>
+    <ActionButton
+      class="floating-btn battle-resume-button"
+      :class="{ 'is-auto-running': autoRunning, 'is-active': autoRunning }"
+      :aria-label="t(autoRunning ? '自动战斗中，点击展开' : '返回 HentaiVerse 战斗')"
+      size="icon"
+      :icon="Lightning"
+      :title="t('返回 HentaiVerse 战斗')"
+      @click="showHentaiVerseBattle"
+    />
+
+    <div class="battle-floating-logs" role="log" aria-live="polite" :aria-label="t('战斗日志')">
+      <TransitionGroup name="battle-log-tip" tag="div" class="battle-log-stack">
+        <p v-for="line in floatingLogs" :key="line.id">{{ t(line.text) }}</p>
+      </TransitionGroup>
+    </div>
   </div>
 
   <Transition name="battle-panel">
@@ -1098,14 +1098,21 @@ function closeLocalBattle() {
   color: var(--muted-foreground);
   font-size: 13px;
 }
-.battle-resume-button {
+.battle-minimized {
   position: fixed;
-  right: 80px;
-  bottom: calc(18px + env(safe-area-inset-bottom));
-  z-index: 3050;
-  width: 46px;
-  height: 46px;
-  box-shadow: var(--shadow);
+  right: calc(var(--fab-inset) + var(--fab-size) + 12px);
+  bottom: calc(var(--fab-inset) + env(safe-area-inset-bottom));
+  z-index: 1090;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100% - var(--fab-inset) - var(--fab-size) - 24px);
+  pointer-events: none;
+}
+.battle-resume-button {
+  pointer-events: auto;
 }
 .battle-resume-button.is-auto-running {
   animation: battle-running-pulse 1.8s ease-in-out infinite;
@@ -1114,12 +1121,8 @@ function closeLocalBattle() {
   animation: battle-running-icon 1.8s ease-in-out infinite;
 }
 .battle-floating-logs {
-  position: fixed;
-  right: 138px;
-  bottom: calc(18px + env(safe-area-inset-bottom));
-  z-index: 3049;
-  width: min(300px, calc(100vw - 154px));
-  pointer-events: none;
+  width: 300px;
+  min-width: 0;
   overflow: clip;
 }
 .battle-log-stack {
@@ -1129,8 +1132,8 @@ function closeLocalBattle() {
   margin: 6px 0 0;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
-  backdrop-filter: blur(6px);
+  border-radius: 8px;
+  background: var(--surface-raised);
   color: var(--foreground);
   font-size: 12px;
   line-height: 1.5;
@@ -1200,17 +1203,6 @@ function closeLocalBattle() {
   }
   .battle-body {
     flex: 1;
-  }
-  .battle-floating-logs {
-    right: 132px;
-    bottom: calc(14px + env(safe-area-inset-bottom));
-    width: min(280px, calc(100vw - 144px));
-  }
-  .battle-resume-button {
-    right: 72px;
-    bottom: calc(14px + env(safe-area-inset-bottom));
-    width: 50px;
-    height: 50px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

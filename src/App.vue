@@ -421,7 +421,7 @@ onUnmounted(() => {
         </div>
       </div>
       <EncounterPrompt v-if="hentaiVerseState.encounter" />
-      <BattleFloatingPanel v-if="hentaiVerseState.battle" />
+      <BattleFloatingPanel v-if="hentaiVerseState.battle" :navigation-expanded="menuExpanded" />
     </div>
     <FeedbackHost />
   </TooltipProvider>
