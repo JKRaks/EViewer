@@ -2,6 +2,8 @@
 *::before,
 *::after {
   box-sizing: border-box;
+  /* Also cover nested scrolling regions, while keeping panning and pinch zoom. */
+  touch-action: manipulation;
 }
 html {
   scrollbar-gutter: stable;

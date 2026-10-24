@@ -184,7 +184,9 @@ export function parseBattleResponse(
       : parsed.monsters.length
         ? parsed.monsters
         : previous.monsters,
-    actions: parsed.completed ? [] : Array.from(actions.values()),
+    actions: parsed.roundCompleted ? [] : Array.from(actions.values()),
+    effectIds: typeof payload.pane_effects === 'string' ? parsed.effectIds : previous.effectIds,
+    overcharge: typeof payload.pane_vitals === 'string' ? parsed.overcharge : previous.overcharge,
     log: parsed.log.length ? [...previous.log, ...parsed.log].slice(-40) : previous.log,
   }
 }
@@ -980,10 +982,18 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
   const completionPane = document.querySelector<HTMLElement>('#pane_completion')
   const completionText = readBattleCompletion(completionPane)
   // Active battles keep an empty completion pane in the DOM as an AJAX target.
-  const completed = Boolean(completionText)
+  const roundCompleted = Boolean(completionText)
+  const sourceCompletion = cleanText(completionPane?.textContent)
+  const completed =
+    roundCompleted &&
+    /Arena challenge cleared|You have been defeated|You have escaped from the battle|You escape from the arena/i.test(
+      sourceCompletion,
+    )
   const victorious =
-    completed &&
-    /\bYou are victorious\b|\bArena challenge cleared\b/i.test(cleanText(completionPane?.textContent))
+    roundCompleted &&
+    /\bYou are victorious\b|\bArena challenge cleared\b/i.test(
+      cleanText(completionPane?.textContent),
+    )
   const monsters = parseMonsters(document)
   if (victorious) {
     // Victory responses can remove health bars instead of returning zero-width bars.
@@ -1001,10 +1011,28 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
     vitals: parseBattleVitals(document),
     effects: parseBattleEffects(document),
     monsters,
-    actions: parseBattleActions(document),
+    actions: roundCompleted ? [] : parseBattleActions(document),
     log: parseBattleLog(document).slice(-40),
     completed,
     completionText,
+    roundCompleted,
+    effectIds: document.querySelector('#pane_effects')
+      ? Array.from(
+          document.querySelectorAll<HTMLElement>(
+            '#pane_effects [onmouseover*="set_infopane_effect"]',
+          ),
+          (node) =>
+            readBattleHoverArguments(node.getAttribute('onmouseover') || '')[0]
+              ?.toLowerCase()
+              .replace(/[^a-z0-9]/g, '') || '',
+        ).filter(Boolean)
+      : undefined,
+    overcharge: (() => {
+      const value = cleanText(document.querySelector('#pane_vitals')?.textContent).match(
+        /\b(?:Overcharge|OC)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*%/i,
+      )
+      return value ? Number(value[1]) : undefined
+    })(),
   }
 }
 
@@ -1053,14 +1081,27 @@ function parseBattleVitals(document: Document) {
     { key: 'spirit', id: 'vrs', bar: '#vbs img', label: '灵力', maxWidth: 207 },
   ]
   return fields.flatMap(({ key, id, bar, label, maxWidth }) => {
-    const value = cleanText(document.getElementById(id)?.textContent)
-    if (!value) return []
+    const node =
+      document.getElementById(id) || (key === 'health' ? document.getElementById('vrhd') : null)
+    const value = cleanText(node?.textContent)
+    const image = document.querySelector<HTMLImageElement>(bar)
+    if (!value && !image) return []
+    const numbers = value.match(/^([\d,]+)(?:\s*\/\s*([\d,]+))?$/)
+    const current = numbers ? Number(numbers[1]!.replace(/,/g, '')) : undefined
+    const maximum = numbers?.[2] ? Number(numbers[2].replace(/,/g, '')) : undefined
+    const percent =
+      maximum && current !== undefined
+        ? Math.round((current / maximum) * 100)
+        : readBattleBarPercent(image, maxWidth)
     return [
       {
         key,
         label,
-        value,
-        percent: readBattleBarPercent(document.querySelector<HTMLImageElement>(bar), maxWidth) ?? 0,
+        value: value || '—',
+        percent: percent ?? 0,
+        current,
+        maximum,
+        percentKnown: percent !== undefined,
       },
     ]
   })
@@ -1138,6 +1179,9 @@ function parseBattleActions(document: Document): HentaiVerseBattleAction[] {
         mode,
         skill: 0,
         target: mode === 'attack' ? 'enemy' : 'none',
+        available: !node.matches('[disabled], [aria-disabled="true"], .disabled'),
+        manaCost: 0,
+        kind: mode === 'attack' ? 'offense' : 'other',
       })
       return
     }
@@ -1155,9 +1199,101 @@ function parseBattleActions(document: Document): HentaiVerseBattleAction[] {
       mode,
       skill,
       target: hostile ? 'enemy' : 'self',
+      ...readBattleSpellState(node),
     })
   })
+  // The skillbook is authoritative; quickbar entries can omit cost and cooldown state.
+  document
+    .querySelectorAll<HTMLElement>('#table_magic [onmouseover*="set_infopane_spell"]')
+    .forEach((node) => {
+      const skill = Number(node.id)
+      if (!/^\d+$/.test(node.id)) return
+      const onclick = node.getAttribute('onclick') || ''
+      const state = readBattleSpellState(node)
+      actions.set(`magic:${skill}`, {
+        ...getBattleActionPresentation(node, 'magic', skill),
+        mode: 'magic',
+        skill,
+        target: /set_hostile_skill/i.test(onclick) || state.kind === 'offense' ? 'enemy' : 'self',
+        ...state,
+      })
+    })
   return Array.from(actions.values())
+}
+
+/** Read source tooltip arguments without evaluating its JavaScript. */
+function readBattleHoverArguments(hover: string): string[] {
+  const call = hover.match(/set_infopane(?:_spell|_effect)?\s*\(/i)
+  if (!call || call.index === undefined) return []
+  const argumentsList: string[] = []
+  let quote = ''
+  let escaped = false
+  let value = ''
+  for (const character of hover.slice(call.index + call[0].length)) {
+    if (escaped) {
+      value += character
+      escaped = false
+      continue
+    }
+    if (character === '\\' && quote) {
+      escaped = true
+      continue
+    }
+    if (quote) {
+      if (character === quote) quote = ''
+      else value += character
+    } else if (character === "'" || character === '"') quote = character
+    else if (character === ',' || character === ')') {
+      argumentsList.push(value.trim())
+      value = ''
+      if (character === ')') break
+    } else value += character
+  }
+  return argumentsList
+}
+
+function readBattleSpellState(node: HTMLElement) {
+  const argumentsList = readBattleHoverArguments(node.getAttribute('onmouseover') || '')
+  const sourceName = argumentsList[0] || ''
+  const name = sourceName.toLowerCase().replace(/[^a-z0-9]/g, '')
+  const offensive = new Set([
+    'fieryblast',
+    'inferno',
+    'flamesofloki',
+    'freeze',
+    'blizzard',
+    'fimbulvetr',
+    'shockblast',
+    'chainedlightning',
+    'wrathofthor',
+    'gale',
+    'downburst',
+    'stormsofnjord',
+    'smite',
+    'banishment',
+    'paradiselost',
+    'corruption',
+    'disintegrate',
+    'ragnarok',
+  ])
+  const kind: HentaiVerseBattleAction['kind'] =
+    name === 'cure'
+      ? 'heal'
+      : name === 'fullcure'
+        ? 'full-heal'
+        : name === 'regen'
+          ? 'regen'
+          : offensive.has(name)
+            ? 'offense'
+            : 'other'
+  return {
+    sourceName,
+    kind,
+    manaCost: /^\d+(?:\.\d+)?$/.test(argumentsList[3] || '') ? Number(argumentsList[3]) : undefined,
+    available:
+      Boolean(node.getAttribute('onclick')?.trim()) &&
+      !node.matches('[disabled], [aria-disabled="true"], .disabled'),
+  }
 }
 
 const BATTLE_ACTION_DESCRIPTIONS: Record<string, string> = {
@@ -1208,6 +1344,8 @@ function getBattleActionPresentation(node: HTMLElement, mode: HentaiVerseBattleM
 
 function readBattleBarPercent(image?: HTMLImageElement | null, maxWidth = 120) {
   if (!image) return
+  if (image.style.width.trim().endsWith('%'))
+    return Math.max(0, Math.min(100, Number.parseFloat(image.style.width)))
   const width = Number.parseFloat(image.style.width || image.getAttribute('width') || '')
   if (!Number.isFinite(width)) return
   return Math.max(0, Math.min(100, Math.round((width / maxWidth) * 100)))
