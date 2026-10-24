@@ -209,11 +209,12 @@ async function loadCoverImage(
       return null
     }
     const proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
-    const proxyUrl = new URL('/image-proxy', proxyOrigin)
+    const ex = new URL(url).hostname === 'exhentai.org'
+    const proxyUrl = new URL(ex ? '/exhentai/image-proxy' : '/image-proxy', proxyOrigin)
     proxyUrl.searchParams.set('url', url)
     const response = await fetch(proxyUrl, {
       signal,
-      credentials: 'omit',
+      credentials: ex ? 'include' : 'omit',
       cache: 'force-cache',
     })
     if (!response.ok) throw new Error(`HTTP ${response.status}`)

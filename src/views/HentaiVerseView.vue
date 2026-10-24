@@ -40,12 +40,13 @@ import {
   hentaiVerseState,
   showHentaiVerseBattleSnapshot,
 } from '@/core/hentaiverse/hentaiVerseStore'
-import { useServerAuthState } from '@/core/auth/authState'
+import { useAuthState } from '@/core/auth/authState'
+import { ASSISTANT_SETTINGS } from '@/core/connector/connectorProtocol'
 
 defineOptions({ name: 'HentaiVerseView' })
 
 const busi = new HentaiVerseBusi()
-const authState = useServerAuthState()
+const authState = useAuthState()
 const activeSection = ref<HentaiVerseSection>('character')
 const page = ref<HentaiVersePage>()
 const loading = ref(false)
@@ -61,6 +62,19 @@ let requestId = 0
 let equipmentDetailsRequestId = 0
 
 watch(page, (nextPage) => void loadEquipmentDetails(nextPage))
+watch(
+  () => [authState.source, authState.site, authState.loggedIn, authState.memberId],
+  () => {
+    requestId++
+    page.value = undefined
+    characterSummary.value = { name: '', persona: '' }
+    loading.value = false
+    error.value = ''
+    battleBlocked.value = false
+    if (authState.loggedIn) void loadSection()
+  },
+  { flush: 'sync' },
+)
 onBeforeUnmount(() => {
   requestId++
   equipmentDetailsRequestId++
@@ -149,10 +163,7 @@ async function loadSection(
   battleBlocked.value = false
   try {
     const result = await busi.getPage(currentTarget.value)
-    if (currentRequest !== requestId) {
-      if (result.page) updateCharacterSummary(result.page)
-      return
-    }
+    if (currentRequest !== requestId) return
     if (result.battle) {
       page.value = undefined
       battleBlocked.value = true
@@ -160,7 +171,7 @@ async function loadSection(
       return
     }
     if (!result.page?.authenticated)
-      throw new Error(t('HentaiVerse 登录态已失效，请重新维护认证 Cookie'))
+      throw new Error(t('HentaiVerse 登录态已失效，请在当前连接模式下重新登录'))
     setPage(result.page)
   } catch (loadError) {
     if (currentRequest === requestId)
@@ -186,7 +197,7 @@ async function runDomainAction(
       notify.success(t('已进入 HentaiVerse 战斗'))
     } else if (result.page) {
       if (!result.page.authenticated)
-        throw new Error(t('HentaiVerse 登录态已失效，请重新维护认证 Cookie'))
+        throw new Error(t('HentaiVerse 登录态已失效，请在当前连接模式下重新登录'))
       setPage(result.page)
       notify.success(successMessage)
     }
@@ -395,11 +406,22 @@ onMounted(() => {
     </header>
 
     <CampScene :compact="activeSection !== 'character'" />
+    <div v-if="authState.source === 'local'" class="hv-local-help">
+      <p>
+        {{
+          t(
+            'HentaiVerse 使用当前浏览器的源站会话。首次使用请更新助手，并在同一浏览器打开源站确认登录。',
+          )
+        }}
+      </p>
+      <a href="https://hentaiverse.org/" target="_blank" rel="noopener noreferrer">{{
+        t('打开 HentaiVerse')
+      }}</a>
+      <RouterLink :to="ASSISTANT_SETTINGS">{{ t('安装或更新浏览器助手') }}</RouterLink>
+    </div>
     <Notice
       v-if="!authState.loggedIn"
-      :title="
-        t('请先在账号信息中维护认证 Cookie，HentaiVerse 使用服务代理凭据，本机会话不适用于此模块。')
-      "
+      :title="t('请先在账号信息中完成当前连接模式的登录验证。')"
       tone="warning"
       :closable="false"
     />
@@ -599,6 +621,24 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.hv-local-help {
+  margin: 16px 0;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.hv-local-help p {
+  margin: 0 0 4px;
+}
+
+.hv-local-help a {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-right: 16px;
+}
+
 .hv-view {
   width: min(1240px, 100%);
   min-height: 100%;

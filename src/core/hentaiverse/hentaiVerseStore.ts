@@ -3,10 +3,19 @@ import { parseEncounterFromGalleryHtml } from './hentaiVerseParser'
 import { HentaiVerseBusi } from './hentaiVerseBusi'
 import { hentaiVerseState } from './hentaiVerseRuntime'
 import { canUseAutomaticBattleAction } from './hentaiVerseAutoBattle'
+import { watch } from 'vue'
+import { authState } from '@/core/auth/authState'
+import { currentTransportSignal } from '@/core/connector/connectionSettings'
 
 export { hentaiVerseState } from './hentaiVerseRuntime'
 
 const busi = new HentaiVerseBusi()
+let generation = 0
+watch(
+  () => [authState.source, authState.site, authState.loggedIn, authState.memberId],
+  () => clearHentaiVerseState(),
+  { flush: 'sync' },
+)
 
 export function inspectGalleryHtmlForEncounter(html: string) {
   const encounter = parseEncounterFromGalleryHtml(html)
@@ -23,16 +32,21 @@ export async function enterHentaiVerseBattle(encounter = hentaiVerseState.encoun
   if (hentaiVerseState.battleLoading) return
   hentaiVerseState.battleLoading = true
   hentaiVerseState.error = ''
+  const signal = currentTransportSignal()
+  const startedGeneration = generation
   try {
-    hentaiVerseState.battle = await busi.enterBattle(encounter)
+    const battle = await busi.enterBattle(encounter)
+    if (signal.aborted || startedGeneration !== generation) return
+    hentaiVerseState.battle = battle
     hentaiVerseState.battleVisible = true
     hentaiVerseState.battleMinimized = false
     hentaiVerseState.encounter = undefined
   } catch (error) {
+    if (signal.aborted || startedGeneration !== generation) return
     hentaiVerseState.error = error instanceof Error ? error.message : '进入 HentaiVerse 战斗失败'
     throw error
   } finally {
-    hentaiVerseState.battleLoading = false
+    if (startedGeneration === generation) hentaiVerseState.battleLoading = false
   }
 }
 
@@ -63,16 +77,18 @@ export async function performHentaiVerseBattleAction(
       throw new Error('自动战斗目标已不可用，已暂停')
   }
   hentaiVerseState.actionPending = true
+  const startedGeneration = generation
   hentaiVerseState.error = ''
   try {
     const next = await busi.sendBattleAction(current, mode, target, skill, automatic)
     if (hentaiVerseState.battle === current) hentaiVerseState.battle = next
   } catch (error) {
-    hentaiVerseState.error =
-      error instanceof Error ? error.message : '战斗动作状态未知，请恢复战斗确认'
+    if (hentaiVerseState.battle === current)
+      hentaiVerseState.error =
+        error instanceof Error ? error.message : '战斗动作状态未知，请恢复战斗确认'
     throw error
   } finally {
-    hentaiVerseState.actionPending = false
+    if (startedGeneration === generation) hentaiVerseState.actionPending = false
   }
 }
 
@@ -86,15 +102,17 @@ export async function continueHentaiVerseBattleRound() {
   )
     return
   hentaiVerseState.battleLoading = true
+  const startedGeneration = generation
   hentaiVerseState.error = ''
   try {
     const next = await busi.continueBattleRound(current)
     if (hentaiVerseState.battle === current) hentaiVerseState.battle = next
   } catch (error) {
-    hentaiVerseState.error = error instanceof Error ? error.message : '继续战斗失败'
+    if (hentaiVerseState.battle === current)
+      hentaiVerseState.error = error instanceof Error ? error.message : '继续战斗失败'
     throw error
   } finally {
-    hentaiVerseState.battleLoading = false
+    if (startedGeneration === generation) hentaiVerseState.battleLoading = false
   }
 }
 
@@ -114,6 +132,7 @@ export function showHentaiVerseBattleSnapshot(snapshot: HentaiVerseBattleSnapsho
 }
 
 export function clearHentaiVerseState() {
+  generation++
   hentaiVerseState.encounter = undefined
   hentaiVerseState.battle = undefined
   hentaiVerseState.battleVisible = false

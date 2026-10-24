@@ -41,7 +41,10 @@ async function handleLink(event: MouseEvent) {
   const link = resolveCommentLink(anchor.getAttribute('href') ?? '')
   if (!link) return
   if (link.bookId) {
-    await router.push({ name: 'bookinfo', query: { bookId: link.bookId.replace('/', '-') } })
+    await router.push({
+      name: 'bookinfo',
+      query: { bookId: link.bookId.replace('/', '-'), site: link.site },
+    })
     return
   }
   try {

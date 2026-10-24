@@ -253,6 +253,13 @@ export async function requestConnector(
       ? 'multipart'
       : 'text'
   if (!identity.capabilities.includes(capability)) throw connectorError('API_UNAVAILABLE')
+  if (new URL(input.url).hostname === 'exhentai.org' && !identity.capabilities.includes('exhentai'))
+    throw new Error(formatSystemMessage('请前往设置更新浏览器助手，以支持 ExHentai 本机请求'))
+  if (
+    new URL(input.url).hostname === 'hentaiverse.org' &&
+    !identity.capabilities.includes('hentaiverse')
+  )
+    throw new Error(formatSystemMessage('请前往设置更新浏览器助手，以支持 HentaiVerse 本机请求'))
   const id = `request-${Date.now()}-${++sequence}`
   return new Promise((resolve, reject) => {
     const signal = options.signal

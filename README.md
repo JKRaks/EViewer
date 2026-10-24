@@ -90,7 +90,7 @@ npm run dev:worker
 
 安装完成后，在「账号信息」页面切换到「本机助手」，点击「检测源站登录」即可使用。应用会自动检测脚本版本并在需要时提示更新。
 
-目前支持 E-Hentai 的列表、详情、收藏、种子、图片搜索等功能，ExHentai 和 HentaiVerse 暂时继续使用服务代理。
+目前支持 E-Hentai 的列表、详情、收藏、种子、图片搜索，以及 HentaiVerse 的页面、表单、战斗和装备数据请求。HentaiVerse 及 ExHentai 请使用 2.2.0 或更新版本的助手。设置 → 浏览器助手可选择画廊站点；本机模式需在同一浏览器确认所选源站的登录和访问权限。服务代理支持导入 Cookie 字符串中的可选 igneous（仅发送到 ExHentai）；账号总览、排行榜、捐赠及 Hath 信息仍由 E-Hentai 提供。切换站点会取消旧请求并隔离画廊缓存、阅读记录和用户配置。图片和种子文件由浏览器直接下载，本机随机遭遇提示与战斗使用助手通道。
 
 ---
 
@@ -99,7 +99,7 @@ npm run dev:worker
 
 助手脚本由 Worker 动态生成（`/auth/bridge/eviewer-assistant.{tampermonkey|userscripts}.user.js`），包含当前环境的 origin 白名单。应用启动时通过 `/auth/bridge/assistant-manifest.json` 检查版本兼容性。
 
-本地开发需要将 Vite dev server origin 添加到 Worker 的 `ALLOWED_ORIGINS` 环境变量。测试命令：`npm run test:assistant`
+本地开发需要将 Vite dev server origin 添加到 Worker 的 `ALLOWED_ORIGINS` 环境变量。验证命令：`npm run type-check`、`npm run build`、`npm run check:worker`。
 
 参考：[Userscripts](https://github.com/quoid/userscripts#usage) | [Tampermonkey](https://www.tampermonkey.net/documentation.php)
 

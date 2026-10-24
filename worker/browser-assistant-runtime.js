@@ -17,7 +17,7 @@ export default String.raw`
     buildVersion: config.version,
     protocolVersion: config.protocolVersion, origin: location.origin,
     manager: info?.scriptHandler || '', managerVersion: info?.version || '',
-    available: Boolean(invoke), capabilities: ['text', 'binary', 'multipart', 'abort'],
+    available: Boolean(invoke), capabilities: ['text', 'binary', 'multipart', 'abort', 'hentaiverse', 'exhentai'],
   }
   const active = new Map()
   const send = (data) => window.postMessage({ channel, direction: 'assistant', instance, ...data }, location.origin)
@@ -30,11 +30,20 @@ export default String.raw`
     const url = new URL(value)
     if (url.protocol !== 'https:' || url.port || url.username || url.password || url.hash) throw new Error('TARGET_NOT_ALLOWED')
     if (binary) {
-      if (method !== 'GET' || !(url.hostname === 'ehgt.org' || url.hostname.endsWith('.ehgt.org'))) throw new Error('TARGET_NOT_ALLOWED')
+      if (method !== 'GET' || !(url.hostname === 'ehgt.org' || url.hostname.endsWith('.ehgt.org') || (url.hostname === 'exhentai.org' && url.pathname.startsWith('/t/')))) throw new Error('TARGET_NOT_ALLOWED')
       return url.href
     }
     if (url.hostname === 'upload.e-hentai.org' && url.pathname === '/image_lookup.php' && method === 'POST') return url.href
-    if (url.hostname !== 'e-hentai.org') throw new Error('TARGET_NOT_ALLOWED')
+    if (url.hostname === 'hentaiverse.org') {
+      const route = url.searchParams.get('s') + ':' + url.searchParams.get('ss')
+      const page = url.pathname === '/' && (
+        (!url.searchParams.has('s') && !url.searchParams.has('ss')) ||
+        /^(Character:(ch|eq|ab|tr|it|se)|Battle:(ba|ar|rb|gr|iw))$/.test(route))
+      const asset = /^\/dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-[1-9]\d{0,19}\.js$/.test(url.pathname)
+      if ((method === 'GET' && (page || asset)) || (method === 'POST' && (page || url.pathname === '/json'))) return url.href
+      throw new Error('TARGET_NOT_ALLOWED')
+    }
+    if (!['e-hentai.org', 'exhentai.org'].includes(url.hostname)) throw new Error('TARGET_NOT_ALLOWED')
     const read = /^(\/|\/popular\/?|\/(home|uconfig|favorites|gallerypopups|gallerytorrents|toplist|bitcoin|hathperks)\.php|\/g\/\d+\/[a-z0-9]+\/?|\/s\/[a-z0-9]+\/\d+-\d+)$/.test(url.pathname)
     const write = /^\/(favorites|gallerypopups|uconfig)\.php$/.test(url.pathname)
     if (!(method === 'GET' && read) && !(method === 'POST' && write)) throw new Error('TARGET_NOT_ALLOWED')
@@ -73,6 +82,15 @@ export default String.raw`
       if (active.has(id) || active.size >= 32) throw new Error('REQUEST_LIMIT')
       url = allowedTarget(input.url, input.method, input.binary)
       body = requestBody(input)
+      if (new URL(url).hostname === 'hentaiverse.org' && new URL(url).pathname === '/json') {
+        if (input.contentType !== 'application/json' || typeof body !== 'string') throw new Error('INVALID_BODY')
+        const action = JSON.parse(body)
+        if (action.type !== 'battle' || action.method !== 'action' ||
+          !/^[A-Za-z0-9_-]{6,128}$/.test(action.token || '') ||
+          !['attack', 'magic', 'items', 'spirit', 'defend', 'focus'].includes(action.mode) ||
+          !Number.isInteger(action.target) || action.target < 0 || action.target > 100 ||
+          !Number.isInteger(action.skill) || action.skill < 0 || action.skill > 1000000) throw new Error('INVALID_BODY')
+      }
     } catch (error) { send({ action: 'response', id, ok: false, error: error.message }); return }
     let handle, timer, ended = false
     const finish = (value) => {
@@ -112,6 +130,10 @@ export default String.raw`
     }
     try {
       const headers = { Accept: input.binary ? 'image/*' : 'text/html,application/xhtml+xml,*/*' }
+      if (new URL(url).hostname === 'hentaiverse.org') {
+        headers.Referer = 'https://hentaiverse.org/'
+        if (input.contentType === 'application/json') headers.Accept = 'application/json'
+      }
       if (input.body?.kind === 'text') headers['Content-Type'] = input.contentType === 'application/json'
         ? 'application/json' : 'application/x-www-form-urlencoded; charset=UTF-8'
       handle = invoke({ url, method: input.method, headers, data: body, timeout,

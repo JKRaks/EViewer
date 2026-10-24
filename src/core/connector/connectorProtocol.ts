@@ -1,3 +1,4 @@
+import { galleryOrigin } from './connectionSettings'
 export const CONNECTOR_PROTOCOL = 1
 export const CONNECTOR_CHANNEL = 'eviewer-browser-assistant'
 export const MANIFEST_PATH = '/auth/bridge/assistant-manifest.json'
@@ -81,8 +82,9 @@ export function readAssistantManifest(value: unknown): AssistantManifest {
 
 /** Preserve existing query fields (gallerypopups) and repeated form fields. */
 export function galleryTarget(path: string, query = '') {
-  const target = new URL(path, 'https://e-hentai.org')
-  if (target.origin !== 'https://e-hentai.org') throw new Error('TARGET_NOT_ALLOWED')
+  const origin = galleryOrigin(path)
+  const target = new URL(path, origin)
+  if (target.origin !== origin) throw new Error('TARGET_NOT_ALLOWED')
   for (const [name, value] of new URLSearchParams(query)) target.searchParams.append(name, value)
   if (target.pathname === '/image-lookup') {
     target.hostname = 'upload.e-hentai.org'

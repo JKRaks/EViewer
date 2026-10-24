@@ -22,6 +22,7 @@ export interface TagTranslationCacheRecord {
 
 export interface GalleryDetailRecord {
   requestMode?: 'server' | 'local'
+  gallerySite?: 'eh' | 'ex'
   bookId: string
   payload: unknown
   updatedAt: number
@@ -29,6 +30,7 @@ export interface GalleryDetailRecord {
 
 export interface GalleryImagePageRecord {
   requestMode?: 'server' | 'local'
+  gallerySite?: 'eh' | 'ex'
   bookId: string
   pageIndex: number
   imageIds: string[]
@@ -39,6 +41,7 @@ export interface GalleryImagePageRecord {
 
 export interface GalleryImageUrlRecord {
   requestMode?: 'server' | 'local'
+  gallerySite?: 'eh' | 'ex'
   bookId: string
   imageId: string
   url: string
@@ -46,6 +49,7 @@ export interface GalleryImageUrlRecord {
 }
 
 export interface ReadingHistoryRecord {
+  gallerySite?: 'eh' | 'ex'
   bookId: string
   title: string
   coverUrl: string
