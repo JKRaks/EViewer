@@ -73,6 +73,10 @@ export async function getBookInfoWithCache(
       if (purpose === 'detail' && indexedDbCacheSettings.cacheBookDetails && pageIndex === 0) {
         staleDetail = await database.get('galleryDetails', bookId)
         signal.throwIfAborted()
+        if (staleDetail && !isValidBookInfo(staleDetail.payload as CachedBookInfoPayload)) {
+          await database.delete('galleryDetails', bookId)
+          staleDetail = undefined
+        }
         if (
           staleDetail &&
           ((staleDetail.requestMode || 'server') !== mode ||
@@ -90,8 +94,12 @@ export async function getBookInfoWithCache(
       if (purpose === 'viewer' && indexedDbCacheSettings.cacheBookImageInfo && !forceRefresh) {
         const cachedPage = await database.get('galleryImagePages', [bookId, pageIndex])
         signal.throwIfAborted()
+        if (cachedPage && (!cachedPage.imageIds?.length || cachedPage.lastPageIndex <= pageIndex))
+          await database.delete('galleryImagePages', [bookId, pageIndex])
         if (
           cachedPage &&
+          cachedPage.imageIds?.length > 0 &&
+          cachedPage.lastPageIndex > pageIndex &&
           (cachedPage.requestMode || 'server') === mode &&
           (cachedPage.gallerySite || 'eh') === site
         ) {
@@ -119,15 +127,19 @@ export async function getBookInfoWithCache(
   try {
     const result = await request
     signal.throwIfAborted()
-    if (result.isSuccess && indexedDbCacheSettings.enabled) {
+    if (result.isSuccess && !isValidBookInfo(result)) {
+      result.isSuccess = false
+      result.msg = '画册数据不完整，请重新加载。'
+    }
+    if (isValidBookInfo(result) && indexedDbCacheSettings.enabled) {
       await persistBookInfo(result, purpose, mode, site)
-    } else if (!result.isSuccess && staleDetail) {
+    } else if (!forceRefresh && !result.isSuccess && !result.contentWarning && staleDetail) {
       return hydrateBookInfo(staleDetail.payload)
     }
     return result
   } catch (error) {
     if (signal.aborted) throw error
-    if (staleDetail) {
+    if (!forceRefresh && staleDetail) {
       return hydrateBookInfo(staleDetail.payload)
     }
     throw error
@@ -150,7 +162,10 @@ export async function getCachedImagePages(bookId: string): Promise<GalleryImageP
     return records
       .filter(
         (record) =>
-          (record.requestMode || 'server') === mode && (record.gallerySite || 'eh') === site,
+          (record.requestMode || 'server') === mode &&
+          (record.gallerySite || 'eh') === site &&
+          record.imageIds?.length > 0 &&
+          record.lastPageIndex > record.pageIndex,
       )
       .sort((left, right) => left.pageIndex - right.pageIndex)
   } catch (error) {
@@ -274,12 +289,27 @@ export async function clearGalleryImageCache() {
   await Promise.all([clearCacheStore('galleryImagePages'), clearCacheStore('galleryImageUrls')])
 }
 
+function isValidBookInfo(result: CachedBookInfoPayload | bookInfoOutput): boolean {
+  return (
+    result.isSuccess === true &&
+    Boolean(result.bookName?.trim()) &&
+    Number.isFinite(result.imageCount) &&
+    result.imageCount > 0 &&
+    Number.isInteger(result.pageIndex) &&
+    result.pageIndex >= 0 &&
+    result.lastPageIndex > result.pageIndex &&
+    Array.isArray(result.data) &&
+    result.data.length > 0
+  )
+}
+
 async function persistBookInfo(
   result: bookInfoOutput,
   purpose: BookInfoCachePurpose,
   requestMode: RequestMode,
   gallerySite: GallerySite,
 ) {
+  if (!isValidBookInfo(result) || result.contentWarning) return
   try {
     const database = await openCacheDatabase()
     const bookId = normalizeBookId(result.bookId)
