@@ -157,9 +157,11 @@
   background: var(--surface);
   cursor: pointer;
 }
-.ui-select svg {
+.ui-select > svg {
   position: absolute;
   right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
   pointer-events: none;
   color: var(--muted-foreground);
 }
