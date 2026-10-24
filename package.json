@@ -15,6 +15,7 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --build",
     "test:assistant": "node --test tests/browser-assistant.test.mjs",
+    "test:hentaiverse": "node --experimental-strip-types --test tests/hentaiverse-auto-battle.test.mjs",
     "lint": "eslint . --fix",
     "format": "prettier --write src/",
     "icons:generate": "node tool/generate-app-icons.mjs",

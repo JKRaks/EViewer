@@ -317,6 +317,10 @@ export interface HentaiVerseBattleAction {
   mode: HentaiVerseBattleMode
   skill: number
   target: 'enemy' | 'self' | 'none'
+  sourceName?: string
+  available?: boolean
+  manaCost?: number
+  kind?: 'offense' | 'heal' | 'full-heal' | 'regen' | 'other'
 }
 
 export interface HentaiVerseBattleVital {
@@ -324,6 +328,9 @@ export interface HentaiVerseBattleVital {
   label: string
   value: string
   percent: number
+  current?: number
+  maximum?: number
+  percentKnown?: boolean
 }
 
 export interface HentaiVerseBattleMonster {
@@ -345,4 +352,7 @@ export interface HentaiVerseBattleSnapshot {
   log: string[]
   completed: boolean
   completionText: string
+  roundCompleted?: boolean
+  effectIds?: string[]
+  overcharge?: number
 }

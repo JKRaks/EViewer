@@ -102,7 +102,7 @@ const battleSections = computed(() =>
 watch(
   () => hentaiVerseState.battle?.completed,
   (completed, wasCompleted) => {
-    if (completed && !wasCompleted && battleBlocked.value) void loadSection()
+    if (completed && !wasCompleted) void loadSection()
   },
 )
 
