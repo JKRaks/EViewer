@@ -2,6 +2,8 @@
 import { allowAppLaunchInteraction, useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
+import GalleryContentWarning from '@/components/GalleryContentWarning.vue'
+import { acceptGalleryWarning } from '@/core/books/galleryContentWarning'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
 import SkeletonLine from '@/components/primitives/SkeletonLine.vue'
@@ -72,7 +74,9 @@ let bookInfo: bookInfoOutput | null = null
 let bookMetadata: bookInfoOutput | null = null
 let currentPageQueue: PageImageQueue | null = null
 let isViewUnmounted = false
+let forceNetworkPages = false
 const loadingPrevious = ref(false)
+const contentWarning = ref<string[]>()
 const readerError = ref('')
 const moreError = ref('')
 const previousError = ref('')
@@ -117,6 +121,7 @@ let visibleImageFrame = 0
 const infiniteScrollDisabled = computed(() => {
   return (
     pageData.loading ||
+    Boolean(contentWarning.value) ||
     pageJumpOpen.value ||
     pageJumpLoading.value ||
     Boolean(readerError.value || moreError.value) ||
@@ -295,6 +300,8 @@ async function jumpToPage() {
       moreError.value = ''
       previousError.value = ''
       bookImages.value = []
+      bookInfo = null
+      bookMetadata = null
       currentPageQueue = null
       bookInfo = targetPage
       pageData.pageIndex = targetPage.pageIndex
@@ -349,7 +356,15 @@ async function observeVisibleImages() {
   requestVisibleImageUpdate()
 }
 
-async function initialize() {
+async function continueAfterWarning() {
+  if (!bookId) return
+  acceptGalleryWarning(bookId)
+  await initialize(true)
+}
+
+async function initialize(forceRefresh = false) {
+  forceNetworkPages = forceRefresh
+  contentWarning.value = undefined
   readerError.value = ''
   moreError.value = ''
   previousError.value = ''
@@ -370,15 +385,16 @@ async function initialize() {
     lastRecordedOrdinal = 0
 
     const [cachedPages, cachedUrls] = await Promise.all([
-      getCachedImagePages(bookId),
-      getCachedImageUrls(bookId),
+      forceRefresh ? Promise.resolve([]) : getCachedImagePages(bookId),
+      forceRefresh ? Promise.resolve(new Map<string, string>()) : getCachedImageUrls(bookId),
     ])
     cachedImagePages = new Map(cachedPages.map((page) => [page.pageIndex, page]))
     cachedImageUrls = cachedUrls
 
     const firstPage = await fetchBookInfo(bookId)
     if (!firstPage.isSuccess || isViewUnmounted) {
-      if (!isViewUnmounted) readerError.value = firstPage.msg || t('画册加载失败，请重试。')
+      if (!isViewUnmounted && !firstPage.contentWarning)
+        readerError.value = firstPage.msg || t('画册加载失败，请重试。')
       return
     }
     bookMetadata = firstPage
@@ -386,8 +402,14 @@ async function initialize() {
       const detail = await getBookInfoWithCache(
         Object.assign(new bookInfoInput(), { bookId, page: 0 }),
         'detail',
+        forceRefresh,
       )
-      if (detail.isSuccess) bookMetadata = detail
+      if (detail.contentWarning) {
+        contentWarning.value = detail.contentWarning
+        return
+      }
+      if (!detail.isSuccess) throw new Error(detail.msg || t('画册加载失败，请重试。'))
+      bookMetadata = detail
     }
     totalImages.value = bookMetadata.imageCount
 
@@ -443,7 +465,9 @@ async function fetchBookInfo(currentBookId: string, page = 0): Promise<bookInfoO
   const input = new bookInfoInput()
   input.bookId = currentBookId
   input.page = page
-  return await getBookInfoWithCache(input, 'viewer')
+  const result = await getBookInfoWithCache(input, 'viewer', forceNetworkPages)
+  if (!isViewUnmounted && result.contentWarning) contentWarning.value = result.contentWarning
+  return result
 }
 
 async function loadMorePic() {
@@ -813,13 +837,20 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
 </script>
 
 <template>
+  <GalleryContentWarning
+    v-if="contentWarning"
+    :paragraphs="contentWarning"
+    :loading="pageData.loading"
+    @continue="continueAfterWarning"
+  />
   <div
+    v-else
     v-intersect-more="loadMorePic"
     class="viewer-view"
     :data-load-disabled="infiniteScrollDisabled"
   >
     <Notice v-if="readerError" tone="error" :title="t(readerError)" class="reader-notice">
-      <ActionButton v-if="bookId" @click="initialize">{{ t('重新加载') }}</ActionButton>
+      <ActionButton v-if="bookId" @click="initialize(true)">{{ t('重新加载') }}</ActionButton>
       <RouterLink v-else to="/booklist">{{ t('返回搜索') }}</RouterLink>
     </Notice>
     <div v-if="!pageData.loading && (bookImages[0]?.ordinal ?? 1) > 1" class="previous-images">
@@ -882,6 +913,7 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
 
     <Notice v-if="moreError" tone="error" :title="t(moreError)" class="reader-notice">
       <ActionButton @click="retryMore">{{ t('重试后续图片') }}</ActionButton>
+      <ActionButton @click="initialize(true)">{{ t('重新加载') }}</ActionButton>
     </Notice>
     <div v-if="pageData.loadingMore" class="load-state">
       <IconFrame class="is-loading">

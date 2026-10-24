@@ -1289,5 +1289,10 @@
   "无法访问 ExHentai，请在同一浏览器打开 ExHentai 确认账号权限和登录状态": "Cannot access ExHentai. Open it in the same browser to check account access and login status",
   "请前往设置更新浏览器助手，以支持 ExHentai 本机请求": "Update the browser assistant in Settings to enable local ExHentai requests",
   "ExHentai 未返回可用页面，请确认账号访问权限及当前连接方式的登录凭据": "ExHentai did not return a usable page. Check account access and credentials for the selected connection",
-  "直接前往所选源站画册页面": "Open the gallery on the selected source site"
+  "直接前往所选源站画册页面": "Open the gallery on the selected source site",
+  "源站内容警告": "Source content warning",
+  "源站已将此画册标记为可能令人不适的内容，请确认是否继续。": "The source has flagged this gallery as potentially disturbing. Please decide whether to continue.",
+  "了解警告，继续查看": "Acknowledge and view gallery",
+  "画册数据不完整，请重新加载。": "Gallery data is incomplete. Please reload.",
+  "源站请求失败（HTTP {p0}），请重新加载。": "Source request failed (HTTP {p0}). Please reload."
 }

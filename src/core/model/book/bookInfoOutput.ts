@@ -3,6 +3,7 @@ import { tagCollection } from './tag'
 import type { galleryFavoriteStatus } from './favoriteOutput'
 
 export class bookInfoOutput extends P<string[]> {
+  contentWarning?: string[]
   /**
    * 画册ID
    */
