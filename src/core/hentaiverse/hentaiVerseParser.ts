@@ -1,3 +1,4 @@
+import { withTranslationCapture, protectTranslationNames } from './hentaiVerseTranslationCapture'
 import { formatSystemMessage } from '@/i18n'
 import type {
   HentaiVerseAttribute,
@@ -50,50 +51,55 @@ import {
 const parser = new DOMParser()
 
 export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget): HentaiVersePage {
-  const document = parser.parseFromString(html, 'text/html')
-  decodeHentaiVerseGlyphs(document)
-  const bodyText = cleanText(document.body?.textContent)
-  const authenticated =
-    !/you (?:must|have to) (?:be logged on|log on)|requires you to log on|please log on|log on with an EH account/i.test(
-      bodyText,
-    )
-  const scriptText = Array.from(document.scripts, (script) => script.textContent || '').join('\n')
-  const section = getHentaiVerseSection(target)
-  const personaName = readScriptString(scriptText, 'current_persona_name')
-  const equipment =
-    section === 'equipment' ? parseEquipment(document, scriptText, target) : undefined
-  const abilities =
-    section === 'abilities' ? parseAbilities(document, scriptText, target) : undefined
-  const training = section === 'training' ? parseTraining(document, scriptText) : undefined
-  const inventory = section === 'inventory' ? parseInventory(document) : undefined
+  return withTranslationCapture(getHentaiVerseSection(target), html, () => {
+    const document = parser.parseFromString(html, 'text/html')
+    decodeHentaiVerseGlyphs(document)
+    const bodyText = cleanText(document.body?.textContent)
+    const authenticated =
+      !/you (?:must|have to) (?:be logged on|log on)|requires you to log on|please log on|log on with an EH account/i.test(
+        bodyText,
+      )
+    const scriptText = Array.from(document.scripts, (script) => script.textContent || '').join('\n')
+    const section = getHentaiVerseSection(target)
+    const personaName = readScriptString(scriptText, 'current_persona_name')
+    protectTranslationNames([personaName, readCharacterName(document, personaName)])
+    const equipment =
+      section === 'equipment' ? parseEquipment(document, scriptText, target) : undefined
+    const abilities =
+      section === 'abilities' ? parseAbilities(document, scriptText, target) : undefined
+    const training = section === 'training' ? parseTraining(document, scriptText) : undefined
+    const inventory = section === 'inventory' ? parseInventory(document) : undefined
 
-  return {
-    section,
-    title: translateHentaiVerseText(
-      document.querySelector('h1, #mainpane h2, title')?.textContent || 'HentaiVerse',
-    ),
-    characterName: readCharacterName(document, personaName),
-    personaName,
-    authenticated,
-    usableExperience: Number(matchValue(scriptText, /usable_exp\s*=\s*([0-9]+)/) || 0),
-    metrics: parseMetrics(document, scriptText),
-    statGroups: parseStatGroups(document),
-    personaCapacity: readPersonaCapacity(document),
-    attributes: parseAttributes(scriptText),
-    personas: parsePersonas(document, personaName),
-    equipment,
-    equipmentSources: ['equipment', 'itemWorld'].includes(section)
-      ? readEquipmentSources(document)
-      : [],
-    abilities,
-    training,
-    inventory,
-    challenges: ['arena', 'ringOfBlood'].includes(section) ? parseChallenges(document) : undefined,
-    challengePostToken: document.querySelector<HTMLInputElement>('input[name="postoken"]')?.value,
-    itemWorld: section === 'itemWorld' ? parseItemWorld(document, scriptText, target) : undefined,
-    forms: parseForms(document, section),
-    notices: parseNotices(document),
-  }
+    return {
+      section,
+      title: translateHentaiVerseText(
+        document.querySelector('h1, #mainpane h2, title')?.textContent || 'HentaiVerse',
+      ),
+      characterName: readCharacterName(document, personaName),
+      personaName,
+      authenticated,
+      usableExperience: Number(matchValue(scriptText, /usable_exp\s*=\s*([0-9]+)/) || 0),
+      metrics: parseMetrics(document, scriptText),
+      statGroups: parseStatGroups(document),
+      personaCapacity: readPersonaCapacity(document),
+      attributes: parseAttributes(scriptText),
+      personas: parsePersonas(document, personaName),
+      equipment,
+      equipmentSources: ['equipment', 'itemWorld'].includes(section)
+        ? readEquipmentSources(document)
+        : [],
+      abilities,
+      training,
+      inventory,
+      challenges: ['arena', 'ringOfBlood'].includes(section)
+        ? parseChallenges(document)
+        : undefined,
+      challengePostToken: document.querySelector<HTMLInputElement>('input[name="postoken"]')?.value,
+      itemWorld: section === 'itemWorld' ? parseItemWorld(document, scriptText, target) : undefined,
+      forms: parseForms(document, section),
+      notices: parseNotices(document),
+    }
+  })
 }
 
 export function parseEncounterFromGalleryHtml(html: string): HentaiVerseEncounter | undefined {
@@ -112,13 +118,15 @@ export function parseEncounterFromGalleryHtml(html: string): HentaiVerseEncounte
 }
 
 export function parseBattlePage(html: string): HentaiVerseBattleSnapshot {
-  const document = parser.parseFromString(html, 'text/html')
-  decodeHentaiVerseGlyphs(document)
-  const scripts = Array.from(document.scripts, (script) => script.textContent || '').join('\n')
-  const token =
-    readScriptString(scripts, 'battle_token') ||
-    matchValue(scripts, /battle_token\s*=\s*['"]([^'"]+)/)
-  return parseBattleDocument(document, token)
+  return withTranslationCapture('battle', html, () => {
+    const document = parser.parseFromString(html, 'text/html')
+    decodeHentaiVerseGlyphs(document)
+    const scripts = Array.from(document.scripts, (script) => script.textContent || '').join('\n')
+    const token =
+      readScriptString(scripts, 'battle_token') ||
+      matchValue(scripts, /battle_token\s*=\s*['"]([^'"]+)/)
+    return parseBattleDocument(document, token)
+  })
 }
 
 function isVerificationDocument(document: Document): boolean {
@@ -153,77 +161,80 @@ export function parseBattleResponse(
   payload: Record<string, unknown>,
   previous: HentaiVerseBattleSnapshot,
 ): HentaiVerseBattleSnapshot {
-  const verification = Object.values(payload).find(
-    (value) => typeof value === 'string' && isHentaiVerseVerificationHtml(value),
-  )
-  if (typeof verification === 'string')
+  return withTranslationCapture('battle', '', () => {
+    protectTranslationNames(previous.monsters.map((monster) => monster.name))
+    const verification = Object.values(payload).find(
+      (value) => typeof value === 'string' && isHentaiVerseVerificationHtml(value),
+    )
+    if (typeof verification === 'string')
+      return {
+        ...previous,
+        verificationRequired: true,
+        completed: false,
+        roundCompleted: false,
+        actions: [],
+      }
+    const document = parser.parseFromString('<!doctype html><body></body>', 'text/html')
+    const paneNames = [
+      'pane_completion',
+      'pane_effects',
+      'pane_action',
+      'pane_vitals',
+      'pane_quickbar',
+      'table_skills',
+      'table_magic',
+      'pane_item',
+      'pane_monster',
+      'textlog',
+    ]
+    paneNames.forEach((name) => {
+      const value = payload[name]
+      if (typeof value !== 'string' && !(name === 'textlog' && Array.isArray(value))) return
+      const wrapper = document.createElement(
+        name.startsWith('table_') || name === 'textlog' ? 'table' : 'div',
+      )
+      wrapper.id = name
+      if (typeof value === 'string') {
+        wrapper.innerHTML = value
+      } else if (Array.isArray(value)) {
+        // Native battle responses send chronological { t: HTML, c?: class }
+        // entries, while full-page logs have the newest table row first.
+        value
+          .slice()
+          .reverse()
+          .forEach((entry) => {
+            if (!entry || typeof entry !== 'object' || typeof entry.t !== 'string') return
+            const row = document.createElement('tr')
+            const cell = document.createElement('td')
+            cell.innerHTML = entry.t
+            row.appendChild(cell)
+            wrapper.appendChild(row)
+          })
+      }
+      document.body.appendChild(wrapper)
+    })
+    decodeHentaiVerseGlyphs(document)
+    const parsed = parseBattleDocument(document, previous.token)
+    const actions = new Map(
+      previous.actions.map((action) => [`${action.mode}:${action.skill}`, action]),
+    )
+    parsed.actions.forEach((action) => actions.set(`${action.mode}:${action.skill}`, action))
     return {
       ...previous,
-      verificationRequired: true,
-      completed: false,
-      roundCompleted: false,
-      actions: [],
-    }
-  const document = parser.parseFromString('<!doctype html><body></body>', 'text/html')
-  const paneNames = [
-    'pane_completion',
-    'pane_effects',
-    'pane_action',
-    'pane_vitals',
-    'pane_quickbar',
-    'table_skills',
-    'table_magic',
-    'pane_item',
-    'pane_monster',
-    'textlog',
-  ]
-  paneNames.forEach((name) => {
-    const value = payload[name]
-    if (typeof value !== 'string' && !(name === 'textlog' && Array.isArray(value))) return
-    const wrapper = document.createElement(
-      name.startsWith('table_') || name === 'textlog' ? 'table' : 'div',
-    )
-    wrapper.id = name
-    if (typeof value === 'string') {
-      wrapper.innerHTML = value
-    } else if (Array.isArray(value)) {
-      // Native battle responses send chronological { t: HTML, c?: class }
-      // entries, while full-page logs have the newest table row first.
-      value
-        .slice()
-        .reverse()
-        .forEach((entry) => {
-          if (!entry || typeof entry !== 'object' || typeof entry.t !== 'string') return
-          const row = document.createElement('tr')
-          const cell = document.createElement('td')
-          cell.innerHTML = entry.t
-          row.appendChild(cell)
-          wrapper.appendChild(row)
-        })
-    }
-    document.body.appendChild(wrapper)
-  })
-  decodeHentaiVerseGlyphs(document)
-  const parsed = parseBattleDocument(document, previous.token)
-  const actions = new Map(
-    previous.actions.map((action) => [`${action.mode}:${action.skill}`, action]),
-  )
-  parsed.actions.forEach((action) => actions.set(`${action.mode}:${action.skill}`, action))
-  return {
-    ...previous,
-    ...parsed,
-    vitals: parsed.vitals.length ? parsed.vitals : previous.vitals,
-    effects: typeof payload.pane_effects === 'string' ? parsed.effects : previous.effects,
-    monsters: parsed.completed
-      ? parsed.monsters
-      : parsed.monsters.length
+      ...parsed,
+      vitals: parsed.vitals.length ? parsed.vitals : previous.vitals,
+      effects: typeof payload.pane_effects === 'string' ? parsed.effects : previous.effects,
+      monsters: parsed.completed
         ? parsed.monsters
-        : previous.monsters,
-    actions: parsed.roundCompleted ? [] : Array.from(actions.values()),
-    effectIds: typeof payload.pane_effects === 'string' ? parsed.effectIds : previous.effectIds,
-    overcharge: typeof payload.pane_vitals === 'string' ? parsed.overcharge : previous.overcharge,
-    log: parsed.log.length ? [...previous.log, ...parsed.log].slice(-40) : previous.log,
-  }
+        : parsed.monsters.length
+          ? parsed.monsters
+          : previous.monsters,
+      actions: parsed.roundCompleted ? [] : Array.from(actions.values()),
+      effectIds: typeof payload.pane_effects === 'string' ? parsed.effectIds : previous.effectIds,
+      overcharge: typeof payload.pane_vitals === 'string' ? parsed.overcharge : previous.overcharge,
+      log: parsed.log.length ? [...previous.log, ...parsed.log].slice(-40) : previous.log,
+    }
+  })
 }
 
 function parseAttributes(scriptText: string): HentaiVerseAttribute[] {
@@ -1029,6 +1040,8 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
       completionText: '',
     }
   }
+  const monsters = parseMonsters(document)
+  protectTranslationNames(monsters.map((monster) => monster.name))
   const completionPane = document.querySelector<HTMLElement>('#pane_completion')
   const completionText = readBattleCompletion(completionPane)
   // Active battles keep an empty completion pane in the DOM as an AJAX target.
@@ -1044,7 +1057,6 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
     /\bYou are victorious\b|\bArena challenge cleared\b/i.test(
       cleanText(completionPane?.textContent),
     )
-  const monsters = parseMonsters(document)
   if (victorious) {
     // Victory responses can remove health bars instead of returning zero-width bars.
     monsters.forEach((monster) => {

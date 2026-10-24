@@ -9,6 +9,7 @@ const groups = [
     items: [
       { id: 'appearance', title: '外观与语言' },
       { id: 'browser-assistant', title: '浏览器助手', beta: true },
+      { id: 'hv-translations', title: 'HV 翻译收集' },
       { id: 'sharing', title: '分享设置' },
     ],
   },

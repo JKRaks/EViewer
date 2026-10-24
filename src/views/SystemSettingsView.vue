@@ -4,6 +4,8 @@ import SelectField from '@/components/primitives/SelectField.vue'
 import AppearanceSettings from '@/components/settings/AppearanceSettings.vue'
 import SettingsNavigation from '@/components/settings/SettingsNavigation.vue'
 import BrowserAssistantSettings from '@/components/settings/BrowserAssistantSettings.vue'
+import HentaiVerseTranslationSettings from '@/components/settings/HentaiVerseTranslationSettings.vue'
+import { clearTranslationCandidates } from '@/core/hentaiverse/hentaiVerseTranslationCapture'
 
 import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
 import RadioChoice from '@/components/primitives/RadioChoice.vue'
@@ -207,7 +209,7 @@ async function clearReadingHistoryFromSettings() {
 async function clearAllIndexedDb() {
   try {
     await dialogs.confirm(
-      t('确定完全清理 IndexedDB 中的标签翻译、画册详情、图片信息和浏览历史吗？'),
+      t('确定完全清理 IndexedDB 中的标签翻译、画册详情、图片信息、浏览历史和翻译收集记录吗？'),
       t('完全清理 IndexedDB'),
       {
         confirmButtonText: t('完全清理'),
@@ -217,6 +219,7 @@ async function clearAllIndexedDb() {
     )
     fullClearRunning.value = true
     resetTagTranslationRuntime()
+    await clearTranslationCandidates()
     await deleteCacheDatabase()
     tagCacheStatus.value = { available: false, count: 0 }
     notify.success(t('IndexedDB 已完全清理'))
@@ -268,6 +271,7 @@ function formatDate(timestamp?: number) {
       </section>
 
       <BrowserAssistantSettings />
+      <HentaiVerseTranslationSettings />
 
       <section id="sharing" class="settings-section">
         <h2>{{ t('分享设置') }}</h2>
@@ -483,7 +487,9 @@ function formatDate(timestamp?: number) {
         <div class="setting-row">
           <div>
             <div class="setting-name">{{ t('全部 IndexedDB 数据') }}</div>
-            <div class="setting-value">{{ t('标签翻译、画册详情、图片信息和浏览历史') }}</div>
+            <div class="setting-value">
+              {{ t('标签翻译、画册详情、图片信息、浏览历史和翻译收集记录') }}
+            </div>
           </div>
           <ActionButton
             variant="destructive"
