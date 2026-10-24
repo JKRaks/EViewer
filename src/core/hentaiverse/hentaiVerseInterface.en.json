@@ -227,5 +227,13 @@
   "每步确认战况后等待三秒；开启轮间自动继续后，等待五秒进入下一轮。自动战斗不使用消耗品。": "Waits three seconds after each confirmed action, and five seconds between waves when enabled. No consumables are used.",
   "自动战斗中，点击展开": "Auto-fighting. Click to expand",
   "当前无法治疗，使用防御等待恢复": "Healing is unavailable. Defending until recovery is possible.",
-  "当前无法治疗且防御不可用，已暂停等待接管": "Healing and defense are unavailable. Paused for manual control."
+  "当前无法治疗且防御不可用，已暂停等待接管": "Healing and defense are unavailable. Paused for manual control.",
+  "等待手动验证": "Waiting for manual verification",
+  "源站需要手动验证": "Manual verification required on the source",
+  "源站需要手动验证，自动战斗已暂停": "Source verification required. Auto-fight paused.",
+  "自动战斗已暂停。请在源站完成图片选择或答题，再返回恢复战斗。": "Auto-fight is paused. Complete the image selection or question on the source, then return to recover the battle.",
+  "请使用与当前连接方式相同的账号登录源站。": "Sign in to the source with the same account used by the current connection.",
+  "打开源站完成验证": "Open source to complete verification",
+  "我已完成验证，恢复战斗": "Verification complete: recover battle",
+  "HentaiVerse 战斗响应无效": "Invalid HentaiVerse battle response"
 }

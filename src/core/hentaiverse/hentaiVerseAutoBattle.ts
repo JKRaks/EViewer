@@ -55,7 +55,13 @@ export function canUseAutomaticBattleAction(
   battle: HentaiVerseBattleSnapshot,
   action: HentaiVerseBattleAction,
 ): boolean {
-  if (action.available !== true || battle.completed || battle.roundCompleted) return false
+  if (
+    action.available !== true ||
+    battle.completed ||
+    battle.roundCompleted ||
+    battle.verificationRequired
+  )
+    return false
   if (action.mode === 'attack') return action.skill === 0 && action.target === 'enemy'
   if (action.mode === 'defend') return action.skill === 0 && action.target !== 'enemy'
   if (action.mode === 'focus') return (battle.overcharge ?? 0) >= 25 && action.skill === 0
@@ -78,6 +84,7 @@ export function decideAutoBattleAction(
   settings: AutoBattleSettings,
   selectedTarget?: number,
 ): AutoBattleDecision {
+  if (battle.verificationRequired) return { reason: '源站需要手动验证，自动战斗已暂停' }
   if (battle.completed) return { reason: '本次战斗已结束' }
   if (battle.roundCompleted) return { reason: '本轮已结束，等待手动继续' }
   const health = battle.vitals.find((vital) => vital.key === 'health')

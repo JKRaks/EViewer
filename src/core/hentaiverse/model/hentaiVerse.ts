@@ -343,6 +343,7 @@ export interface HentaiVerseBattleMonster {
 }
 
 export interface HentaiVerseBattleSnapshot {
+  verificationRequired?: boolean
   token: string
   title: string
   vitals: HentaiVerseBattleVital[]
