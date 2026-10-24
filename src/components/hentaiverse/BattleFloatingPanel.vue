@@ -82,6 +82,52 @@ const settingsError = ref('')
 const autoRunning = ref(false)
 const autoCountdown = ref(0)
 const autoReason = ref('')
+const floatingLogs = ref<{ id: number; text: string }[]>([])
+const logTimers = new Map<number, ReturnType<typeof setTimeout>>()
+let floatingLogId = 0
+
+function clearFloatingLogs() {
+  logTimers.forEach((timer) => clearTimeout(timer))
+  logTimers.clear()
+  floatingLogs.value = []
+}
+
+watch(
+  () => battle.value?.log,
+  (current, previous) => {
+    if (!current || !previous || !autoRunning.value || hentaiVerseState.battleVisible) return
+    // Source snapshots include overlapping history; only announce newly appended entries.
+    let overlap = Math.min(previous.length, current.length)
+    while (overlap && !previous.slice(-overlap).every((line, index) => line === current[index]))
+      overlap--
+    const additions = current.slice(overlap).slice(-3)
+    for (const text of additions) {
+      const id = ++floatingLogId
+      floatingLogs.value = [...floatingLogs.value, { id, text }].slice(-3)
+      logTimers.set(
+        id,
+        setTimeout(() => {
+          floatingLogs.value = floatingLogs.value.filter((line) => line.id !== id)
+          logTimers.delete(id)
+        }, 2000),
+      )
+    }
+    for (const [id, timer] of logTimers) {
+      if (!floatingLogs.value.some((line) => line.id === id)) {
+        clearTimeout(timer)
+        logTimers.delete(id)
+      }
+    }
+  },
+  { flush: 'sync' },
+)
+watch(
+  () => hentaiVerseState.battleVisible,
+  (visible) => {
+    if (visible) clearFloatingLogs()
+  },
+)
+
 let cancelDelay: (() => void) | undefined
 let autoRunId = 0
 const offensiveSpells = computed(
@@ -97,6 +143,7 @@ onMounted(() => document.addEventListener('visibilitychange', handleVisibility))
 onUnmounted(() => {
   document.removeEventListener('visibilitychange', handleVisibility)
   pauseAutoBattle()
+  clearFloatingLogs()
 })
 
 function toggleManual() {
@@ -118,25 +165,24 @@ watch(
   { immediate: true },
 )
 
-watch(
-  [battle, () => hentaiVerseState.battleVisible, () => hentaiVerseState.error],
-  ([current, visible, error], [previous, , previousError]) => {
-    if (!current || !visible) pauseAutoBattle()
-    else if (error) pauseAutoBattle('战斗状态待确认，请从服务器恢复')
-    else if (current.completed) {
-      pauseAutoBattle('本次战斗已结束')
-      if (!previous?.completed)
-        notify.success({
-          title: t('战斗已结束'),
-          message: t('战斗结果已保留在面板中，查看后可关闭战斗面板。'),
-          duration: 5000,
-        })
-    } else if (current.roundCompleted && (!autoRunning.value || !autoSettings.value.continueRounds))
-      pauseAutoBattle('本轮已结束，等待手动继续')
-    else if (previousError || !previous || previous.completed || previous.roundCompleted)
-      autoReason.value = ''
-  },
-)
+watch([battle, () => hentaiVerseState.error], ([current, error], [previous, previousError]) => {
+  if (!current) {
+    pauseAutoBattle()
+    clearFloatingLogs()
+  } else if (error) pauseAutoBattle('战斗状态待确认，请从服务器恢复')
+  else if (current.completed) {
+    pauseAutoBattle('本次战斗已结束')
+    if (!previous?.completed)
+      notify.success({
+        title: t('战斗已结束'),
+        message: t('战斗结果已保留在面板中，查看后可关闭战斗面板。'),
+        duration: 5000,
+      })
+  } else if (current.roundCompleted && (!autoRunning.value || !autoSettings.value.continueRounds))
+    pauseAutoBattle('本轮已结束，等待手动继续')
+  else if (previousError || !previous || previous.completed || previous.roundCompleted)
+    autoReason.value = ''
+})
 
 async function act(action: HentaiVerseBattleAction) {
   pauseAutoBattle('已切换为手动操作')
@@ -226,7 +272,7 @@ async function startAutoBattle() {
   autoRunning.value = true
   manualOpen.value = false
   try {
-    while (runId === autoRunId && hentaiVerseState.battleVisible) {
+    while (runId === autoRunId) {
       const current = battle.value
       if (!current || current.completed || document.hidden) return
       if (current.roundCompleted) {
@@ -277,7 +323,7 @@ async function continueRound(automatic = false) {
   const runId = autoRunId
   try {
     await continueHentaiVerseBattleRound()
-    if (automatic && runId === autoRunId && hentaiVerseState.battleVisible && !document.hidden) {
+    if (automatic && runId === autoRunId && battle.value && !document.hidden) {
       if (battle.value?.roundCompleted && !battle.value.completed)
         throw new Error(t('未能确认下一轮，请恢复战斗状态'))
       await startAutoBattle()
@@ -297,7 +343,6 @@ async function recover() {
 }
 
 function minimizeBattle() {
-  pauseAutoBattle()
   hideHentaiVerseBattle()
 }
 
@@ -312,13 +357,31 @@ function closeLocalBattle() {
 <template>
   <ActionButton
     v-if="battle && !hentaiVerseState.battleVisible"
-    class="battle-resume-button"
-    variant="destructive"
+    class="battle-resume-button hv-theme"
+    :class="{ 'is-auto-running': autoRunning }"
+    :variant="autoRunning ? 'default' : 'destructive'"
+    :aria-label="t(autoRunning ? '自动战斗中，点击展开' : '返回 HentaiVerse 战斗')"
     size="icon"
     :icon="Lightning"
     :title="t('返回 HentaiVerse 战斗')"
     @click="showHentaiVerseBattle"
   />
+
+  <div
+    v-if="battle && !hentaiVerseState.battleVisible"
+    class="battle-floating-logs hv-theme"
+    role="log"
+    aria-live="polite"
+    :aria-label="t('战斗日志')"
+  >
+    <div v-for="slot in 3" :key="slot" class="battle-log-slot">
+      <Transition name="battle-log-tip" mode="out-in">
+        <p v-if="floatingLogs[slot - 1]" :key="floatingLogs[slot - 1]!.id">
+          {{ t(floatingLogs[slot - 1]!.text) }}
+        </p>
+      </Transition>
+    </div>
+  </div>
 
   <Transition name="battle-panel">
     <section
@@ -997,6 +1060,64 @@ function closeLocalBattle() {
   height: 46px;
   box-shadow: var(--shadow);
 }
+.battle-resume-button.is-auto-running {
+  animation: battle-running-pulse 1.8s ease-in-out infinite;
+}
+.battle-resume-button.is-auto-running :deep(svg) {
+  animation: battle-running-icon 1.8s ease-in-out infinite;
+}
+.battle-floating-logs {
+  position: fixed;
+  right: 138px;
+  bottom: calc(18px + env(safe-area-inset-bottom));
+  z-index: 3049;
+  width: min(300px, calc(100vw - 154px));
+  pointer-events: none;
+}
+.battle-log-slot p {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
+  backdrop-filter: blur(6px);
+  color: var(--foreground);
+  font-size: 12px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.battle-log-tip-enter-active,
+.battle-log-tip-leave-active {
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+.battle-log-tip-enter-from,
+.battle-log-tip-leave-to {
+  opacity: 0;
+  transform: translateY(5px);
+}
+@keyframes battle-running-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  60% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+@keyframes battle-running-icon {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
 .battle-panel-enter-active,
 .battle-panel-leave-active {
   transition:
@@ -1021,6 +1142,11 @@ function closeLocalBattle() {
   .battle-body {
     flex: 1;
   }
+  .battle-floating-logs {
+    right: 132px;
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    width: min(280px, calc(100vw - 144px));
+  }
   .battle-resume-button {
     right: 72px;
     bottom: calc(14px + env(safe-area-inset-bottom));
@@ -1029,6 +1155,18 @@ function closeLocalBattle() {
   }
 }
 @media (prefers-reduced-motion: reduce) {
+  .battle-resume-button.is-auto-running,
+  .battle-resume-button.is-auto-running :deep(svg) {
+    animation: none;
+  }
+  .battle-resume-button.is-auto-running {
+    outline: 2px solid var(--accent);
+    outline-offset: 3px;
+  }
+  .battle-log-tip-enter-active,
+  .battle-log-tip-leave-active {
+    transition: none;
+  }
   .auto-countdown-line i {
     transition: none;
   }
