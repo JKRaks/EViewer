@@ -8,7 +8,11 @@ import axios, {
 } from 'axios'
 import type { R, requestEncoding } from '../model/R'
 import { jsonClass } from './decorator/jsonProperty'
-import { connectionSettings, currentTransportSignal } from '../connector/connectionSettings'
+import {
+  connectionSettings,
+  currentTransportSignal,
+  galleryOrigin,
+} from '../connector/connectionSettings'
 import { requestLocalGallery } from '../connector/connectorTransport'
 
 export interface HttpRequestOptions {
@@ -84,17 +88,25 @@ export class httpClass {
 
       options.signal?.throwIfAborted()
       this.checkSourceResponse(response)
+      if (
+        galleryOrigin(param.url()) === 'https://exhentai.org' &&
+        !/<(?:html|body|div|table|form)\b/i.test(response.data)
+      )
+        throw new Error(
+          formatSystemMessage(
+            'ExHentai 未返回可用页面，请确认账号访问权限及当前连接方式的登录凭据',
+          ),
+        )
       result.data = response.data
       result.isSuccess = true
       if (
-        connectionSettings.mode === 'server' &&
         typeof response.data === 'string' &&
         response.data.includes('eventpane') &&
         response.data.includes('hentaiverse.org')
       ) {
         void import('../hentaiverse/hentaiVerseStore').then(
           ({ inspectGalleryHtmlForEncounter }) => {
-            inspectGalleryHtmlForEncounter(response.data)
+            if (!options.signal?.aborted) inspectGalleryHtmlForEncounter(response.data)
           },
         )
       }

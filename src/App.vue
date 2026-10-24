@@ -330,7 +330,10 @@ onUnmounted(() => {
         <Suspense>
           <template #default>
             <RouterView v-slot="{ Component, route }">
-              <KeepAlive :key="connectionSettings.mode" :include="cachedViews">
+              <KeepAlive
+                :key="`${connectionSettings.mode}:${connectionSettings.site}`"
+                :include="cachedViews"
+              >
                 <component :is="Component" :key="route.path" />
               </KeepAlive>
             </RouterView>

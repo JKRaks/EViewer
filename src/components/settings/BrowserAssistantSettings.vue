@@ -15,7 +15,7 @@ import windowsIcon from '@/assets/platform-icons/windows.svg?raw'
 import appleIcon from '@/assets/platform-icons/apple.svg?raw'
 import androidIcon from '@/assets/platform-icons/android.svg?raw'
 import linuxIcon from '@/assets/platform-icons/linux.svg?raw'
-import { connectionSettings } from '@/core/connector/connectionSettings'
+import { connectionSettings, galleryOrigin } from '@/core/connector/connectionSettings'
 import {
   assistantUrl,
   checkAssistantVersion,
@@ -172,7 +172,7 @@ onMounted(scrollToEntry)
     <div class="assistant-row">
       <div>
         <strong>{{ t('画廊请求方式') }}</strong>
-        <p>{{ t('本机模式通过脚本从当前浏览器访问 E-Hentai。') }}</p>
+        <p>{{ t('本机模式通过脚本从当前浏览器访问所选画廊站点。') }}</p>
       </div>
       <ChoiceGroup
         :model-value="connectionSettings.mode"
@@ -187,7 +187,24 @@ onMounted(scrollToEntry)
         >
       </ChoiceGroup>
     </div>
-    <p>{{ t('本机失败后不会自动切回服务代理。HentaiVerse 仍使用服务代理及其登录凭据。') }}</p>
+    <div class="assistant-row">
+      <div>
+        <strong>{{ t('画廊站点') }}</strong>
+        <p>{{ t('ExHentai 需要账号已有访问权限。本机模式请先在同一浏览器打开源站。') }}</p>
+      </div>
+      <ChoiceGroup v-model="connectionSettings.site" :aria-label="t('画廊站点')">
+        <RadioChoice value="eh">E-Hentai</RadioChoice>
+        <RadioChoice value="ex">ExHentai</RadioChoice>
+      </ChoiceGroup>
+    </div>
+    <p>{{ t('画廊和 HentaiVerse 均使用所选连接方式。本机请求失败后不会自动切回服务代理。') }}</p>
+    <p v-if="connectionSettings.site === 'ex'">
+      {{
+        t(
+          '服务代理如需 igneous，请在账号信息中通过 Cookie 字符串一并导入。账号总览、排行榜与捐赠信息仍由 E-Hentai 提供。',
+        )
+      }}
+    </p>
     <div class="assistant-row">
       <div aria-live="polite">
         <strong>{{ status }}</strong>
@@ -286,7 +303,7 @@ onMounted(scrollToEntry)
           <p>
             {{
               t(
-                '允许扩展访问本站和 E-Hentai，刷新本页后点击“重新检测”；连接成功即可选择“本机助手”。',
+                '允许扩展访问本站及所选源站，刷新本页后点击“重新检测”；连接成功即可选择“本机助手”。',
               )
             }}
           </p>
@@ -335,7 +352,7 @@ onMounted(scrollToEntry)
       <p>
         {{
           t(
-            '在同一浏览器登录 E-Hentai，再检测登录状态。本机请求使用源站会话，不向服务代理同步 Cookie。',
+            '在同一浏览器登录所选画廊站点，再检测登录状态。本机请求使用源站会话，不向服务代理同步 Cookie。',
           )
         }}
       </p>
@@ -343,7 +360,11 @@ onMounted(scrollToEntry)
         <Button
           as="a"
           variant="outline"
-          href="https://e-hentai.org/bounce_login.php?b=d&amp;bt=1-1"
+          :href="
+            connectionSettings.site === 'ex'
+              ? galleryOrigin()
+              : 'https://e-hentai.org/bounce_login.php?b=d&bt=1-1'
+          "
           target="_blank"
           rel="noopener noreferrer"
           >{{ t('先登录原站') }}</Button

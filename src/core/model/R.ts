@@ -1,4 +1,5 @@
 import { eurlEnum } from '../common/enum/eurlEnum'
+import { galleryProxyBase } from '../connector/connectionSettings'
 
 export type requestEncoding = 'urlencoded' | 'multipart' | 'json'
 
@@ -10,7 +11,7 @@ export abstract class R {
   }
 
   getHost(): eurlEnum {
-    return eurlEnum.EH
+    return galleryProxyBase(eurlEnum.EH, this.url())
   }
 
   getRequestEncoding(): requestEncoding {

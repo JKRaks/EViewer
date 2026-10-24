@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory } from 'vue-router'
+import { connectionSettings } from '@/core/connector/connectionSettings'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
@@ -62,6 +63,10 @@ const router = createRouter({
       component: () => import('@/views/HentaiVerseView.vue'),
     },
   ],
+})
+
+router.beforeEach((to) => {
+  if (to.query.site === 'eh' || to.query.site === 'ex') connectionSettings.site = to.query.site
 })
 
 export default router

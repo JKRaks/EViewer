@@ -1,14 +1,21 @@
 import { t } from '@/i18n'
+import { galleryOrigin, type GallerySite } from '@/core/connector/connectionSettings'
 
 /** 只接受普通网页地址；相对地址以源站为基准。 */
-export function resolveCommentLink(value: string): { url: string; bookId?: string } | undefined {
+export function resolveCommentLink(
+  value: string,
+): { url: string; bookId?: string; site?: GallerySite } | undefined {
   try {
-    const url = new URL(value, 'https://e-hentai.org/')
+    const url = new URL(value, galleryOrigin())
     if (!['http:', 'https:'].includes(url.protocol) || url.username || url.password) return
     const gallery = url.pathname.match(/^\/g\/(\d+)\/([a-zA-Z0-9]+)\/?$/)
     const isGallery =
       ['e-hentai.org', 'exhentai.org'].includes(url.hostname) && !url.port && gallery
-    return { url: url.href, bookId: isGallery ? `${gallery[1]}/${gallery[2]}` : undefined }
+    return {
+      url: url.href,
+      bookId: isGallery ? `${gallery[1]}/${gallery[2]}` : undefined,
+      site: isGallery ? (url.hostname === 'exhentai.org' ? 'ex' : 'eh') : undefined,
+    }
   } catch {
     return undefined
   }

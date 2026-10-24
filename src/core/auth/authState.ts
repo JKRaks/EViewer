@@ -59,22 +59,33 @@ function loadAuthState(): AuthState {
 export const serverAuthState = reactive(loadAuthState())
 const localAuthState = reactive<AuthState>({ ...defaultState })
 export const localSession = reactive({ checking: false, paused: false, error: '', checkedAt: 0 })
-export const authState = reactive({ ...defaultState, source: connectionSettings.mode })
+export const authState = reactive({
+  ...defaultState,
+  source: connectionSettings.mode,
+  site: connectionSettings.site,
+})
 watch(
-  () => [connectionSettings.mode, { ...serverAuthState }, { ...localAuthState }] as const,
+  () =>
+    [
+      connectionSettings.mode,
+      connectionSettings.site,
+      { ...serverAuthState },
+      { ...localAuthState },
+    ] as const,
   () => {
     Object.assign(
       authState,
       connectionSettings.mode === 'local' ? localAuthState : serverAuthState,
       {
         source: connectionSettings.mode,
+        site: connectionSettings.site,
       },
     )
   },
   { immediate: true, flush: 'sync' },
 )
 watch(
-  () => connectionSettings.mode,
+  () => [connectionSettings.mode, connectionSettings.site],
   () => {
     clearUserConfigCache()
     Object.assign(localAuthState, defaultState, { expiresAt: undefined, lastLoginAt: undefined })
@@ -92,7 +103,13 @@ export async function refreshLocalAuthState(explicit = false, signal?: AbortSign
   const transportSignal = currentTransportSignal()
   try {
     const result = await requestConnector(
-      { url: 'https://e-hentai.org/home.php', method: 'GET' },
+      {
+        url:
+          connectionSettings.site === 'ex'
+            ? 'https://exhentai.org/'
+            : 'https://e-hentai.org/home.php',
+        method: 'GET',
+      },
       { signal },
     )
     transportSignal.throwIfAborted()
@@ -100,10 +117,19 @@ export async function refreshLocalAuthState(explicit = false, signal?: AbortSign
       throw new Error(formatSystemMessage('源站登录检查失败，请打开源站确认访问状态'))
     const doc = new DOMParser().parseFromString(result.text, 'text/html')
     const loggedIn =
-      doc.querySelectorAll('.stuffbox .homebox').length >= 3 &&
-      /Image Limits/i.test(doc.body.textContent || '')
+      connectionSettings.site === 'ex'
+        ? new URL(result.finalUrl).hostname === 'exhentai.org' &&
+          Boolean(doc.querySelector('#searchbox, .itg, #nb a[href*="favorites.php"]'))
+        : doc.querySelectorAll('.stuffbox .homebox').length >= 3 &&
+          /Image Limits/i.test(doc.body.textContent || '')
     if (!loggedIn)
-      throw new Error(formatSystemMessage('未识别到源站登录会话，请在同一浏览器登录后重新检测'))
+      throw new Error(
+        formatSystemMessage(
+          connectionSettings.site === 'ex'
+            ? '无法访问 ExHentai，请在同一浏览器打开 ExHentai 确认账号权限和登录状态'
+            : '未识别到源站登录会话，请在同一浏览器登录后重新检测',
+        ),
+      )
     // home.php does not reliably expose the account ID. Never borrow the server account ID.
     Object.assign(localAuthState, { loggedIn: true, memberId: '', lastLoginAt: Date.now() })
     clearUserConfigCache()
@@ -122,8 +148,12 @@ export async function refreshLocalAuthState(explicit = false, signal?: AbortSign
   }
 }
 
-export async function saveAuthCookies(memberId: string, passHash: string) {
-  const response = await requestAuth('/auth/cookies', { memberId, passHash })
+export async function saveAuthCookies(memberId: string, passHash: string, igneous?: string) {
+  const response = await requestAuth('/auth/cookies', {
+    memberId,
+    passHash,
+    ...(igneous ? { igneous } : {}),
+  })
   applyAuthState({ ...response, memberId: response.memberId ?? memberId }, true)
 }
 
@@ -209,14 +239,20 @@ export function useServerAuthState() {
 /** 仅在用户主动提取时读取代理当前使用的认证 Cookie。 */
 export async function extractAuthCookies(signal?: AbortSignal): Promise<string> {
   const proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
-  const response = await fetch(new URL('/ehentai/auth/export', proxyOrigin), {
-    method: 'POST',
-    credentials: 'include',
-    cache: 'no-store',
-    signal,
-    headers: { 'Content-Type': 'application/json' },
-    body: '{}',
-  })
+  const response = await fetch(
+    new URL(
+      connectionSettings.site === 'ex' ? '/exhentai/auth/export' : '/ehentai/auth/export',
+      proxyOrigin,
+    ),
+    {
+      method: 'POST',
+      credentials: 'include',
+      cache: 'no-store',
+      signal,
+      headers: { 'Content-Type': 'application/json' },
+      body: '{}',
+    },
+  )
   const result = (await response.json().catch(() => ({}))) as {
     success?: boolean
     cookie?: string
