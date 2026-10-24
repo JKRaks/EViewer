@@ -1,10 +1,8 @@
-import type {
-  HentaiVerseBattleMode,
-  HentaiVerseBattleSnapshot,
-} from './model/hentaiVerse'
+import type { HentaiVerseBattleMode, HentaiVerseBattleSnapshot } from './model/hentaiVerse'
 import { parseEncounterFromGalleryHtml } from './hentaiVerseParser'
 import { HentaiVerseBusi } from './hentaiVerseBusi'
 import { hentaiVerseState } from './hentaiVerseRuntime'
+import { canUseAutomaticBattleAction } from './hentaiVerseAutoBattle'
 
 export { hentaiVerseState } from './hentaiVerseRuntime'
 
@@ -42,19 +40,61 @@ export async function performHentaiVerseBattleAction(
   mode: HentaiVerseBattleMode,
   target: number,
   skill = 0,
+  automatic = false,
 ) {
   const current = hentaiVerseState.battle
-  if (!current || current.completed) throw new Error('当前没有可执行的战斗动作')
+  if (!current || current.completed || current.roundCompleted)
+    throw new Error('当前没有可执行的战斗动作')
   if (hentaiVerseState.actionPending) throw new Error('前一战斗动作尚未完成')
+  if (automatic) {
+    const action = current.actions.find((item) => item.mode === mode && item.skill === skill)
+    if (!action || !canUseAutomaticBattleAction(current, action))
+      throw new Error('自动战斗操作已不可用，已暂停')
+    if (
+      action.target === 'enemy' &&
+      !current.monsters.some(
+        (monster) =>
+          monster.id === target &&
+          !monster.defeated &&
+          monster.healthPercent !== undefined &&
+          monster.healthPercent > 0,
+      )
+    )
+      throw new Error('自动战斗目标已不可用，已暂停')
+  }
   hentaiVerseState.actionPending = true
   hentaiVerseState.error = ''
   try {
-    hentaiVerseState.battle = await busi.sendBattleAction(current, mode, target, skill)
+    const next = await busi.sendBattleAction(current, mode, target, skill, automatic)
+    if (hentaiVerseState.battle === current) hentaiVerseState.battle = next
   } catch (error) {
-    hentaiVerseState.error = error instanceof Error ? error.message : '战斗动作状态未知，请恢复战斗确认'
+    hentaiVerseState.error =
+      error instanceof Error ? error.message : '战斗动作状态未知，请恢复战斗确认'
     throw error
   } finally {
     hentaiVerseState.actionPending = false
+  }
+}
+
+export async function continueHentaiVerseBattleRound() {
+  const current = hentaiVerseState.battle
+  if (
+    !current?.roundCompleted ||
+    current.completed ||
+    hentaiVerseState.battleLoading ||
+    hentaiVerseState.actionPending
+  )
+    return
+  hentaiVerseState.battleLoading = true
+  hentaiVerseState.error = ''
+  try {
+    const next = await busi.continueBattleRound(current)
+    if (hentaiVerseState.battle === current) hentaiVerseState.battle = next
+  } catch (error) {
+    hentaiVerseState.error = error instanceof Error ? error.message : '继续战斗失败'
+    throw error
+  } finally {
+    hentaiVerseState.battleLoading = false
   }
 }
 
