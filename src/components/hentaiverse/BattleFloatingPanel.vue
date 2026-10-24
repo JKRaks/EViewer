@@ -85,8 +85,36 @@ const autoReason = ref('')
 const floatingLogs = ref<{ id: number; text: string }[]>([])
 const logTimers = new Map<number, ReturnType<typeof setTimeout>>()
 let floatingLogId = 0
+const pendingLogs: string[] = []
+let logQueueTimer: ReturnType<typeof setTimeout> | undefined
+
+function presentNextLog() {
+  logQueueTimer = undefined
+  const text = pendingLogs.shift()
+  if (text === undefined) return
+  const id = ++floatingLogId
+  floatingLogs.value = [...floatingLogs.value, { id, text }].slice(-3)
+  for (const [oldId, timer] of logTimers) {
+    if (!floatingLogs.value.some((line) => line.id === oldId)) {
+      clearTimeout(timer)
+      logTimers.delete(oldId)
+    }
+  }
+  logTimers.set(
+    id,
+    setTimeout(() => {
+      floatingLogs.value = floatingLogs.value.filter((line) => line.id !== id)
+      logTimers.delete(id)
+    }, 2000),
+  )
+  // Keep the gap even when another snapshot arrives just after this batch drains.
+  logQueueTimer = setTimeout(presentNextLog, 300)
+}
 
 function clearFloatingLogs() {
+  clearTimeout(logQueueTimer)
+  logQueueTimer = undefined
+  pendingLogs.length = 0
   logTimers.forEach((timer) => clearTimeout(timer))
   logTimers.clear()
   floatingLogs.value = []
@@ -100,24 +128,8 @@ watch(
     let overlap = Math.min(previous.length, current.length)
     while (overlap && !previous.slice(-overlap).every((line, index) => line === current[index]))
       overlap--
-    const additions = current.slice(overlap).slice(-3)
-    for (const text of additions) {
-      const id = ++floatingLogId
-      floatingLogs.value = [...floatingLogs.value, { id, text }].slice(-3)
-      logTimers.set(
-        id,
-        setTimeout(() => {
-          floatingLogs.value = floatingLogs.value.filter((line) => line.id !== id)
-          logTimers.delete(id)
-        }, 2000),
-      )
-    }
-    for (const [id, timer] of logTimers) {
-      if (!floatingLogs.value.some((line) => line.id === id)) {
-        clearTimeout(timer)
-        logTimers.delete(id)
-      }
-    }
+    pendingLogs.push(...current.slice(overlap))
+    if (!logQueueTimer) presentNextLog()
   },
   { flush: 'sync' },
 )
@@ -374,13 +386,9 @@ function closeLocalBattle() {
     aria-live="polite"
     :aria-label="t('战斗日志')"
   >
-    <div v-for="slot in 3" :key="slot" class="battle-log-slot">
-      <Transition name="battle-log-tip" mode="out-in">
-        <p v-if="floatingLogs[slot - 1]" :key="floatingLogs[slot - 1]!.id">
-          {{ t(floatingLogs[slot - 1]!.text) }}
-        </p>
-      </Transition>
-    </div>
+    <TransitionGroup name="battle-log-tip" tag="div" class="battle-log-stack">
+      <p v-for="line in floatingLogs" :key="line.id">{{ t(line.text) }}</p>
+    </TransitionGroup>
   </div>
 
   <Transition name="battle-panel">
@@ -1073,8 +1081,12 @@ function closeLocalBattle() {
   z-index: 3049;
   width: min(300px, calc(100vw - 154px));
   pointer-events: none;
+  overflow: clip;
 }
-.battle-log-slot p {
+.battle-log-stack {
+  position: relative;
+}
+.battle-log-stack p {
   margin: 6px 0 0;
   padding: 8px 10px;
   border: 1px solid var(--border);
@@ -1089,16 +1101,24 @@ function closeLocalBattle() {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
+.battle-log-tip-move,
 .battle-log-tip-enter-active,
 .battle-log-tip-leave-active {
   transition:
     opacity 220ms ease,
     transform 220ms ease;
 }
-.battle-log-tip-enter-from,
+.battle-log-tip-enter-from {
+  opacity: 0;
+  transform: translateX(calc(100% + 10px));
+}
+.battle-log-tip-leave-active {
+  position: absolute;
+  width: 100%;
+}
 .battle-log-tip-leave-to {
   opacity: 0;
-  transform: translateY(5px);
+  transform: translateY(-100%);
 }
 @keyframes battle-running-pulse {
   0%,
@@ -1163,6 +1183,7 @@ function closeLocalBattle() {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
   }
+  .battle-log-tip-move,
   .battle-log-tip-enter-active,
   .battle-log-tip-leave-active {
     transition: none;
