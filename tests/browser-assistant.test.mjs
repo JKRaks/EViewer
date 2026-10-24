@@ -308,6 +308,8 @@ function clientHarness() {
         if (dependency === '@/i18n') return { formatSystemMessage: (value) => value }
         if (dependency.includes('eurlEnum')) return { eurlEnum: { EH: origin + '/ehentai' } }
         if (dependency === './userConfigCache') return { clearUserConfigCache() {} }
+        if (dependency.includes('hentaiVerseProtocol'))
+          return load('hentaiverse/hentaiVerseProtocol')
         return load(dependency.split('/').at(-1))
       },
     })
@@ -322,6 +324,7 @@ function clientHarness() {
     storage,
     auth: () => load('auth/authState'),
     transport: () => load('connectorTransport'),
+    hvTransport: () => load('hentaiVerseTransport'),
     respond: (text, finalUrl = 'https://e-hentai.org/home.php') => {
       const request = sent.findLast((message) => message.action === 'request')
       emit({
@@ -503,4 +506,196 @@ test('local transport: repeated form fields and image-search redirect do not rep
   } finally {
     h.client.stopConnector()
   }
+})
+
+for (const flavor of ['tampermonkey', 'userscripts']) {
+  test(`${flavor}: HentaiVerse permissions, source requests and battle boundaries`, () => {
+    const h = scriptHarness(flavor)
+    try {
+      assert.match(createAssistantScript(origin, flavor), /@connect hentaiverse.org/)
+      assert.ok(h.identity.capabilities.includes('hentaiverse'))
+      const requests = [
+        { url: 'https://hentaiverse.org/?s=Character&ss=ch', method: 'GET' },
+        {
+          url: 'https://hentaiverse.org/?s=Character&ss=eq',
+          method: 'POST',
+          body: { kind: 'text', text: 'eqids%5B%5D=123&action=equip' },
+        },
+        { url: 'https://hentaiverse.org/dynjs/123/abc/equip-456.js', method: 'GET' },
+        {
+          url: 'https://hentaiverse.org/json',
+          method: 'POST',
+          contentType: 'application/json',
+          body: {
+            kind: 'text',
+            text: JSON.stringify({
+              type: 'battle',
+              method: 'action',
+              token: 'token123',
+              mode: 'defend',
+              target: 0,
+              skill: 0,
+            }),
+          },
+        },
+      ]
+      requests.forEach((request, index) => {
+        h.send({ action: 'request', id: `hv-${index}`, request })
+        const call = h.calls.at(-1)
+        assert.equal(call.url, request.url)
+        assert.equal(call.headers.Referer, 'https://hentaiverse.org/')
+        assert.equal(call.headers.Cookie, undefined)
+        call.onload({ status: 200, responseText: 'fixture', finalUrl: request.url })
+        assert.equal(h.messages.at(-1).ok, true)
+      })
+      for (const url of [
+        'https://hentaiverse.org/?s=Bazaar&ss=tr',
+        'https://hentaiverse.org/unknown',
+        'https://evil.example/json',
+      ]) {
+        h.send({ action: 'request', id: 'bad', request: { url, method: 'GET' } })
+        assert.equal(h.messages.at(-1).error, 'TARGET_NOT_ALLOWED')
+      }
+      h.send({
+        action: 'request',
+        id: 'invalid-action',
+        request: { ...requests[3], body: { kind: 'text', text: '{"type":"trade"}' } },
+      })
+      assert.equal(h.messages.at(-1).error, 'INVALID_BODY')
+      assert.equal(h.calls.length, 4)
+    } finally {
+      h.close()
+    }
+  })
+}
+
+test('HentaiVerse adapter: routes, repeated form values, action envelope and old assistant upgrade', async () => {
+  const h = clientHarness()
+  try {
+    const { hentaiVerseRequest, requestLocalHentaiVerse } = h.hvTransport()
+    assert.equal(
+      hentaiVerseRequest('/hentaiverse/page', { query: { s: 'Character', ss: 'ab', tree: 'red' } })
+        .url,
+      'https://hentaiverse.org/?s=Character&ss=ab&tree=red',
+    )
+    const form = hentaiVerseRequest('/hentaiverse/form', {
+      method: 'POST',
+      body: {
+        section: 'itemWorld',
+        target: { filter: 'shield' },
+        data: { 'eqids[]': ['123'], name: '中文 +' },
+      },
+    })
+    assert.equal(form.url, 'https://hentaiverse.org/?s=Battle&ss=iw&filter=shield')
+    assert.equal(new URLSearchParams(form.body.text).get('name'), '中文 +')
+    assert.deepEqual(new URLSearchParams(form.body.text).getAll('eqids[]'), ['123'])
+    const action = hentaiVerseRequest('/hentaiverse/action', {
+      method: 'POST',
+      body: { token: 'token123', mode: 'attack', target: 1, skill: 0 },
+    })
+    assert.deepEqual(JSON.parse(action.body.text), {
+      token: 'token123',
+      mode: 'attack',
+      target: 1,
+      skill: 0,
+      type: 'battle',
+      method: 'action',
+    })
+    assert.throws(() =>
+      hentaiVerseRequest('/hentaiverse/equipment-data', {
+        query: { path: 'https://evil.example/' },
+      }),
+    )
+    await h.client.detectConnector()
+    await assert.rejects(requestLocalHentaiVerse('/hentaiverse/page', {}), /更新浏览器助手/)
+    assert.equal(h.sent.filter((m) => m.action === 'request').length, 0)
+    h.identity.capabilities.push('hentaiverse')
+    await h.client.detectConnector()
+    const pending = requestLocalHentaiVerse('/hentaiverse/page', {})
+    await pause()
+    h.respond('HV page', 'https://hentaiverse.org/')
+    assert.equal((await pending).text, 'HV page')
+    const posting = requestLocalHentaiVerse('/hentaiverse/action', {
+      method: 'POST',
+      body: { token: 'token123', mode: 'defend', target: 0, skill: 0 },
+    })
+    const rejected = assert.rejects(posting, { name: 'AbortError' })
+    await pause()
+    h.settings.connectionSettings.mode = 'local'
+    await rejected
+    assert.equal(h.sent.filter((m) => m.action === 'request').length, 2)
+  } finally {
+    h.client.stopConnector()
+  }
+})
+
+test('HentaiVerse business transport: local coverage, server preservation and no POST fallback', async () => {
+  const calls = []
+  const settings = { mode: 'local' }
+  const controller = new AbortController()
+  let failure = false
+  const exports = {}
+  const js = ts.transpileModule(
+    readFileSync(new URL('../src/core/hentaiverse/hentaiVerseBusi.ts', import.meta.url), 'utf8'),
+    { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } },
+  ).outputText
+  vm.runInNewContext(js, {
+    exports,
+    URL,
+    AbortSignal,
+    window: { location: { origin } },
+    fetch: async (url, options) => {
+      calls.push({ transport: 'server', url: String(url), options })
+      return new Response('{}')
+    },
+    require: (dependency) => {
+      if (dependency === '@/i18n') return { formatSystemMessage: (value) => value }
+      if (dependency.includes('eurlEnum')) return { eurlEnum: { EH: origin + '/ehentai' } }
+      if (dependency.includes('connectionSettings'))
+        return { connectionSettings: settings, currentTransportSignal: () => controller.signal }
+      if (dependency.includes('hentaiVerseTransport'))
+        return {
+          requestLocalHentaiVerse: async (path, options) => {
+            calls.push({ transport: 'local', path, options })
+            if (failure) throw new Error('network failed')
+            return { status: 200, text: '{}' }
+          },
+        }
+      if (dependency === './hentaiVerseEquipment') return { parseEquipmentData: (text) => text }
+      if (dependency === './hentaiVerseParser')
+        return {
+          isHentaiVerseBattleHtml: () => false,
+          parseHentaiVersePage: () => ({ authenticated: true }),
+          parseBattleResponse: (_, current) => ({ ...current, roundCompleted: true, actions: [] }),
+        }
+      throw new Error(dependency)
+    },
+  })
+  const busi = new exports.HentaiVerseBusi()
+  await busi.getPage({ s: 'Character', ss: 'ch' })
+  await busi.submitForm('training', { start_train: '1' }, { s: 'Character', ss: 'tr' })
+  await busi.getEquipmentDetails('/dynjs/1/abc/equip-1.js')
+  await busi.sendBattleAction({ token: 'token123' }, 'defend', 0, 0, true)
+  assert.deepEqual(
+    calls.map((call) => call.path),
+    [
+      '/hentaiverse/page',
+      '/hentaiverse/form',
+      '/hentaiverse/equipment-data',
+      '/hentaiverse/action',
+    ],
+  )
+  failure = true
+  await assert.rejects(
+    busi.submitForm('training', { start_train: '1' }, { s: 'Character', ss: 'tr' }),
+    /network failed/,
+  )
+  assert.equal(calls.length, 5)
+  assert.ok(calls.every((call) => call.transport === 'local'))
+  settings.mode = 'server'
+  await busi.getPage({ s: 'Character', ss: 'ch' })
+  await busi.getEquipmentDetails('/dynjs/1/abc/equip-1.js')
+  assert.equal(calls[5].url, origin + '/hentaiverse/page?s=Character&ss=ch')
+  assert.equal(calls[5].options.credentials, 'include')
+  assert.equal(calls[6].transport, 'server')
 })

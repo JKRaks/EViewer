@@ -90,7 +90,7 @@ npm run dev:worker
 
 安装完成后，在「账号信息」页面切换到「本机助手」，点击「检测源站登录」即可使用。应用会自动检测脚本版本并在需要时提示更新。
 
-目前支持 E-Hentai 的列表、详情、收藏、种子、图片搜索等功能，ExHentai 和 HentaiVerse 暂时继续使用服务代理。
+目前支持 E-Hentai 的列表、详情、收藏、种子、图片搜索，以及 HentaiVerse 的页面、表单、战斗和装备数据请求。HentaiVerse 需使用 2.1.0 或更新版本的助手，并在同一浏览器打开 HentaiVerse 确认登录；ExHentai 暂时继续使用服务代理。
 
 ---
 

@@ -1,7 +1,7 @@
 import runtimeSource from './browser-assistant-runtime.js'
 import loginSource from './auth-bridge-script.js'
 
-export const ASSISTANT_VERSION = '2.0.0'
+export const ASSISTANT_VERSION = '2.1.0'
 export const ASSISTANT_PROTOCOL = 1
 export const ASSISTANT_FLAVORS = ['tampermonkey', 'userscripts']
 const prefix = '/auth/bridge/'
@@ -53,6 +53,7 @@ export function createAssistantScript(origin, flavor, allowedOrigins = []) {
     '// @connect e-hentai.org',
     '// @connect upload.e-hentai.org',
     '// @connect ehgt.org',
+    '// @connect hentaiverse.org',
     '// @run-at document-start',
     '// @noframes',
     `// @updateURL ${installationUrl}`,

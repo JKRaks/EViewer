@@ -6,6 +6,7 @@ import Field from '@/components/primitives/Field.vue'
 import SectionTabs from '@/components/primitives/SectionTabs'
 import SectionTab from '@/components/primitives/SectionTab.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
+import { Button } from '@/components/ui/button'
 import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
 import StatusPanel from '@/components/primitives/StatusPanel.vue'
 import ProgressMeter from '@/components/primitives/ProgressMeter.vue'
@@ -965,7 +966,10 @@ onBeforeUnmount(resetAccountData)
       </SectionTab>
 
       <SectionTab :label="t('认证信息')" name="authentication">
-        <section v-if="connectionSettings.mode === 'local'" class="account-section">
+        <section
+          v-if="connectionSettings.mode === 'local'"
+          class="account-section local-source-login"
+        >
           <h2>{{ t('本机源站登录') }}</h2>
           <p>
             {{
@@ -974,20 +978,23 @@ onBeforeUnmount(resetAccountData)
               )
             }}
           </p>
-          <div class="auth-status-actions">
-            <a
+          <div class="local-source-actions">
+            <Button
+              as="a"
+              variant="outline"
+              class="ui-button"
               href="https://e-hentai.org/bounce_login.php?b=d&amp;bt=1-1"
               target="_blank"
               rel="noopener noreferrer"
-              >{{ t('先登录原站') }}</a
+              >{{ t('先登录原站') }}</Button
             >
             <ActionButton :loading="localSession.checking" @click="refreshLocalAuthState(true)">{{
               t('检测源站登录')
             }}</ActionButton>
-            <RouterLink :to="ASSISTANT_SETTINGS">{{
-              t('前往设置安装或更新浏览器助手')
-            }}</RouterLink>
           </div>
+          <RouterLink class="local-source-install" :to="ASSISTANT_SETTINGS">{{
+            t('前往设置安装或更新浏览器助手')
+          }}</RouterLink>
           <Notice v-if="localSession.error" tone="warning" :title="localSession.error" />
         </section>
         <section class="account-section">
@@ -1135,6 +1142,41 @@ onBeforeUnmount(resetAccountData)
 </template>
 
 <style scoped>
+.local-source-login > p {
+  margin: 0 0 16px;
+  line-height: 1.7;
+}
+
+.local-source-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  max-width: 400px;
+}
+
+.local-source-actions :deep(.ui-button) {
+  min-width: 0;
+  height: auto;
+  min-height: 44px;
+  padding: 10px 12px;
+  white-space: normal;
+  text-align: center;
+}
+
+.local-source-actions :deep(.ui-button + .ui-button) {
+  margin-left: 0;
+}
+
+.local-source-install {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
 .auth-status-actions {
   display: flex;
   flex-wrap: wrap;

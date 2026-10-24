@@ -1,5 +1,7 @@
 import { formatSystemMessage } from '@/i18n'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
+import { connectionSettings, currentTransportSignal } from '@/core/connector/connectionSettings'
+import { requestLocalHentaiVerse } from '@/core/connector/hentaiVerseTransport'
 import type {
   HentaiVerseAbilityActionName,
   HentaiVerseBattleMode,
@@ -26,14 +28,15 @@ export class HentaiVerseBusi {
 
   /** Fetch each versioned source asset once; failed requests can be retried separately from the page. */
   getEquipmentDetails(source: string) {
-    const cached = this.equipmentDataCache.get(source)
+    const key = `${connectionSettings.mode}:${source}`
+    const cached = this.equipmentDataCache.get(key)
     if (cached) return cached
     const request = this.fetchEquipmentData(source)
-    this.equipmentDataCache.set(source, request)
+    this.equipmentDataCache.set(key, request)
     if (this.equipmentDataCache.size > 8)
       this.equipmentDataCache.delete(this.equipmentDataCache.keys().next().value!)
     void request.catch(() => {
-      if (this.equipmentDataCache.get(source) === request) this.equipmentDataCache.delete(source)
+      if (this.equipmentDataCache.get(key) === request) this.equipmentDataCache.delete(key)
     })
     return request
   }
@@ -281,6 +284,14 @@ export class HentaiVerseBusi {
     path: string,
     options: { method?: 'GET' | 'POST'; query?: Record<string, unknown>; body?: unknown } = {},
   ) {
+    const signal = currentTransportSignal()
+    if (connectionSettings.mode === 'local') {
+      const response = await requestLocalHentaiVerse(path, options)
+      signal.throwIfAborted()
+      if (response.status < 200 || response.status >= 300)
+        throw new Error(readError(response.text, response.status))
+      return response.text
+    }
     const url = new URL(path, this.proxyOrigin)
     Object.entries(options.query || {}).forEach(([key, value]) => {
       if (value !== undefined && value !== '') url.searchParams.set(key, String(value))
@@ -289,28 +300,30 @@ export class HentaiVerseBusi {
       method: options.method || 'GET',
       cache: 'no-store',
       credentials: 'include',
-      signal: path === '/hentaiverse/equipment-data' ? AbortSignal.timeout(30_000) : undefined,
+      signal:
+        path === '/hentaiverse/equipment-data'
+          ? AbortSignal.any([signal, AbortSignal.timeout(30_000)])
+          : signal,
       headers: options.body ? { 'Content-Type': 'application/json' } : undefined,
       body: options.body ? JSON.stringify(options.body) : undefined,
     })
     const text = await response.text()
+    signal.throwIfAborted()
     if (!response.ok) throw new Error(readError(text, response.status))
     return text
   }
 
   private async requestJson<T>(path: string, body: unknown): Promise<T> {
-    const response = await fetch(new URL(path, this.proxyOrigin), {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    })
-    const payload = (await response.json().catch(() => ({}))) as T & { error?: string }
-    if (!response.ok || payload.error)
+    const text = await this.requestText(path, { method: 'POST', body })
+    let payload: T & { error?: string }
+    try {
+      payload = JSON.parse(text)
+    } catch {
       throw new Error(
-        payload.error ||
-          formatSystemMessage('HentaiVerse 请求失败 ({p0})', { p0: response.status }),
+        formatSystemMessage('HentaiVerse 未返回战斗数据，请打开源站确认登录后恢复战斗'),
       )
+    }
+    if (payload.error) throw new Error(payload.error)
     return payload
   }
 }

@@ -1271,5 +1271,13 @@
   "数据清理": "Clear data",
   "关闭目录": "Close navigation",
   "展开目录": "Open navigation",
-  "设置章节": "Settings sections"
+  "设置章节": "Settings sections",
+  "请前往设置更新浏览器助手，以支持 HentaiVerse 本机请求": "Update the browser assistant in Settings to enable local HentaiVerse requests",
+  "HentaiVerse 登录态已失效，请在当前连接模式下重新登录": "Your HentaiVerse session has expired. Sign in again using the current connection mode",
+  "HentaiVerse 使用当前浏览器的源站会话。首次使用请更新助手，并在同一浏览器打开源站确认登录。": "HentaiVerse uses this browser's source-site session. Update the assistant, then open the source site in the same browser to confirm you are signed in.",
+  "打开 HentaiVerse": "Open HentaiVerse",
+  "HentaiVerse 未返回战斗数据，请打开源站确认登录后恢复战斗": "HentaiVerse did not return battle data. Open the source site to check your login, then restore the battle",
+  "安装或更新浏览器助手": "Install or update browser assistant",
+  "请先在账号信息中完成当前连接模式的登录验证。": "Verify your login for the current connection mode in Account first.",
+  "画廊和 HentaiVerse 均使用所选连接方式。本机请求失败后不会自动切回服务代理。": "Galleries and HentaiVerse use the selected connection. Local request failures do not switch to the server proxy."
 }

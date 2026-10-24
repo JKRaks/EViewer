@@ -187,7 +187,7 @@ onMounted(scrollToEntry)
         >
       </ChoiceGroup>
     </div>
-    <p>{{ t('本机失败后不会自动切回服务代理。HentaiVerse 仍使用服务代理及其登录凭据。') }}</p>
+    <p>{{ t('画廊和 HentaiVerse 均使用所选连接方式。本机请求失败后不会自动切回服务代理。') }}</p>
     <div class="assistant-row">
       <div aria-live="polite">
         <strong>{{ status }}</strong>
