@@ -53,6 +53,7 @@ interface ViewerImageItem {
   url: string
   loading: boolean
   rendered: boolean
+  loadRequested: boolean
   failed: boolean
   autoRetryAttempted: boolean
   aspectRatio?: number
@@ -66,6 +67,8 @@ interface PageImageQueue {
 }
 
 const imageBatchSize = 4
+const imageBatchAhead = 2
+const imagePreloadAhead = 2
 const route = useRoute()
 const bookId = (route.query.bookId ?? route.params.bookId) as string | undefined
 const imageBusi = new bookImageBusi()
@@ -117,6 +120,7 @@ const progressPercentage = computed(() =>
 )
 let imageObserver: IntersectionObserver | null = null
 let visibleImageFrame = 0
+let lastVisibleImageOrdinal = 0
 
 const infiniteScrollDisabled = computed(() => {
   return (
@@ -229,6 +233,8 @@ function requestVisibleImageUpdate() {
     const atEnd =
       pageData.noMore && scrollRoot.scrollHeight - getLayoutScrollTop() - (bottom - top) <= 2
     let finalImageVisible = false
+    let firstVisibleOrdinal = 0
+    let lastVisibleOrdinal = 0
     let closest: { ordinal: number; distance: number } | undefined
     document
       .querySelectorAll<HTMLElement>('.viewer-view .image-block[data-ordinal]')
@@ -237,6 +243,11 @@ function requestVisibleImageUpdate() {
         const ordinal = Number(node.dataset.ordinal)
         const image = bookImages.value.find((item) => item.ordinal === ordinal)
         const visibleHeight = Math.min(rect.bottom, bottom) - Math.max(rect.top, top)
+        // 预载按可见占位框推进，不等待图片下载完成，也不将预载计入已读。
+        if (visibleHeight > 0 && rect.height > 0) {
+          firstVisibleOrdinal ||= ordinal
+          lastVisibleOrdinal = ordinal
+        }
         if (!image?.rendered || image.failed || visibleHeight <= 0 || rect.height <= 0) return
         // 短图至少显示一半，长图至少覆盖半个视口，才计入已读。
         if (visibleHeight >= Math.min(rect.height, bottom - top) / 2) {
@@ -258,6 +269,18 @@ function requestVisibleImageUpdate() {
       bookImages.value.some((item) => item.ordinal === visibleOrdinal && item.rendered)
     ) {
       persistViewedImage(visibleOrdinal)
+    }
+    lastVisibleImageOrdinal = lastVisibleOrdinal
+    if (lastVisibleOrdinal) {
+      for (const image of bookImages.value) {
+        if (
+          image.ordinal >= firstVisibleOrdinal &&
+          image.ordinal <= lastVisibleOrdinal + imagePreloadAhead
+        ) {
+          image.loadRequested = true
+        }
+      }
+      void loadMorePic()
     }
   })
 }
@@ -479,18 +502,14 @@ async function fetchBookInfo(currentBookId: string, page = 0): Promise<bookInfoO
 }
 
 async function loadMorePic() {
-  if (infiniteScrollDisabled.value) {
+  if (infiniteScrollDisabled.value || isViewUnmounted) {
     return
   }
+  const lastImage = bookImages.value[bookImages.value.length - 1]
+  if (!lastVisibleImageOrdinal || !lastImage) return
+  if (lastImage.ordinal - lastVisibleImageOrdinal > imageBatchAhead) return
 
   try {
-    if (isViewUnmounted) {
-      return
-    }
-
-    // Do not chain batches while the preceding batch is still only URL/bitmap placeholders.
-    // The sentinel may stay visible during sequential source-page requests.
-    if (bookImages.value.some((image) => !image.rendered && !image.failed)) return
     pageData.loadingMore = true
 
     if (hasPendingCurrentPageImages()) {
@@ -593,6 +612,7 @@ async function loadPreviousImages() {
       url: getReusableCachedImageUrl(imageId),
       loading: false,
       rendered: false,
+      loadRequested: false,
       failed: false,
       autoRetryAttempted: false,
     }))
@@ -656,6 +676,7 @@ async function appendPageInOrder(current: bookInfoOutput, startImageIndex = 0): 
         url,
         loading: false,
         rendered: false,
+        loadRequested: false,
         failed: !url,
         autoRetryAttempted: false,
       }
@@ -692,6 +713,7 @@ async function loadNextImageBatch(): Promise<void> {
         url: getReusableCachedImageUrl(imageId),
         loading: false,
         rendered: false,
+        loadRequested: false,
         failed: false,
         autoRetryAttempted: false,
       })),
@@ -851,12 +873,7 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
     :loading="pageData.loading"
     @continue="continueAfterWarning"
   />
-  <div
-    v-else
-    v-intersect-more="loadMorePic"
-    class="viewer-view"
-    :data-load-disabled="infiniteScrollDisabled"
-  >
+  <div v-else class="viewer-view">
     <Notice v-if="readerError" tone="error" :title="t(readerError)" class="reader-notice">
       <ActionButton v-if="bookId" @click="initialize(true)">{{ t('重新加载') }}</ActionButton>
       <RouterLink v-else to="/booklist">{{ t('返回搜索') }}</RouterLink>
@@ -896,11 +913,10 @@ function createFailedBookInfo(msg: string): bookInfoOutput {
             class="reader-placeholder"
           />
           <MediaImage
-            v-if="image.url"
+            v-if="image.url && image.loadRequested"
             :src="image.url"
             :alt="t('第 {p0} 张图片', { p0: image.ordinal })"
             class="reader-image"
-            lazy
             @load="handleImageRendered(image, $event)"
             @error="handleImageLoadError(image)"
           />
