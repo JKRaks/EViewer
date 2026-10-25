@@ -19,6 +19,7 @@ import {
   parseHentaiVersePage,
 } from './hentaiVerseParser'
 import { parseEquipmentData } from './hentaiVerseEquipment'
+import { isHentaiVerseBattleStart } from './hentaiVerseProtocol'
 
 export class HentaiVerseBusi {
   private readonly proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
@@ -75,7 +76,18 @@ export class HentaiVerseBusi {
       body: { section, data, target },
     })
     if (isHentaiVerseBattleHtml(html)) return { battle: parseBattlePage(html) }
-    return { page: parseHentaiVersePage(html, target) }
+    const page = parseHentaiVersePage(html, target)
+    if (!page.authenticated || !isHentaiVerseBattleStart(section, data)) return { page }
+    // A successful start can return an intermediate entry page. Confirm with one
+    // read, rather than reporting a settings update or submitting the start again.
+    let confirmed: Awaited<ReturnType<HentaiVerseBusi['getPage']>>
+    try {
+      confirmed = await this.getPage({})
+    } catch {
+      throw new Error('开战请求已提交，但无法确认战况，请使用“恢复战斗”继续。')
+    }
+    if (confirmed.battle) return confirmed
+    throw new Error('源站未确认战斗开始，请刷新战斗入口后重试。')
   }
 
   /** Input: 装备套装编号。Output: 切换套装后的装备页。 */
@@ -264,6 +276,21 @@ export class HentaiVerseBusi {
     ) {
       return { ...updated, roundCompleted: true, actions: [] }
     }
+    // These are the complete panes returned by a confirmed native action. Retain
+    // unchanged action buttons; fetch a full page only when essential state is missing.
+    if (
+      automatic &&
+      !payload.reload &&
+      (mode !== 'spirit' ||
+        (typeof payload.pane_action === 'string' && updated.spiritStance !== undefined)) &&
+      ['pane_vitals', 'pane_monster', 'pane_effects', 'table_skills', 'table_magic'].every(
+        (name) => typeof payload[name] === 'string',
+      ) &&
+      updated.vitals.some((vital) => vital.key === 'health' && vital.percentKnown !== false) &&
+      updated.monsters.length > 0 &&
+      updated.monsters.every((monster) => monster.healthPercent !== undefined || monster.defeated)
+    )
+      return updated
     // The source also uses its completion pane between arena rounds. Confirm
     // the full page before treating the entire challenge as finished.
     let html: string
