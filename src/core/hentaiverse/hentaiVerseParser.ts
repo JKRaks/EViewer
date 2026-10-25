@@ -1,8 +1,15 @@
 import { withTranslationCapture, protectTranslationNames } from './hentaiVerseTranslationCapture'
 import { formatSystemMessage } from '@/i18n'
+import {
+  battleIdentity,
+  classifyBattleSkill,
+  hasActiveBattleEffect,
+  weaponSkillStyles,
+} from './hentaiVerseBattleSkills'
 import type {
   HentaiVerseAttribute,
   HentaiVerseBattleAction,
+  HentaiVerseBattleEffect,
   HentaiVerseBattleMode,
   HentaiVerseBattleMonster,
   HentaiVerseBattleSnapshot,
@@ -218,20 +225,50 @@ export function parseBattleResponse(
     const actions = new Map(
       previous.actions.map((action) => [`${action.mode}:${action.skill}`, action]),
     )
-    parsed.actions.forEach((action) => actions.set(`${action.mode}:${action.skill}`, action))
+    // An included action pane replaces that group, including an explicitly empty list.
+    for (const [key, action] of actions) {
+      if (
+        (typeof payload.table_magic === 'string' &&
+          action.mode === 'magic' &&
+          action.sourcePanel !== 'skills') ||
+        (typeof payload.table_skills === 'string' && action.sourcePanel === 'skills') ||
+        (typeof payload.pane_item === 'string' && action.mode === 'items') ||
+        (typeof payload.pane_action === 'string' && !['magic', 'items'].includes(action.mode))
+      )
+        actions.delete(key)
+    }
+    parsed.actions.forEach((action) => {
+      const key = `${action.mode}:${action.skill}`
+      const existing = actions.get(key)
+      // Quickbar shortcuts do not confirm the skillbook's current cost or cooldown.
+      if (action.sourcePanel === 'quickbar' && existing && existing.sourcePanel !== 'quickbar')
+        return
+      actions.set(key, action)
+    })
     return {
       ...previous,
       ...parsed,
       vitals: parsed.vitals.length ? parsed.vitals : previous.vitals,
       effects: typeof payload.pane_effects === 'string' ? parsed.effects : previous.effects,
-      monsters: parsed.completed
-        ? parsed.monsters
-        : parsed.monsters.length
+      monsters:
+        parsed.completed || typeof payload.pane_monster === 'string'
           ? parsed.monsters
           : previous.monsters,
       actions: parsed.roundCompleted ? [] : Array.from(actions.values()),
       effectIds: typeof payload.pane_effects === 'string' ? parsed.effectIds : previous.effectIds,
+      activeEffects:
+        typeof payload.pane_effects === 'string' ? parsed.activeEffects : previous.activeEffects,
       overcharge: typeof payload.pane_vitals === 'string' ? parsed.overcharge : previous.overcharge,
+      overchargeExact:
+        typeof payload.pane_vitals === 'string' ? parsed.overchargeExact : previous.overchargeExact,
+      spiritStance:
+        typeof payload.pane_action === 'string'
+          ? parsed.spiritStance
+          : parsed.spiritStance === true
+            ? true
+            : previous.spiritStance,
+      weaponStyle:
+        typeof payload.table_skills === 'string' ? parsed.weaponStyle : previous.weaponStyle,
       log: parsed.log.length ? [...previous.log, ...parsed.log].slice(-40) : previous.log,
     }
   })
@@ -1065,6 +1102,11 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
     })
   }
   const sourceTitle = cleanText(document.querySelector('#pane_battle h1, h1, title')?.textContent)
+  const activeEffects = readBattleEffectState(document.querySelector('#pane_effects'))
+  const actions = roundCompleted ? [] : parseBattleActions(document)
+  const weaponStyle = actions
+    .map((action) => weaponSkillStyles[battleIdentity(action.sourceName || '')])
+    .find(Boolean)
   return {
     token,
     title: /^(?:The )?HentaiVerse$/i.test(sourceTitle)
@@ -1073,28 +1115,43 @@ function parseBattleDocument(document: Document, token: string): HentaiVerseBatt
     vitals: parseBattleVitals(document),
     effects: parseBattleEffects(document),
     monsters,
-    actions: roundCompleted ? [] : parseBattleActions(document),
+    actions,
     log: parseBattleLog(document).slice(-40),
     completed,
     completionText,
     roundCompleted,
-    effectIds: document.querySelector('#pane_effects')
-      ? Array.from(
-          document.querySelectorAll<HTMLElement>(
-            '#pane_effects [onmouseover*="set_infopane_effect"]',
-          ),
-          (node) =>
-            readBattleHoverArguments(node.getAttribute('onmouseover') || '')[0]
-              ?.toLowerCase()
-              .replace(/[^a-z0-9]/g, '') || '',
-        ).filter(Boolean)
-      : undefined,
-    overcharge: (() => {
-      const value = cleanText(document.querySelector('#pane_vitals')?.textContent).match(
-        /\b(?:Overcharge|OC)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*%/i,
-      )
-      return value ? Number(value[1]) : undefined
-    })(),
+    activeEffects,
+    effectIds: activeEffects?.map((effect) => effect.id),
+    weaponStyle,
+    ...readBattleResources(document, activeEffects),
+  }
+}
+
+function readBattleResources(document: Document, effects?: HentaiVerseBattleEffect[]) {
+  const vitals = document.querySelector('#pane_vitals')
+  const numeric = cleanText(vitals?.textContent).match(
+    /\b(?:Overcharge|OC)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*%/i,
+  )
+  // Standard UI exposes complete 25% pips and one dim partial pip, not an exact number.
+  const pips = Array.from(document.querySelectorAll('#vcp > div > div'))
+  const standard = Boolean(vitals?.querySelector('#vbh, #vrhb'))
+  const overcharge = numeric
+    ? Number(numeric[1])
+    : standard
+      ? pips.filter((pip) => pip.id !== 'vcr').length * 25
+      : undefined
+  const icon = document.querySelector('#ckey_spirit')?.getAttribute('src') || ''
+  const spiritStance =
+    hasActiveBattleEffect(effects, ['spiritstance', 'spiritchanneling']) ||
+    /\/spirit_a\.png(?:\?|$)/i.test(icon)
+      ? true
+      : /\/spirit_n\.png(?:\?|$)/i.test(icon)
+        ? false
+        : undefined
+  return {
+    overcharge,
+    overchargeExact: numeric ? true : standard ? pips.length === 0 : undefined,
+    spiritStance,
   }
 }
 
@@ -1112,6 +1169,37 @@ function parseBattleEffects(document: Document) {
       ),
   ).filter(Boolean)
   return Array.from(new Set([...names, ...readTextRows(pane).map(translateHentaiVerseText)]))
+}
+
+function readBattleEffectState(pane: Element | null): HentaiVerseBattleEffect[] | undefined {
+  if (!pane) return
+  const nodes = Array.from(
+    pane.querySelectorAll<HTMLElement>('[onmouseover*="set_infopane_effect"]'),
+  )
+  if (!nodes.length && (pane.querySelector('img') || cleanText(pane.textContent))) return
+  const effects = nodes.map((node) => {
+    const hover = node.getAttribute('onmouseover') || ''
+    const values = readBattleHoverArguments(hover)
+    const title = values[0] || ''
+    const stackedTitle = title.match(/\s*\((?:x\s*)?(\d+)(?:\s+stacks?)?\)\s*$/i)
+    const id = battleIdentity(stackedTitle ? title.slice(0, stackedTitle.index) : title)
+    const remaining = values[2]
+    const ticks = node.dataset.remainingTicks
+    const stacks =
+      node.dataset.stacks || values[1]?.match(/(\d+)\s*stacks?\b/i)?.[1] || stackedTitle?.[1]
+    return {
+      id,
+      label: translateHentaiVerseText(values[0] || ''),
+      remainingTurns:
+        remaining && /^\d+(?:\.\d+)?$/.test(remaining) ? Number(remaining) : undefined,
+      remainingTicks: ticks && /^\d+$/.test(ticks) ? Number(ticks) : undefined,
+      expiry: ['autocast', 'permanent', 'decaying'].includes(remaining || '')
+        ? (remaining as HentaiVerseBattleEffect['expiry'])
+        : undefined,
+      stacks: stacks && /^\d+$/.test(stacks) ? Number(stacks) : undefined,
+    }
+  })
+  return effects.every((effect) => effect.id) ? effects : undefined
 }
 
 function readBattleCompletion(pane?: HTMLElement | null) {
@@ -1138,7 +1226,7 @@ function parseBattleVitals(document: Document) {
       maxWidth: number
     }
   > = [
-    { key: 'health', id: 'vrhb', bar: '#vbh img', label: '生命', maxWidth: 492 },
+    { key: 'health', id: 'vrhb', bar: '#vbh img', label: '生命', maxWidth: 496 },
     { key: 'magic', id: 'vrm', bar: '#vbm img', label: '魔力', maxWidth: 207 },
     { key: 'spirit', id: 'vrs', bar: '#vbs img', label: '灵力', maxWidth: 207 },
   ]
@@ -1212,13 +1300,22 @@ function parseMonsters(document: Document): HentaiVerseBattleMonster[] {
       const health = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="health"]'))
       const magic = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="magic"]'))
       const status = level ? formatSystemMessage('等级 {p0}', { p0: level }) : ''
+      const log = document.querySelector('#textlog')?.textContent || ''
+      const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
       monsters.set(id, {
         id,
         name,
         status,
         healthPercent: health,
         magicPercent: magic,
-        defeated: health === 0 || /dead|defeated/i.test(`${node.className} ${node.textContent}`),
+        defeated: health === 0 || /(?:^|\s)(?:dead|defeated)(?:\s|$)/i.test(node.className),
+        spiritPercent: readBattleBarPercent(
+          node.querySelector<HTMLImageElement>('img[alt="spirit"]'),
+        ),
+        activeEffects: readBattleEffectState(node.querySelector('.btm6')),
+        specialAttackObserved: Boolean(
+          name && new RegExp(`${escapedName}\\s+(?:casts|uses)\\s+`, 'i').test(log),
+        ),
       })
     })
   return Array.from(monsters.values())
@@ -1253,20 +1350,39 @@ function parseBattleActions(document: Document): HentaiVerseBattleAction[] {
     )
     if (!skillMatch) return
     const mode = skillMatch[1]?.toLowerCase() as HentaiVerseBattleMode
+    if (
+      mode === 'magic' &&
+      document.querySelector('#table_magic') &&
+      !node.closest('#table_magic, #table_skills')
+    )
+      return
     const skill = Number(skillMatch[2] || 0)
-    const hostile = /set_hostile_skill/i.test(onclick)
     const presentation = getBattleActionPresentation(node, mode, skill)
+    const state = readBattleSpellState(node)
+    const hostile =
+      /set_hostile_skill/i.test(onclick) ||
+      ['offense', 'weapon', 'debuff'].includes(state.kind || '')
     actions.set(`${mode}:${skill}`, {
       ...presentation,
       mode,
       skill,
+      sourcePanel:
+        mode === 'items'
+          ? 'items'
+          : node.closest('#table_skills')
+            ? 'skills'
+            : node.closest('#table_magic')
+              ? 'magic'
+              : 'quickbar',
       target: hostile ? 'enemy' : 'self',
-      ...readBattleSpellState(node),
+      ...state,
     })
   })
   // The skillbook is authoritative; quickbar entries can omit cost and cooldown state.
   document
-    .querySelectorAll<HTMLElement>('#table_magic [onmouseover*="set_infopane_spell"]')
+    .querySelectorAll<HTMLElement>(
+      '#table_magic [onmouseover*="set_infopane_spell"], #table_skills [onmouseover*="set_infopane_spell"]',
+    )
     .forEach((node) => {
       const skill = Number(node.id)
       if (!/^\d+$/.test(node.id)) return
@@ -1276,7 +1392,12 @@ function parseBattleActions(document: Document): HentaiVerseBattleAction[] {
         ...getBattleActionPresentation(node, 'magic', skill),
         mode: 'magic',
         skill,
-        target: /set_hostile_skill/i.test(onclick) || state.kind === 'offense' ? 'enemy' : 'self',
+        sourcePanel: node.closest('#table_skills') ? 'skills' : 'magic',
+        target:
+          /set_hostile_skill/i.test(onclick) ||
+          ['offense', 'weapon', 'debuff'].includes(state.kind || '')
+            ? 'enemy'
+            : 'self',
         ...state,
       })
     })
@@ -1317,44 +1438,23 @@ function readBattleHoverArguments(hover: string): string[] {
 function readBattleSpellState(node: HTMLElement) {
   const argumentsList = readBattleHoverArguments(node.getAttribute('onmouseover') || '')
   const sourceName = argumentsList[0] || ''
-  const name = sourceName.toLowerCase().replace(/[^a-z0-9]/g, '')
-  const offensive = new Set([
-    'fieryblast',
-    'inferno',
-    'flamesofloki',
-    'freeze',
-    'blizzard',
-    'fimbulvetr',
-    'shockblast',
-    'chainedlightning',
-    'wrathofthor',
-    'gale',
-    'downburst',
-    'stormsofnjord',
-    'smite',
-    'banishment',
-    'paradiselost',
-    'corruption',
-    'disintegrate',
-    'ragnarok',
-  ])
-  const kind: HentaiVerseBattleAction['kind'] =
-    name === 'cure'
-      ? 'heal'
-      : name === 'fullcure'
-        ? 'full-heal'
-        : name === 'regen'
-          ? 'regen'
-          : offensive.has(name)
-            ? 'offense'
-            : 'other'
+  const kind = classifyBattleSkill(sourceName)
+  const cooldown = node.dataset.cooldownRemaining
+  const cooldownRemaining = cooldown && /^\d+$/.test(cooldown) ? Number(cooldown) : undefined
+  const charge = argumentsList[4]
+  const baseCooldown = argumentsList[5]
   return {
     sourceName,
     kind,
+    cooldownRemaining,
+    cooldown: /^\d+$/.test(baseCooldown || '') ? Number(baseCooldown) : undefined,
+    // Tooltip charges are 25% OC each. Its cooldown argument is the base, not time left.
+    overchargeCost: /^\d+$/.test(charge || '') ? Number(charge) * 25 : undefined,
     manaCost: /^\d+(?:\.\d+)?$/.test(argumentsList[3] || '') ? Number(argumentsList[3]) : undefined,
     available:
       Boolean(node.getAttribute('onclick')?.trim()) &&
-      !node.matches('[disabled], [aria-disabled="true"], .disabled'),
+      !node.closest('[disabled], [aria-disabled="true"], .disabled') &&
+      !(cooldownRemaining && cooldownRemaining > 0),
   }
 }
 
@@ -1365,7 +1465,7 @@ const BATTLE_ACTION_DESCRIPTIONS: Record<string, string> = {
   defend:
     '本回合及下一回合的物理与魔法减伤提升 25%；过载值充足时消耗 25% 过载值，恢复 10% 基础生命。',
   focus:
-    '消耗 25% 过载值恢复 5% 基础魔力；本回合闪避、格挡、招架和抵抗降为 0，下一回合提高魔法命中与反抵抗。',
+    '过载充足时消耗 25% 过载值恢复 5% 基础魔力；下一回合提高魔法命中与反抵抗，但闪避、格挡、招架和抵抗降为 0。',
   flee: '逃离当前战斗。',
   scan: '获取选中怪物的能力、攻击方式与抗性信息，会消耗一个回合。',
   cure: '为自己恢复适量生命值。',

@@ -310,6 +310,7 @@ export interface HentaiVerseEncounter {
 }
 
 export type HentaiVerseBattleMode = 'attack' | 'magic' | 'items' | 'spirit' | 'defend' | 'focus'
+export type HentaiVerseWeaponStyle = 'one-handed' | 'two-handed' | 'dual-wield' | 'niten' | 'staff'
 
 export interface HentaiVerseBattleAction {
   label: string
@@ -320,7 +321,20 @@ export interface HentaiVerseBattleAction {
   sourceName?: string
   available?: boolean
   manaCost?: number
-  kind?: 'offense' | 'heal' | 'full-heal' | 'regen' | 'other'
+  overchargeCost?: number
+  cooldown?: number
+  cooldownRemaining?: number
+  sourcePanel?: 'magic' | 'skills' | 'items' | 'quickbar'
+  kind?: 'offense' | 'weapon' | 'debuff' | 'heal' | 'full-heal' | 'regen' | 'buff' | 'other'
+}
+
+export interface HentaiVerseBattleEffect {
+  id: string
+  label?: string
+  remainingTicks?: number
+  remainingTurns?: number
+  expiry?: 'autocast' | 'permanent' | 'decaying'
+  stacks?: number
 }
 
 export interface HentaiVerseBattleVital {
@@ -340,6 +354,9 @@ export interface HentaiVerseBattleMonster {
   healthPercent?: number
   magicPercent?: number
   defeated: boolean
+  spiritPercent?: number
+  activeEffects?: HentaiVerseBattleEffect[]
+  specialAttackObserved?: boolean
 }
 
 export interface HentaiVerseBattleSnapshot {
@@ -355,5 +372,9 @@ export interface HentaiVerseBattleSnapshot {
   completionText: string
   roundCompleted?: boolean
   effectIds?: string[]
+  activeEffects?: HentaiVerseBattleEffect[]
   overcharge?: number
+  overchargeExact?: boolean
+  spiritStance?: boolean
+  weaponStyle?: HentaiVerseWeaponStyle
 }

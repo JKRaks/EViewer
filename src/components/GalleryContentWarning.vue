@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
+import { useRouter } from 'vue-router'
 import Notice from './primitives/Notice.vue'
 import ActionButton from './primitives/ActionButton.vue'
 
 defineProps<{ paragraphs: string[]; loading?: boolean }>()
 defineEmits<{ continue: [] }>()
+
+const router = useRouter()
+function goBack() {
+  if (window.history.state?.back) router.back()
+  else void router.push('/')
+}
 </script>
 
 <template>
@@ -14,7 +21,7 @@ defineEmits<{ continue: [] }>()
       {{ paragraph }}
     </p>
     <div class="warning-actions">
-      <RouterLink to="/booklist">{{ t('返回搜索') }}</RouterLink>
+      <ActionButton variant="link" @click="goBack">{{ t('返回上一页') }}</ActionButton>
       <ActionButton :loading="loading" @click="$emit('continue')">{{
         t('了解警告，继续查看')
       }}</ActionButton>

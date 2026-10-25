@@ -1,4 +1,9 @@
-import type { HentaiVersePageTarget, HentaiVerseSection } from './model/hentaiVerse'
+import type {
+  HentaiVerseFormData,
+  HentaiVerseFormSection,
+  HentaiVersePageTarget,
+  HentaiVerseSection,
+} from './model/hentaiVerse'
 
 export const HENTAIVERSE_SECTIONS: Array<{
   key: HentaiVerseSection
@@ -19,7 +24,18 @@ export const HENTAIVERSE_SECTIONS: Array<{
 ]
 
 export function getHentaiVerseSection(target: HentaiVersePageTarget): HentaiVerseSection {
-  return HENTAIVERSE_SECTIONS.find(
-    (item) => item.target.s === target.s && item.target.ss === target.ss,
-  )?.key ?? 'character'
+  return (
+    HENTAIVERSE_SECTIONS.find((item) => item.target.s === target.s && item.target.ss === target.ss)
+      ?.key ?? 'character'
+  )
+}
+
+export function isHentaiVerseBattleStart(
+  section: HentaiVerseFormSection,
+  data: HentaiVerseFormData,
+) {
+  return (
+    (['arena', 'ringOfBlood', 'grindfest'].includes(section) && Boolean(data.initid)) ||
+    section === 'itemWorld'
+  )
 }

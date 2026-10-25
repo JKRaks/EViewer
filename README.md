@@ -86,7 +86,7 @@ npm run dev:worker
 - **Tampermonkey**（桌面浏览器）：点击安装链接，确认权限后刷新页面
 - **Userscripts**（iOS/iPadOS Safari）：在 Userscripts App 中启用 Safari 扩展，点击安装链接后从扩展菜单确认
 
-安装后选择「本机助手」，在同一浏览器登录源站，再前往「账号信息」检测登录状态。脚本安装和更新统一在设置中完成；使用 ExHentai 需具备源站访问权限。
+安装后选择「本机代理」，在同一浏览器登录源站，再前往「账号信息」检测登录状态。脚本安装和更新统一在设置中完成；使用 ExHentai 需具备源站访问权限。
 
 ## 部署（Cloudflare Workers）
 
