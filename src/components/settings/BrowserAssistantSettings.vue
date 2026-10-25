@@ -183,7 +183,7 @@ onMounted(scrollToEntry)
         <RadioChoice
           value="local"
           :disabled="connectorState.phase !== 'ready' && connectionSettings.mode !== 'local'"
-          >{{ t('本机助手') }} <TagChip class="assistant-beta">Beta</TagChip></RadioChoice
+          >{{ t('本机代理') }} <TagChip class="assistant-beta">Beta</TagChip></RadioChoice
         >
       </ChoiceGroup>
     </div>
@@ -303,7 +303,7 @@ onMounted(scrollToEntry)
           <p>
             {{
               t(
-                '允许扩展访问本站及所选源站，刷新本页后点击“重新检测”；连接成功即可选择“本机助手”。',
+                '允许扩展访问本站及所选源站，刷新本页后点击“重新检测”；连接成功即可选择“本机代理”。',
               )
             }}
           </p>
