@@ -28,6 +28,290 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Ring of Blood': '鲜血之环',
     Grindfest: '混战祭',
     'Item World': '装备界',
+    Bazaar: '集市',
+    Armory: '装备库',
+    'Item Shop': '物品商店',
+    'Equipment Shop': '装备商店',
+    Market: '市场',
+    Shrine: '神殿',
+    'Monster Lab': '怪物实验室',
+    MoogleMail: '莫古邮件',
+    'Weapon Lottery': '武器彩票',
+    'Armor Lottery': '防具彩票',
+    'The Tower': '塔挑战',
+    'Tower Challenges': '塔挑战',
+    Persistent: '永久世界',
+    Isekai: '异世界',
+  },
+  bazaar: {
+    'Browse Items': '浏览物品',
+    'My Buy Orders': '我的买单',
+    'My Sell Orders': '我的卖单',
+    'Monster Items': '怪物物品',
+    'Your Stock': '自有库存',
+    'Market Bid': '市场买价',
+    'Market Ask': '市场卖价',
+    'Market Stock': '市场库存',
+    'There are no orders for this type of item': '此类物品暂无订单',
+    'There are no recent market events.': '暂无近期市场事件。',
+    'There are no recent trades.': '暂无近期交易。',
+    Figures: '收藏品',
+    Count: '数量',
+    'Item Inventory': '物品栏',
+    'Buy Orders': '买单',
+    'Sell Orders': '卖单',
+    'Buy Order': '买单',
+    'Sell Order': '卖单',
+    'Place Buy Order': '提交买单',
+    'Place Sell Order': '提交卖单',
+    'Item List': '物品列表',
+    'Recent Trades': '最近交易',
+    'Price History': '价格历史',
+    'Trade Log': '交易日志',
+    'Account Log': '资金日志',
+    'Market Balance': '市场余额',
+    'Current Balance': '当前余额',
+    'Unit Price': '单价',
+    'Price Per Batch': '每批价格',
+    'Batch Size': '每批数量',
+    'Your Order': '你的订单',
+    'Your Orders': '你的订单',
+    'Order History': '订单历史',
+    'Cancel Order': '取消订单',
+    'Buy Price': '买价',
+    'Sell Price': '卖价',
+    'Last Price': '最近成交价',
+    'Lowest Ask': '最低卖价',
+    'Highest Bid': '最高买价',
+    'Only show items in stock': '仅显示有库存的物品',
+    'Offer Item': '提交祭品',
+    'Select Reward': '选择奖励',
+    Trophies: '奖杯',
+    Artifacts: '文物',
+    Collectibles: '收藏品',
+    Consumables: '消耗品',
+    Materials: '材料',
+    Crystals: '水晶',
+    Tokens: '代币',
+    Quantity: '数量',
+    Batches: '批数',
+    Stock: '库存',
+    Price: '价格',
+    Total: '总额',
+    Deposit: '存入',
+    Withdraw: '取回',
+    Purchase: '购买',
+    Sell: '出售',
+    Buy: '购买',
+  },
+  services: {
+    Arthropod: '节肢类',
+    Avion: '鸟类',
+    Beast: '野兽',
+    Celestial: '天界生物',
+    Daimon: '恶魔',
+    Dragonkin: '龙族',
+    Elemental: '元素生物',
+    Giant: '巨人',
+    Humanoid: '人型生物',
+    Mechanoid: '机械生物',
+    Reptilian: '爬行生物',
+    Sprite: '精灵',
+    Undead: '亡灵',
+    Unnamed: '未命名',
+    'Empty slot - click to create': '空槽位 - 点击创建',
+    'Primary Attributes': '基础属性',
+    Primary: '基础属性',
+    Element: '元素抗性',
+    Defense: '物理防御',
+    'Elemental Mitigation': '元素减伤',
+    'Other Stats': '其他属性',
+    'Battles Won': '获胜场次',
+    'Killing Blows': '击杀次数',
+    'Gift Factor': '礼物系数',
+    'Phys. Attack': '物理攻击',
+    'Mag. Attack': '魔法攻击',
+    'Phys. Defense': '物理防御',
+    'Mag. Defense': '魔法防御',
+    'Slashing Mit': '斩击减伤',
+    'Piercing Mit': '穿刺减伤',
+    'Crushing Mit': '钝击减伤',
+    'Evade Bonus': '回避加成',
+    'Parry Bonus': '招架加成',
+    'Resist Bonus': '抵抗加成',
+    'Anti-block': '反格挡',
+    'Anti-evade': '反回避',
+    'Anti-parry': '反招架',
+    'Anti-resist': '反抵抗',
+    Scavenging: '拾荒',
+    Fortitude: '坚韧',
+    Brutality: '残暴',
+    Precision: '精准打击',
+    Overpower: '压制',
+    Interception: '拦截',
+    Dissipation: '消散',
+    Evasion: '回避',
+    Warding: '魔法防护',
+    Swiftness: '迅捷',
+    'Increases the gift factor by 2.5%': '礼物系数提高 2.5%',
+    'Increases monster health by 5%': '怪物生命值提高 5%',
+    'Increases monster damage by 2.5%': '怪物伤害提高 2.5%',
+    'Increases monster accuracy by 1%': '怪物命中率提高 1%',
+    'Decreases effective target evade/block by 1%': '目标有效回避与格挡降低 1%',
+    'Decreases effective target parry/resist by 1%': '目标有效招架与抵抗降低 1%',
+    'Increases monster natural parry by 5%': '怪物基础招架提高 5%',
+    'Increases monster natural resist by 5%': '怪物基础抵抗提高 5%',
+    'Increases monster natural evade by 5%': '怪物基础回避提高 5%',
+    'Increases monster physical mitigation by 1%': '怪物物理减伤提高 1%',
+    'Increases monster magical mitigation by 1%': '怪物魔法减伤提高 1%',
+    'Increases monster attack speed by 2.5%.': '怪物攻击速度提高 2.5%。',
+    STR: '力量',
+    DEX: '灵巧',
+    AGI: '敏捷',
+    END: '耐力',
+    INT: '智力',
+    WIS: '智慧',
+    Needs: '需要',
+    Chow: '饲料',
+    'Happy Pills': '快乐药丸',
+    'Upgrade with': '升级所需',
+    'Skill Name': '技能名称',
+    'Skill Type': '技能类型',
+    'Claw Poke': '利爪戳击',
+    'You still have to feed this monsters enough crystals to reach powerlevel 25 and give it a name to activate it.':
+      '需要灌注水晶使怪物强度达到 25，并为它命名，才能激活。',
+    'You can use the Monster Lab to create monsters that will roam free in the HentaiVerse. The monsters you create will be mixed in with the normal battles in all forms of play.':
+      '你可以在怪物实验室创建怪物。它们会在 HentaiVerse 中自由活动，并出现在各种模式的普通战斗里。',
+    'The monsters you create will start out weak, but can be upgraded by infusing them with Power Crystals, and by unlocking special perks with Chaos Tokens.':
+      '新创建的怪物较弱，可以灌注力量水晶提升属性，或消耗混沌令牌解锁特殊能力。',
+    'To get started, select a monster class from the list to the left.': '先选择一种怪物类型。',
+    'The class determines a number of factors:': '怪物类型决定以下因素：',
+    'The starting primary stats': '初始基础属性',
+    'The starting damage resistances': '初始伤害抗性',
+    'Which melee attack types the monster can do': '可使用的近战攻击类型',
+    '(Future) Upgrade paths and specializations': '（未来）升级路线与专精',
+    'After selecting a class, select the desired primary attack type of the monster to create it. You will then be able to feed it some crystals and name it to make it active in the game.':
+      '选好怪物类型后，选择基础攻击类型即可创建。之后灌注水晶并命名，使它在游戏中激活。',
+    'Arthropods are a diverse phylum of invertebrate animals distinguished by having a segmented body with jointed appendages, encased in a hard exoskeleton. Variants include insects, spiders and scorpions, and they exist in many different forms and sizes. Remains of humanoid arthropods have been discovered in old ruins, but it is unknown whether such animals still exist, and whether or not they are intelligent.':
+      '节肢类是具有分节躯体、关节附肢和坚硬外骨骼的无脊椎生物，包括昆虫、蜘蛛、蝎子等不同形态与大小的种类。古代遗迹中发现过人型节肢生物的遗骸，但尚不清楚它们是否仍然存在，以及是否拥有智慧。',
+    'Arthropods are typically equipped with crushing melee attacks using claws and similar appendages, or piercing attacks with stingers. There are rumors of massive mutated members of the species, large enough to crush other creatures with the sheer bulk of their bodies.':
+      '节肢类通常用钳爪等附肢进行钝击，或用螫针进行穿刺攻击。据说某些变异个体体型巨大，仅凭躯体的重量就能碾碎其他生物。',
+    'Their natural armor provides a high degree of resistance against slashing attacks, but they are vulnerable to blunt weapons. The exoskeleton provides a heightened defense against most elemental attacks.':
+      '天生的外甲能有效抵抗斩击，但容易受到钝击伤害。外骨骼还能提高对大多数元素攻击的防御。',
+    Inbox: '收件箱',
+    'Write New': '撰写邮件',
+    'Read Mail': '已读邮件',
+    'Sent Mail': '已发送邮件',
+    'No new mail': '暂无新邮件',
+    'No mail': '暂无邮件',
+    'To:': '收件人：',
+    'From:': '寄件人：',
+    Subject: '主题',
+    Sent: '发送时间',
+    Read: '阅读时间',
+    'Send Message': '发送邮件',
+    'Save Draft': '保存草稿',
+    'Discard Message': '丢弃邮件',
+    'Return Message': '退回邮件',
+    'Credits on Delivery': '货到付款',
+    'Attach Item': '添加物品附件',
+    'Attach Equipment': '添加装备附件',
+    'Attach Credits': '添加信用点附件',
+    'Attach Hath': '添加 Hath 附件',
+    'Current Funds': '当前资金',
+    'Choose number to buy:': '选择购买数量：',
+    'Grand Prize': '大奖',
+    'Golden Lottery Ticket': '黄金彩票',
+    'Caffeinated Candy': '咖啡因糖果',
+    'Chaos Tokens': '混沌令牌',
+    'Chaos Token': '混沌令牌',
+    'You cannot opt out unless you have at least one ticket.': '至少持有一张彩票才能放弃大奖。',
+    'The Weapon Lottery lets you spend GP on a chance to win the specific equipment piece shown on the left. Each lottery period lasts 24 hours. At midnight UTC, a drawing is held, and a new lottery period starts.':
+      '武器彩票使用 GP 购票，有机会赢取所示装备。每期持续 24 小时，在 UTC 零点开奖并开始下一期。',
+    'The Armor Lottery lets you spend GP on a chance to win the specific equipment piece shown on the left. Each lottery period lasts 24 hours. At noon UTC, a drawing is held, and a new lottery period starts.':
+      '防具彩票使用 GP 购票，有机会赢取所示装备。每期持续 24 小时，在 UTC 正午开奖并开始下一期。',
+    'In addition to normal tickets, you can also spend a Golden Lottery Ticket to add 100 tickets and double your effective ticket count at the time of drawing. This will not increase the effective ticket count past 10% of the total purchased tickets. Golden Lottery Tickets can only be acquired as a consolation prize from the lottery.':
+      '使用一张黄金彩票可增加 100 张彩票，并在开奖时将有效票数加倍，但不会使有效票数超过总购票数的 10%。黄金彩票只能作为彩票安慰奖获得。',
+    'The number of items granted by the 2nd-5th prize will increase with the size of the pot. You can only ever win one of the prizes no matter how many tickets you purchase.':
+      '二至五等奖的奖励数量随奖池规模增加。无论购买多少张彩票，每期最多只能获得一个奖项。',
+    'You can click the buttons above to attach items, equipment, credits or hath to this message. Up to 10 different things can be attached to each message.':
+      '可为邮件添加物品、装备、信用点或 Hath，每封邮件最多附带 10 种附件。',
+    'You can optionally request payment for messages with attachments with the Credits on Delivery (CoD) setting after attaching at least one item. The receipient will have to pay the specified number of credits in order to remove the attachments from your message. To prevent misuse, a fee is required to use this function unless you have the Postage Paid perk.':
+      '添加至少一件附件后，可设置货到付款（CoD）。收件人必须支付指定信用点才能领取附件。除非拥有 Postage Paid 特典，否则此功能需要手续费。',
+    'Until the CoD has been paid, the sender and the recipient can both choose to return the message. This allows the recepient to reject an unwanted message, and allows you to recover your items if the recipient does not accept it within a reasonable time.':
+      '支付货到付款金额之前，寄件人和收件人均可退回邮件，方便收件人拒收，或让寄件人在邮件迟迟未被接收时取回物品。',
+    'Note that unsent drafts will be deleted after one month, and sent messages will be deleted after one year. Any remaining attachments for a deleted message will be permanently lost.':
+      '未发送草稿会在一个月后删除，已发送邮件会在一年后删除。邮件删除时，剩余附件将永久丢失。',
+  },
+  armory: {
+    'Organize Equipment': '整理装备',
+    'Modify Equipment': '改造装备',
+    'Repair Equipment': '修理装备',
+    'Soulbind Equipment': '灵魂绑定装备',
+    'Purchase Equipment': '购买装备',
+    'Sell Equipment': '出售装备',
+    'Salvage Equipment': '分解装备',
+    'Replace Charms & Pouches': '替换护符与袋子',
+    'Sell Salvaged Equipment': '出售已分解装备',
+    'Pin Equipment': '置顶装备',
+    'Set To Locked': '设为锁定',
+    'Set To Protected': '设为保护',
+    'Challenge Item World': '挑战装备界',
+    '(Soulbinding Required)': '（需要灵魂绑定）',
+    'You can only upgrade soulbound equipment.': '只能升级已灵魂绑定的装备。',
+    'You can only enter the item world of soulbound equipment.': '只能进入已灵魂绑定装备的装备界。',
+    'You need additional materials to repair this equipment.': '修理此装备还需要更多材料。',
+    'Base Stat Rolls': '基础属性随机值',
+    Charms: '护符',
+    'Charm Points': '护符点数',
+    'Charm Slot': '护符槽位',
+    'Insufficient Charm Points': '护符点数不足',
+    '(Insufficient Charm Points)': '（护符点数不足）',
+    'Attach Charm': '附加护符',
+    'Destroy Charm': '销毁护符',
+    'Replace Charm': '替换护符',
+    'Replace Pouch': '替换护符袋',
+    'Repair Pouch': '修理护符袋',
+    Capacity: '容量',
+    'Next Tier Materials': '下一阶所需材料',
+    'Available Soul Fragments': '可用灵魂碎片',
+    'Inventory Capacity': '库存容量',
+    'Storage Capacity': '仓库容量',
+    'Upgrade Tier': '升级阶数',
+    Organize: '整理装备',
+    Modify: '改造装备',
+    Repair: '修理装备',
+    Salvage: '分解装备',
+    Soulbind: '灵魂绑定',
+    'Force Unequip': '强制卸下',
+    'Rename Equipment': '重命名装备',
+    'Reset Name': '恢复名称',
+    'Restore Equipment': '恢复装备',
+    'Equipment Storage': '装备仓库',
+    'Equipment Inventory': '装备库存',
+    'Upgrade Equipment': '升级装备',
+    Upgrades: '升级',
+    Enchantments: '附魔',
+    Reforge: '重铸',
+    Reforging: '重铸',
+    'Item World': '装备界',
+    'Replace Charms': '替换护符',
+    'Sell Salvage': '出售分解材料',
+    'Trade In': '折价换取',
+    'Forge Level': '锻造等级',
+    'Upgrade Level': '升级等级',
+    'Required Materials': '所需材料',
+    'Soul Fragments': '灵魂碎片',
+    'Soul Fragment': '灵魂碎片',
+    Scraps: '残骸',
+    'Unassigned Equipment': '未分配装备',
+    'One-Handed': '单手武器',
+    'Two-Handed': '双手武器',
+    Staves: '法杖',
+    Shields: '盾牌',
+    'Cloth Armor': '布甲',
+    'Light Armor': '轻甲',
+    'Heavy Armor': '重甲',
   },
   character: {
     'Primary Attributes': '基础属性',
@@ -857,14 +1141,49 @@ function translateAndCapture(
 export function translateHentaiVerseText(value: string) {
   return translateAndCapture('label', value, translateHentaiVerseTextInChinese)
 }
-function translateHentaiVerseTextInChinese(value: string) {
+function translateHentaiVerseTextInChinese(value: string): string {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
   if (LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()])
     return LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()]!
+  const monsterUpgrade = source.match(/^Next upgrade available at powerlevel\s*(\d+)$/i)
+  if (monsterUpgrade) return `下次升级需要怪物强度 ${monsterUpgrade[1]}`
+  const towerRanking = source.match(/^Your Ranking:\s*(Unranked|#?[\d,]+)$/i)
+  if (towerRanking)
+    return `当前排名：${/^unranked$/i.test(towerRanking[1]!) ? '未上榜' : towerRanking[1]}`
+  const towerFloor = source.match(/^Current Floor:\s*([\d,]+)\s*\(([\d,]+) Rounds?\)$/i)
+  if (towerFloor) return `当前楼层：${towerFloor[1]}（${towerFloor[2]} 轮）`
+  const towerDifficulty = source.match(/^(.+?),\s*Monster Level\s+([\d,]+)$/i)
+  if (towerDifficulty)
+    return `${translateHentaiVerseTextInChinese(towerDifficulty[1]!)}，怪物等级 ${towerDifficulty[2]}`
+  const towerDaily = source.match(/^Daily (Attempts|Clears):\s*([\d,]+)\s*\/\s*([\d,]+)$/i)
+  if (towerDaily)
+    return `今日${towerDaily[1]!.toLowerCase() === 'attempts' ? '挑战' : '通关'}次数：${towerDaily[2]} / ${towerDaily[3]}`
+  const funds = source.match(/^You currently have ([\d,.]+) GP\.$/i)
+  if (funds) return `当前持有 ${funds[1]} GP。`
+  const ticketCost = source.match(/^Each ticket costs ([\d,.]+) GP\.$/i)
+  if (ticketCost) return `每张彩票价格为 ${ticketCost[1]} GP。`
+  const held = source.match(/^You hold ([\d,.]+) of ([\d,.]+) sold tickets\.$/i)
+  if (held) return `已售出 ${held[2]} 张彩票，你持有其中 ${held[1]} 张。`
+  const drawing = source.match(
+    /^Today's drawing is in (.+?)\. Ticket sales will close up to ten minutes before this time\.$/i,
+  )
+  if (drawing) {
+    const remaining = drawing[1]!
+      .replace(/(\d+) hours?/gi, '$1 小时')
+      .replace(/(\d+) minutes?/gi, '$1 分钟')
+      .replace(/\s+and\s+/gi, ' ')
+    return `距离本期开奖还有 ${remaining}。售票最早会在开奖前十分钟结束。`
+  }
+  const grandPrize = source.match(/^Grand Prize for (.+?):$/i)
+  if (grandPrize) return `${grandPrize[1]} 大奖：`
+  const lowerPrize = source.match(/^([2-5])(?:nd|rd|th) Prize:\s*(.+)$/i)
+  if (lowerPrize)
+    return `${lowerPrize[1]} 等奖：${translateHentaiVerseTextInChinese(lowerPrize[2]!)}`
   return source
     .replace(TERM_PATTERN, (term) => LOWERCASE_TERM_TRANSLATIONS[term.toLowerCase()] ?? term)
     .replace(/\blv\.\s*(\d+)/gi, '等级 $1')
+    .replace(/\blvl\s*(\d+)/gi, '强度等级 $1')
     .replace(/([\d,]+)\s+c\b/gi, '$1 信用点')
     .replace(/\bAutocast\s+(\d+)\b/gi, '自动施法 $1')
 }
@@ -885,6 +1204,10 @@ function translateHentaiVerseDescriptionInChinese(value: string) {
   const upkeep = source.match(/^Upkeep:\s*([\d.,]+)\s*MP\/round$/i)
   if (upkeep) return `每回合维护消耗 ${upkeep[1]} 魔力`
   const pageDescriptions: Record<string, string> = {
+    'The Tower is an Isekai-Only battle mode where the goal is to get as high as possible before the end of the season. Ranking high in this mode at the end of the season will provide you with some permanent bonuses on HV Persistent.':
+      '塔是异世界专属战斗模式，目标是在赛季结束前尽可能攀登更高楼层。赛季结束时排名靠前，可在常驻世界获得永久加成。',
+    'The difficulty and monster level in this battle mode is locked to each floor, with an increase in monster level, difficulty or number of rounds for each floor.':
+      '此模式的战斗难度和怪物等级由楼层固定，每升一层都会提高怪物等级、难度或战斗轮数。',
     'Welcome to the Grindfest.': '欢迎来到混战祭。',
     'A Grindfest consists of up to 1000 rounds of battle.': '混战祭最多包含 1000 轮战斗。',
     'Starting a Grindfest will consume 1 point of Stamina.': '开始混战祭会消耗 1 点体力。',

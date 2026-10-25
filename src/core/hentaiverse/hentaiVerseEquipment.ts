@@ -7,7 +7,7 @@ import { formatSystemMessage, rememberSourceText } from '@/i18n'
 import type { HentaiVerseEquipmentDetail } from './model/hentaiVerse'
 import { translateHentaiVerseText } from './hentaiVerseTranslations'
 
-const EQUIPMENT_SOURCE = /^\/dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-[1-9]\d{0,19}\.js$/
+const EQUIPMENT_SOURCE = /^\/(?:isekai\/)?dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-[1-9]\d{0,19}\.js$/
 
 export function readEquipmentSources(document: Document): string[] {
   const sources = new Set<string>()

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hentaiVerseSourceUrl } from '@/core/hentaiverse/hentaiVerseWorld'
 import { t } from '@/i18n'
 
 import '@/assets/hentaiverse.css'
@@ -478,7 +479,7 @@ function closeLocalBattle() {
           <div class="verification-actions">
             <a
               class="ui-button"
-              href="https://hentaiverse.org/"
+              :href="hentaiVerseSourceUrl"
               target="_blank"
               rel="noopener noreferrer"
               >{{ t('打开源站完成验证') }}</a

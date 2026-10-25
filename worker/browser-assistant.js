@@ -1,7 +1,7 @@
 import runtimeSource from './browser-assistant-runtime.js'
 import loginSource from './auth-bridge-script.js'
 
-export const ASSISTANT_VERSION = '2.2.0'
+export const ASSISTANT_VERSION = '2.3.0'
 export const ASSISTANT_PROTOCOL = 1
 export const ASSISTANT_FLAVORS = ['tampermonkey', 'userscripts']
 const prefix = '/auth/bridge/'

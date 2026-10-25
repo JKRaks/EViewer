@@ -18,6 +18,9 @@ import { Zap as Lightning, RefreshCw as Refresh } from '@lucide/vue'
 import AbilityPanel from '@/components/hentaiverse/AbilityPanel.vue'
 import CharacterOverviewPanel from '@/components/hentaiverse/CharacterOverviewPanel.vue'
 import EquipmentPanel from '@/components/hentaiverse/EquipmentPanel.vue'
+import ArmoryPanel from '@/components/hentaiverse/ArmoryPanel.vue'
+import BazaarPanel from '@/components/hentaiverse/BazaarPanel.vue'
+import ServicesPanel from '@/components/hentaiverse/ServicesPanel.vue'
 import HentaiVerseFormPanel from '@/components/hentaiverse/HentaiVerseFormPanel.vue'
 import InventoryPanel from '@/components/hentaiverse/InventoryPanel.vue'
 import TrainingPanel from '@/components/hentaiverse/TrainingPanel.vue'
@@ -25,8 +28,10 @@ import StatGroupsPanel from '@/components/hentaiverse/StatGroupsPanel.vue'
 import ChallengePanel from '@/components/hentaiverse/ChallengePanel.vue'
 import ItemWorldPanel from '@/components/hentaiverse/ItemWorldPanel.vue'
 import { HentaiVerseBusi } from '@/core/hentaiverse/hentaiVerseBusi'
+import { hentaiVerseWorld, hentaiVerseSourceUrl } from '@/core/hentaiverse/hentaiVerseWorld'
 import {
   HENTAIVERSE_SECTIONS,
+  HENTAIVERSE_SECTION_GROUPS,
   isHentaiVerseBattleStart,
 } from '@/core/hentaiverse/hentaiVerseProtocol'
 import type {
@@ -57,7 +62,7 @@ const loading = ref(false)
 useAppLaunchReadiness(() => loading.value, 'battle')
 const error = ref('')
 const battleBlocked = ref(false)
-const currentTarget = ref<HentaiVersePageTarget>({ ...HENTAIVERSE_SECTIONS[0]!.target })
+const currentTarget = ref<HentaiVersePageTarget>({ s: 'Character', ss: 'ch' })
 const characterSummary = ref({ name: '', persona: '' })
 const equipmentDetails = ref<Record<string, HentaiVerseEquipmentDetail>>({})
 const equipmentDetailsLoading = ref(false)
@@ -67,7 +72,13 @@ let equipmentDetailsRequestId = 0
 
 watch(page, (nextPage) => void loadEquipmentDetails(nextPage))
 watch(
-  () => [authState.source, authState.site, authState.loggedIn, authState.memberId],
+  () => [
+    authState.source,
+    authState.site,
+    authState.loggedIn,
+    authState.memberId,
+    hentaiVerseWorld.value,
+  ],
   () => {
     requestId++
     page.value = undefined
@@ -75,7 +86,11 @@ watch(
     loading.value = false
     error.value = ''
     battleBlocked.value = false
-    if (authState.loggedIn) void loadSection()
+    if (authState.loggedIn) {
+      if (!availableSections.value.some((section) => section.key === activeSection.value))
+        activeSection.value = 'character'
+      void loadSection(activeSection.value, {})
+    }
   },
   { flush: 'sync' },
 )
@@ -86,7 +101,7 @@ onBeforeUnmount(() => {
 
 async function loadEquipmentDetails(nextPage = page.value) {
   const currentRequest = ++equipmentDetailsRequestId
-  equipmentDetails.value = {}
+  equipmentDetails.value = { ...nextPage?.armory?.inlineDetails }
   equipmentDetailsError.value = ''
   const sources = nextPage?.equipmentSources || []
   equipmentDetailsLoading.value = sources.length > 0
@@ -110,11 +125,19 @@ async function loadEquipmentDetails(nextPage = page.value) {
 const currentMeta = computed(
   () => HENTAIVERSE_SECTIONS.find((item) => item.key === activeSection.value)!,
 )
-const characterSections = computed(() =>
-  HENTAIVERSE_SECTIONS.filter((item) => item.group === 'character'),
+const availableSections = computed(() =>
+  HENTAIVERSE_SECTIONS.filter(
+    (section) => !section.worlds || section.worlds.includes(hentaiVerseWorld.value),
+  ),
 )
-const battleSections = computed(() =>
-  HENTAIVERSE_SECTIONS.filter((item) => item.group === 'battle'),
+const navigationGroups = computed(() =>
+  HENTAIVERSE_SECTION_GROUPS.map((group) => ({
+    ...group,
+    sections: availableSections.value.filter((item) => item.group === group.key),
+  })).filter((group) => group.sections.length),
+)
+const currentGroup = computed(
+  () => HENTAIVERSE_SECTION_GROUPS.find((group) => group.key === currentMeta.value.group)!,
 )
 
 watch(
@@ -138,6 +161,8 @@ function updateCharacterSummary(nextPage: HentaiVersePage) {
 function setPage(nextPage: HentaiVersePage) {
   page.value = nextPage
   battleBlocked.value = false
+  if (nextPage.services?.canonicalQuery)
+    currentTarget.value = { ...nextPage.services.canonicalQuery, world: hentaiVerseWorld.value }
   if (nextPage.equipment)
     currentTarget.value.equip_slot = nextPage.equipment.selectedSlot || undefined
   updateCharacterSummary(nextPage)
@@ -166,6 +191,7 @@ async function loadSection(
   currentTarget.value = {
     ...meta.target,
     ...(!changedSection && !targetOverride ? currentTarget.value : targetOverride || {}),
+    world: hentaiVerseWorld.value,
   }
   if (changedSection) page.value = undefined
   const currentRequest = ++requestId
@@ -273,7 +299,9 @@ async function submitForm(section: HentaiVerseFormSection, data: HentaiVerseForm
       if (!result.page.authenticated)
         throw new Error(t('HentaiVerse 登录态已失效，请重新维护认证 Cookie'))
       setPage(result.page)
-      notify.success(t('HentaiVerse 设置已更新'))
+      if (result.page.armory || result.page.bazaar || result.page.services)
+        notify.info(t('已收到源站响应'))
+      else notify.success(t('HentaiVerse 设置已更新'))
     }
   } catch (submitError) {
     if (currentRequest === requestId && memberId === authState.memberId)
@@ -281,6 +309,13 @@ async function submitForm(section: HentaiVerseFormSection, data: HentaiVerseForm
   } finally {
     if (currentRequest === requestId) loading.value = false
   }
+}
+
+function navigateService(query: Record<string, string>) {
+  const meta = availableSections.value.find(
+    (item) => item.target.s === query.s && item.target.ss === query.ss,
+  )
+  if (meta) void loadSection(meta.key, query)
 }
 
 function selectEquipmentSet(id: string, postToken: string) {
@@ -423,7 +458,7 @@ onMounted(() => {
           )
         }}
       </p>
-      <a href="https://hentaiverse.org/" target="_blank" rel="noopener noreferrer">{{
+      <a :href="hentaiVerseSourceUrl" target="_blank" rel="noopener noreferrer">{{
         t('打开 HentaiVerse')
       }}</a>
       <RouterLink :to="ASSISTANT_SETTINGS">{{ t('安装或更新浏览器助手') }}</RouterLink>
@@ -437,29 +472,39 @@ onMounted(() => {
 
     <div v-else class="hv-shell">
       <aside class="hv-navigation">
-        <strong>{{ t('角色') }}</strong>
-        <button
-          v-for="item in characterSections"
-          :key="item.key"
-          type="button"
-          :class="{ active: activeSection === item.key }"
-          @click="loadSection(item.key)"
+        <SelectField
+          v-model="hentaiVerseWorld"
+          :aria-label="t('世界')"
+          :disabled="loading || hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
         >
-          <PixelIcon :kind="item.key" />{{ t(item.label) }}
-        </button>
-        <strong>{{ t('战斗') }}</strong>
-        <button
-          v-for="item in battleSections"
-          :key="item.key"
-          type="button"
-          :class="{ active: activeSection === item.key }"
-          @click="loadSection(item.key)"
-        >
-          <PixelIcon :kind="item.key" />{{ t(item.label) }}
-        </button>
+          <option value="persistent" :label="t('永久世界')" />
+          <option value="isekai" :label="t('异世界')" />
+        </SelectField>
+        <template v-for="group in navigationGroups" :key="group.key">
+          <strong>{{ t(group.label) }}</strong>
+          <button
+            v-for="item in group.sections"
+            :key="item.key"
+            type="button"
+            :class="{ active: activeSection === item.key }"
+            @click="loadSection(item.key)"
+          >
+            <PixelIcon :kind="item.key" />{{ t(item.label) }}
+          </button>
+        </template>
       </aside>
 
       <main class="hv-content">
+        <div class="hv-mobile-navigation">
+          <SelectField
+            v-model="hentaiVerseWorld"
+            :aria-label="t('世界')"
+            :disabled="loading || hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
+          >
+            <option value="persistent" :label="t('永久世界')" />
+            <option value="isekai" :label="t('异世界')" />
+          </SelectField>
+        </div>
         <SelectField
           v-model="activeSection"
           class="hv-mobile-navigation"
@@ -467,7 +512,7 @@ onMounted(() => {
           @change="loadSection"
         >
           <option
-            v-for="item in HENTAIVERSE_SECTIONS"
+            v-for="item in availableSections"
             :key="item.key"
             :label="t(item.label)"
             :value="item.key"
@@ -508,10 +553,9 @@ onMounted(() => {
         <template v-else-if="page">
           <div class="hv-content-heading">
             <div>
-              <span>{{
-                t(currentMeta.group === 'character' ? t('角色维护') : t('战斗入口'))
-              }}</span>
+              <span>{{ t(currentGroup.heading) }}</span>
               <h2>{{ t(currentMeta.label) }}</h2>
+              <small v-if="page.season">{{ page.season }}</small>
             </div>
             <TagChip v-if="loading" tone="info">{{ t('更新中') }}</TagChip>
           </div>
@@ -546,6 +590,32 @@ onMounted(() => {
             @slot="selectEquipmentSlot"
             @equip="equipItem"
             @unequip="unequipItem"
+          />
+
+          <ArmoryPanel
+            v-else-if="page.armory"
+            :data="page.armory"
+            :loading="loading"
+            :details="equipmentDetails"
+            :details-loading="equipmentDetailsLoading"
+            :details-error="equipmentDetailsError"
+            @retry-details="loadEquipmentDetails()"
+            @navigate="navigateService"
+            @submit="submitForm('armory', $event)"
+          />
+          <BazaarPanel
+            v-else-if="page.bazaar"
+            :data="page.bazaar"
+            :loading="loading"
+            @navigate="navigateService"
+            @submit="submitForm(activeSection, $event)"
+          />
+          <ServicesPanel
+            v-else-if="page.services"
+            :data="page.services"
+            :loading="loading"
+            @navigate="navigateService"
+            @submit="submitForm(activeSection, $event)"
           />
 
           <AbilityPanel
@@ -615,6 +685,9 @@ onMounted(() => {
               activeSection !== 'character' &&
               !page.forms.length &&
               !page.equipment &&
+              !page.armory &&
+              !page.bazaar &&
+              !page.services &&
               !page.abilities &&
               !page.training &&
               !page.inventory &&
