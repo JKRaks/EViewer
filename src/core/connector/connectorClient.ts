@@ -108,7 +108,7 @@ function connectorError(code: string) {
     ABORTED: '请求已取消',
     TIMEOUT: '请求超时，请稍后重试',
     NETWORK_ERROR: '网络连接失败，请检查网络后重试',
-    TARGET_NOT_ALLOWED: '本机助手不支持此请求地址',
+    TARGET_NOT_ALLOWED: '本机代理不支持此请求地址',
     BODY_TOO_LARGE: '上传图片体积超过限制',
     RESPONSE_TOO_LARGE: '源站响应体积超过限制',
     API_UNAVAILABLE: '脚本请求能力不可用，请检查扩展权限',

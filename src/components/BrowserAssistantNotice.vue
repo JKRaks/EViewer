@@ -71,7 +71,7 @@ onUnmounted(() => {
     "
     class="assistant-notice"
   >
-    <Notice tone="warning" :title="t('本机助手不可用，请检查脚本或切换请求方式')">
+    <Notice tone="warning" :title="t('本机代理不可用，请检查脚本或切换请求方式')">
       <RouterLink :to="ASSISTANT_SETTINGS">{{ t('前往设置安装或更新浏览器助手') }}</RouterLink>
     </Notice>
   </div>
