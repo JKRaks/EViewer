@@ -7,7 +7,7 @@ export class bookInfoInput extends R {
    * @returns 请求相对URL
    */
   url(): string {
-    return `/g/${this.bookId}`
+    return `/g/${this.bookId.replace(/\/+$/, '')}/`
   }
   /**
    * 画册ID

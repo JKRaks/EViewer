@@ -19,7 +19,8 @@ const groups = computed(() => {
   for (const action of props.actions) {
     if (action.mode === 'attack' || action.mode === 'spirit' || action.kind === 'heal')
       common.push(action)
-    else if (action.mode === 'magic' && action.kind === 'offense') offense.push(action)
+    else if (action.mode === 'magic' && ['offense', 'weapon', 'debuff'].includes(action.kind || ''))
+      offense.push(action)
     else if (action.mode === 'magic' && ['full-heal', 'regen'].includes(action.kind || ''))
       support.push(action)
     else if (action.mode === 'magic' && action.target === 'self') support.push(action)

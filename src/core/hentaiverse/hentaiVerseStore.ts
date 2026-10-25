@@ -62,7 +62,7 @@ export async function performHentaiVerseBattleAction(
   if (hentaiVerseState.actionPending) throw new Error('前一战斗动作尚未完成')
   if (automatic) {
     const action = current.actions.find((item) => item.mode === mode && item.skill === skill)
-    if (!action || !canUseAutomaticBattleAction(current, action))
+    if (!action || !canUseAutomaticBattleAction(current, action, target))
       throw new Error('自动战斗操作已不可用，已暂停')
     if (
       action.target === 'enemy' &&
@@ -84,6 +84,7 @@ export async function performHentaiVerseBattleAction(
     if (hentaiVerseState.battle === current) {
       hentaiVerseState.battle = next
       if (next.verificationRequired) hentaiVerseState.battleVisible = true
+      return hentaiVerseState.battle
     }
   } catch (error) {
     if (hentaiVerseState.battle === current)
@@ -112,6 +113,7 @@ export async function continueHentaiVerseBattleRound() {
     if (hentaiVerseState.battle === current) {
       hentaiVerseState.battle = next
       if (next.verificationRequired) hentaiVerseState.battleVisible = true
+      return hentaiVerseState.battle
     }
   } catch (error) {
     if (hentaiVerseState.battle === current)

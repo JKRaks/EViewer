@@ -11,7 +11,7 @@ import IconFrame from '@/components/primitives/IconFrame.vue'
 import ModalPanel from '@/components/primitives/ModalPanel.vue'
 import SelectField from '@/components/primitives/SelectField.vue'
 import ToggleField from '@/components/primitives/ToggleField.vue'
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { computed, onUnmounted, ref, watch } from 'vue'
 import {
   CircleCheck,
   X as Close,
@@ -25,22 +25,23 @@ import {
 import { notify } from '@/components/primitives/feedback'
 import {
   enterHentaiVerseBattle,
-  continueHentaiVerseBattleRound,
   hentaiVerseState,
   hideHentaiVerseBattle,
   performHentaiVerseBattleAction,
   showHentaiVerseBattle,
 } from '@/core/hentaiverse/hentaiVerseStore'
 import {
-  decideAutoBattleAction,
   defaultAutoBattleSettings,
   normalizeAutoBattleSettings,
   type AutoBattleSettings,
 } from '@/core/hentaiverse/hentaiVerseAutoBattle'
+import { useHentaiVerseAutoBattle } from '@/core/hentaiverse/hentaiVerseAutoBattleRuntime'
 import type {
   HentaiVerseBattleAction,
   HentaiVerseBattleVital,
 } from '@/core/hentaiverse/model/hentaiVerse'
+
+defineProps<{ navigationExpanded?: boolean }>()
 
 const selectedTarget = ref(1)
 const battle = computed(() => hentaiVerseState.battle)
@@ -64,9 +65,6 @@ const activeTarget = computed(() => {
 const newestLogFirst = computed(() => [...(battle.value?.log ?? [])].reverse())
 const manualOpen = ref(true)
 const logOpen = ref(false)
-const pendingAction = ref('')
-const roundWaiting = ref(false)
-const delaySeconds = ref(3)
 const autoSettings = ref<AutoBattleSettings>({ ...defaultAutoBattleSettings })
 try {
   autoSettings.value =
@@ -79,9 +77,30 @@ try {
 const draftSettings = ref({ ...autoSettings.value })
 const settingsOpen = ref(false)
 const settingsError = ref('')
-const autoRunning = ref(false)
-const autoCountdown = ref(0)
-const autoReason = ref('')
+const {
+  autoRunning,
+  autoPhase,
+  autoCountdown,
+  autoReason,
+  autoAction,
+  autoTarget,
+  roundWaiting,
+  delaySeconds,
+  pendingAction,
+  startAutoBattle,
+  stepAutoBattle,
+  pauseAutoBattle,
+  continueRound,
+} = useHentaiVerseAutoBattle(
+  autoSettings,
+  () => activeTarget.value,
+  (error) => {
+    notify.error(error instanceof Error ? t(error.message) : t('自动战斗已暂停'))
+  },
+)
+watch(autoRunning, (running) => {
+  if (running) manualOpen.value = false
+})
 const floatingLogs = ref<{ id: number; text: string }[]>([])
 const logTimers = new Map<number, ReturnType<typeof setTimeout>>()
 let floatingLogId = 0
@@ -140,23 +159,13 @@ watch(
   },
 )
 
-let cancelDelay: (() => void) | undefined
-let autoRunId = 0
 const offensiveSpells = computed(
   () =>
     battle.value?.actions.filter(
       (action) => action.mode === 'magic' && action.kind === 'offense' && action.target === 'enemy',
     ) || [],
 )
-function handleVisibility() {
-  if (document.hidden) pauseAutoBattle('页面已隐藏，自动战斗已暂停')
-}
-onMounted(() => document.addEventListener('visibilitychange', handleVisibility))
-onUnmounted(() => {
-  document.removeEventListener('visibilitychange', handleVisibility)
-  pauseAutoBattle()
-  clearFloatingLogs()
-})
+onUnmounted(clearFloatingLogs)
 
 function toggleManual() {
   manualOpen.value = !manualOpen.value
@@ -168,6 +177,13 @@ const vitalColors: Record<HentaiVerseBattleVital['key'], string> = {
   magic: '#4f7fc4',
   spirit: '#c65d6f',
 }
+const weaponStyleLabels = {
+  'one-handed': '单手',
+  'two-handed': '双手',
+  'dual-wield': '双持',
+  niten: '二天',
+  staff: '法杖',
+}
 
 watch(
   activeTarget,
@@ -177,27 +193,15 @@ watch(
   { immediate: true },
 )
 
-watch([battle, () => hentaiVerseState.error], ([current, error], [previous, previousError]) => {
-  if (!current) {
-    pauseAutoBattle()
-    clearFloatingLogs()
-  } else if (current.verificationRequired) {
-    pauseAutoBattle('源站需要手动验证，自动战斗已暂停')
-    clearFloatingLogs()
-    hentaiVerseState.battleVisible = true
-  } else if (error) pauseAutoBattle('战斗状态待确认，请从服务器恢复')
-  else if (current.completed) {
-    pauseAutoBattle('本次战斗已结束')
-    if (!previous?.completed)
-      notify.success({
-        title: t('战斗已结束'),
-        message: t('战斗结果已保留在面板中，查看后可关闭战斗面板。'),
-        duration: 5000,
-      })
-  } else if (current.roundCompleted && (!autoRunning.value || !autoSettings.value.continueRounds))
-    pauseAutoBattle('本轮已结束，等待手动继续')
-  else if (previousError || !previous || previous.completed || previous.roundCompleted)
-    autoReason.value = ''
+watch(battle, (current, previous) => {
+  if (!current || current.verificationRequired) clearFloatingLogs()
+  if (current?.verificationRequired) hentaiVerseState.battleVisible = true
+  if (current?.completed && !previous?.completed)
+    notify.success({
+      title: t('战斗已结束'),
+      message: t('战斗结果已保留在面板中，查看后可关闭战斗面板。'),
+      duration: 5000,
+    })
 })
 
 async function act(action: HentaiVerseBattleAction) {
@@ -224,8 +228,11 @@ function openAutoSettings() {
 
 function saveAutoSettings() {
   const settings = normalizeAutoBattleSettings(draftSettings.value)
-  if (!settings || (settings.style === 'magic' && !settings.spell)) {
-    settingsError.value = t('生命阈值需在 10–90% 内，危急阈值须更低；法术策略需要选择进攻法术。')
+  if (
+    !settings ||
+    (settings.style === 'magic' && settings.spellSelection === 'selected' && !settings.spell)
+  ) {
+    settingsError.value = t('请检查生命阈值、进阶策略、等待时间与进攻法术设置。')
     return
   }
   autoSettings.value = settings
@@ -236,118 +243,6 @@ function saveAutoSettings() {
   }
   autoReason.value = ''
   settingsOpen.value = false
-}
-
-function pauseAutoBattle(reason = '自动战斗已暂停') {
-  autoRunId++
-  cancelDelay?.()
-  cancelDelay = undefined
-  autoCountdown.value = 0
-  autoRunning.value = false
-  roundWaiting.value = false
-  autoReason.value = reason
-}
-
-function waitAutoStep(runId: number, seconds = 3): Promise<boolean> {
-  delaySeconds.value = seconds
-  autoCountdown.value = seconds
-  return new Promise((resolve) => {
-    const timer = window.setInterval(() => {
-      if (runId !== autoRunId) {
-        window.clearInterval(timer)
-        cancelDelay = undefined
-        resolve(false)
-        return
-      }
-      autoCountdown.value--
-      if (autoCountdown.value === 0) {
-        window.clearInterval(timer)
-        cancelDelay = undefined
-        resolve(true)
-      }
-    }, 1000)
-    cancelDelay = () => {
-      window.clearInterval(timer)
-      resolve(false)
-    }
-  })
-}
-
-async function startAutoBattle() {
-  if (
-    !battle.value ||
-    autoRunning.value ||
-    hentaiVerseState.actionPending ||
-    hentaiVerseState.battleLoading ||
-    hentaiVerseState.error ||
-    battle.value.completed ||
-    battle.value.verificationRequired ||
-    document.hidden
-  )
-    return
-  const runId = ++autoRunId
-  autoRunning.value = true
-  manualOpen.value = false
-  try {
-    while (runId === autoRunId) {
-      const current = battle.value
-      if (!current || current.completed || current.verificationRequired || document.hidden) return
-      if (current.roundCompleted) {
-        if (!autoSettings.value.continueRounds) {
-          autoReason.value = '本轮已结束，等待手动继续'
-          return
-        }
-        roundWaiting.value = true
-        if (!(await waitAutoStep(runId, 5)) || runId !== autoRunId) return
-        roundWaiting.value = false
-        await continueHentaiVerseBattleRound()
-        if (runId !== autoRunId) return
-        if (battle.value?.roundCompleted && !battle.value.completed)
-          throw new Error(t('未能确认下一轮，请恢复战斗状态'))
-        continue
-      }
-      const decision = decideAutoBattleAction(current, autoSettings.value, activeTarget.value)
-      autoReason.value = decision.reason
-      if (!decision.action || !(await waitAutoStep(runId)) || runId !== autoRunId) return
-      // Re-evaluate after the countdown, so changed resources and targets are not stale.
-      const latest = battle.value
-      if (!latest) return
-      const next = decideAutoBattleAction(latest, autoSettings.value, activeTarget.value)
-      autoReason.value = next.reason
-      if (!next.action || next.target === undefined) return
-      pendingAction.value = `${next.action.mode}:${next.action.skill}`
-      await performHentaiVerseBattleAction(next.action.mode, next.target, next.action.skill, true)
-      pendingAction.value = ''
-    }
-  } catch (error) {
-    if (runId === autoRunId) {
-      autoReason.value = '战斗状态待确认，请从服务器恢复'
-      notify.error(error instanceof Error ? error.message : t('自动战斗已暂停'))
-    }
-  } finally {
-    if (runId === autoRunId) {
-      autoCountdown.value = 0
-      autoRunning.value = false
-      roundWaiting.value = false
-      pendingAction.value = ''
-    }
-  }
-}
-
-async function continueRound(automatic = false) {
-  if (hentaiVerseState.battleLoading || hentaiVerseState.actionPending) return
-  pauseAutoBattle()
-  const runId = autoRunId
-  try {
-    await continueHentaiVerseBattleRound()
-    if (automatic && runId === autoRunId && battle.value && !document.hidden) {
-      if (battle.value?.roundCompleted && !battle.value.completed)
-        throw new Error(t('未能确认下一轮，请恢复战斗状态'))
-      await startAutoBattle()
-    }
-  } catch (error) {
-    notify.error(error instanceof Error ? error.message : t('继续战斗失败'))
-  }
 }
 
 async function recover() {
@@ -372,28 +267,26 @@ function closeLocalBattle() {
 </script>
 
 <template>
-  <ActionButton
-    v-if="battle && !hentaiVerseState.battleVisible"
-    class="battle-resume-button hv-theme"
-    :class="{ 'is-auto-running': autoRunning }"
-    :variant="autoRunning ? 'default' : 'destructive'"
-    :aria-label="t(autoRunning ? '自动战斗中，点击展开' : '返回 HentaiVerse 战斗')"
-    size="icon"
-    :icon="Lightning"
-    :title="t('返回 HentaiVerse 战斗')"
-    @click="showHentaiVerseBattle"
-  />
-
   <div
     v-if="battle && !hentaiVerseState.battleVisible"
-    class="battle-floating-logs hv-theme"
-    role="log"
-    aria-live="polite"
-    :aria-label="t('战斗日志')"
+    v-show="!navigationExpanded"
+    class="battle-minimized hv-theme"
   >
-    <TransitionGroup name="battle-log-tip" tag="div" class="battle-log-stack">
-      <p v-for="line in floatingLogs" :key="line.id">{{ t(line.text) }}</p>
-    </TransitionGroup>
+    <ActionButton
+      class="floating-btn battle-resume-button"
+      :class="{ 'is-auto-running': autoRunning, 'is-active': autoRunning }"
+      :aria-label="t(autoRunning ? '自动战斗中，点击展开' : '返回 HentaiVerse 战斗')"
+      size="icon"
+      :icon="Lightning"
+      :title="t('返回 HentaiVerse 战斗')"
+      @click="showHentaiVerseBattle"
+    />
+
+    <div class="battle-floating-logs" role="log" aria-live="polite" :aria-label="t('战斗日志')">
+      <TransitionGroup name="battle-log-tip" tag="div" class="battle-log-stack">
+        <p v-for="line in floatingLogs" :key="line.id">{{ t(line.text) }}</p>
+      </TransitionGroup>
+    </div>
   </div>
 
   <Transition name="battle-panel">
@@ -410,31 +303,37 @@ function closeLocalBattle() {
           <span v-else-if="battle.roundCompleted">{{ t('本轮已结束') }}</span>
           <span v-else>{{ t('回合进行中') }}</span>
         </div>
-        <div class="battle-header-right">
-          <div class="battle-window-actions">
-            <ActionButton
-              v-if="!battle.completed"
-              variant="ghost"
-              size="icon"
-              :icon="Minus"
-              :title="t('隐藏战斗')"
-              @click="minimizeBattle"
-            />
-            <ActionButton
-              variant="ghost"
-              size="icon"
-              :icon="Close"
-              :title="t('关闭本地战斗面板')"
-              :disabled="hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
-              @click="closeLocalBattle"
-            />
-          </div>
-          <div
-            v-if="!battle.completed && !battle.verificationRequired"
-            class="battle-auto-indicator"
-            :title="t(autoReason)"
-          >
-            <span>{{ t(autoRunning ? '自动战斗中' : '手动操作') }}</span>
+        <div class="battle-window-actions">
+          <ActionButton
+            v-if="!battle.completed"
+            variant="ghost"
+            size="icon"
+            :icon="Minus"
+            :title="t('隐藏战斗')"
+            @click="minimizeBattle"
+          />
+          <ActionButton
+            variant="ghost"
+            size="icon"
+            :icon="Close"
+            :title="t('关闭本地战斗面板')"
+            :disabled="hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
+            @click="closeLocalBattle"
+          />
+        </div>
+        <div
+          v-if="!battle.completed && !battle.verificationRequired"
+          class="battle-auto-indicator"
+          :title="t(autoReason)"
+        >
+          <span>{{ t(autoRunning ? '自动战斗中' : '手动操作') }}</span>
+          <div v-if="autoRunning" class="battle-auto-decision">
+            <span v-if="autoAction" class="battle-planned-action">
+              {{ t(autoAction) }}
+              <template v-if="autoTarget !== undefined">
+                · {{ battle.monsters.find((monster) => monster.id === autoTarget)?.name }}
+              </template>
+            </span>
             <div
               class="auto-countdown-line"
               :aria-label="t('自动操作倒计时')"
@@ -467,6 +366,26 @@ function closeLocalBattle() {
           </div>
         </div>
 
+        <p v-if="battle.vitals.length" class="battle-resources">
+          {{ t('过载') }}
+          {{
+            battle.overcharge === undefined
+              ? t('未知')
+              : `${battle.overchargeExact === false ? '≥' : ''}${battle.overcharge}%`
+          }}
+          · {{ t('灵力姿态') }}
+          {{
+            t(
+              battle.spiritStance === undefined
+                ? '未知'
+                : battle.spiritStance
+                  ? '已开启'
+                  : '已关闭',
+            )
+          }}
+          <span v-if="battle.weaponStyle"> · {{ t(weaponStyleLabels[battle.weaponStyle]) }}</span>
+        </p>
+
         <div
           v-if="
             battle.monsters.length &&
@@ -480,7 +399,11 @@ function closeLocalBattle() {
             v-for="monster in battle.monsters"
             :key="monster.id"
             type="button"
-            :class="{ active: activeTarget === monster.id }"
+            :class="{
+              active:
+                (autoRunning && autoTarget !== undefined ? autoTarget : activeTarget) ===
+                monster.id,
+            }"
             :disabled="
               battle.completed ||
               battle.roundCompleted ||
@@ -517,6 +440,11 @@ function closeLocalBattle() {
               <small v-else-if="monster.healthPercent === undefined">{{
                 t('无血条 · 不可选择')
               }}</small>
+              <small v-if="monster.activeEffects?.length" class="monster-effects">
+                {{
+                  monster.activeEffects.map((effect) => t(effect.label || effect.id)).join(' · ')
+                }}
+              </small>
             </div>
             <span
               v-if="monster.healthPercent !== undefined"
@@ -578,7 +506,7 @@ function closeLocalBattle() {
               {{ autoCountdown }} <small>{{ t('秒后继续') }}</small>
             </div>
             <ProgressMeter
-              :percentage="(autoCountdown / 5) * 100"
+              :percentage="(autoCountdown / delaySeconds) * 100"
               :show-text="false"
               :label="t('轮间倒计时')"
             />
@@ -647,7 +575,10 @@ function closeLocalBattle() {
         </div>
       </div>
       <footer v-if="!battle.completed && !battle.verificationRequired" class="battle-footer">
-        <p>{{ t('轮间自动继续') }} · {{ t(autoSettings.continueRounds ? '已开启' : '已关闭') }}</p>
+        <p>
+          {{ t('轮间自动继续') }} · {{ t(autoSettings.continueRounds ? '已开启' : '已关闭') }}
+          <span v-if="autoPhase === 'pausing'"> · {{ t('等待当前动作完成') }}</span>
+        </p>
         <div class="battle-footer-actions">
           <ActionButton
             v-if="!battle.roundCompleted"
@@ -656,6 +587,17 @@ function closeLocalBattle() {
             :disabled="hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
             @click="openAutoSettings"
             >{{ t('策略设置') }}</ActionButton
+          >
+          <ActionButton
+            v-if="!autoRunning && !battle.roundCompleted"
+            variant="outline"
+            :disabled="
+              hentaiVerseState.actionPending ||
+              hentaiVerseState.battleLoading ||
+              Boolean(hentaiVerseState.error)
+            "
+            @click="stepAutoBattle"
+            >{{ t('单步执行') }}</ActionButton
           >
           <ActionButton
             v-if="autoRunning"
@@ -674,7 +616,7 @@ function closeLocalBattle() {
               Boolean(hentaiVerseState.error)
             "
             @click="startAutoBattle"
-            >{{ t('开始自动战斗') }}</ActionButton
+            >{{ t('自动战斗') }}</ActionButton
           >
           <template v-if="battle.roundCompleted">
             <ActionButton
@@ -700,17 +642,28 @@ function closeLocalBattle() {
   <ModalPanel v-model="settingsOpen" :title="t('自动战斗策略')" width="min(460px, 92vw)">
     <div class="auto-settings">
       <p class="auto-settings-copy">
-        {{
-          t(
-            '每步确认战况后等待三秒；开启轮间自动继续后，等待五秒进入下一轮。自动战斗不使用消耗品。',
-          )
-        }}
+        {{ t('每步确认战况后再执行下一步；等待时间可调整。自动战斗不使用消耗品。') }}
       </p>
       <label class="auto-setting">
         <span>{{ t('攻击策略') }}</span>
         <SelectField v-model="draftSettings.style" :aria-label="t('攻击策略')">
           <option value="physical">{{ t('物理优先') }}</option>
           <option value="magic">{{ t('法术优先') }}</option>
+        </SelectField>
+      </label>
+      <label class="auto-setting">
+        <span>{{ t('选敌策略') }}</span>
+        <SelectField v-model="draftSettings.targeting" :aria-label="t('选敌策略')">
+          <option value="selected">{{ t('当前目标优先') }}</option>
+          <option value="lowest-health">{{ t('残血目标优先') }}</option>
+          <option value="priority">{{ t('威胁与连招优先') }}</option>
+        </SelectField>
+      </label>
+      <label v-if="draftSettings.style === 'magic'" class="auto-setting">
+        <span>{{ t('法术选择') }}</span>
+        <SelectField v-model="draftSettings.spellSelection" :aria-label="t('法术选择')">
+          <option value="selected">{{ t('使用指定法术') }}</option>
+          <option value="adaptive">{{ t('按敌人数和资源自动选择') }}</option>
         </SelectField>
       </label>
       <label v-if="draftSettings.style === 'magic'" class="auto-setting">
@@ -744,6 +697,97 @@ function closeLocalBattle() {
       </div>
       <ToggleField v-model="draftSettings.continueRounds" :label="t('轮间自动继续')" />
       <ToggleField v-model="draftSettings.maintainRegen" :label="t('按需补充再生')" />
+      <ToggleField v-model="draftSettings.maintainBuffs" :label="t('按需补充保护增益')" />
+      <p class="auto-settings-copy">{{ t('补充保护和流派增益，并为治疗与灵力防护保留资源。') }}</p>
+      <details class="auto-advanced">
+        <summary>{{ t('进阶战斗策略') }}</summary>
+        <div class="auto-settings">
+          <ToggleField v-model="draftSettings.useWeaponSkills" :label="t('按武器流派衔接技能')" />
+          <label class="auto-setting">
+            <span>{{ t('灵力姿态策略') }}</span>
+            <SelectField v-model="draftSettings.spiritPolicy" :aria-label="t('灵力姿态策略')">
+              <option value="manual">{{ t('手动管理姿态') }}</option>
+              <option value="sustain">{{ t('偏向维持姿态') }}</option>
+              <option value="skills">{{ t('优先预留武器技能资源') }}</option>
+            </SelectField>
+          </label>
+          <div v-if="draftSettings.spiritPolicy !== 'manual'" class="auto-thresholds">
+            <label class="auto-setting"
+              ><span>{{ t('姿态开启过载（%）') }}</span>
+              <input
+                v-model.number="draftSettings.spiritOnAt"
+                type="number"
+                min="50"
+                max="250"
+                step="25"
+              />
+            </label>
+            <label class="auto-setting"
+              ><span>{{ t('姿态关闭过载（%）') }}</span>
+              <input
+                v-model.number="draftSettings.spiritOffAt"
+                type="number"
+                min="25"
+                max="225"
+                step="25"
+              />
+            </label>
+            <label class="auto-setting"
+              ><span>{{ t('保留灵力（%）') }}</span>
+              <input
+                v-model.number="draftSettings.spiritReserve"
+                type="number"
+                min="10"
+                max="90"
+                step="5"
+              />
+            </label>
+          </div>
+          <label class="auto-setting"
+            ><span>{{ t('保留过载（%）') }}</span>
+            <input
+              v-model.number="draftSettings.overchargeReserve"
+              type="number"
+              min="0"
+              max="100"
+              step="25"
+            />
+          </label>
+          <label class="auto-setting">
+            <span>{{ t('怪物减益策略') }}</span>
+            <SelectField v-model="draftSettings.debuffs" :aria-label="t('怪物减益策略')">
+              <option value="off">{{ t('不自动施加减益') }}</option>
+              <option value="survival">{{ t('优先降低承伤') }}</option>
+              <option value="balanced">{{ t('兼顾控制与减防') }}</option>
+            </SelectField>
+          </label>
+          <p class="auto-settings-copy">
+            {{ t('连招随时让位于治疗；姿态和武器技能共用过载预算。减益未生效时本轮不重复尝试。') }}
+          </p>
+        </div>
+      </details>
+      <div class="auto-thresholds">
+        <label class="auto-setting">
+          <span>{{ t('动作间隔（秒）') }}</span>
+          <input
+            v-model.number="draftSettings.actionDelay"
+            type="number"
+            min="1"
+            max="10"
+            step="1"
+          />
+        </label>
+        <label class="auto-setting">
+          <span>{{ t('轮间等待（秒）') }}</span>
+          <input
+            v-model.number="draftSettings.roundDelay"
+            type="number"
+            min="1"
+            max="15"
+            step="1"
+          />
+        </label>
+      </div>
       <p class="auto-settings-copy">
         {{ t('施法时预留一次治疗所需魔力；无法确认资源或没有合适操作时暂停。') }}
       </p>
@@ -778,10 +822,10 @@ function closeLocalBattle() {
   min-height: 44px;
 }
 .battle-header {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
+  gap: 6px 12px;
   padding: 8px 12px;
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
@@ -801,26 +845,35 @@ function closeLocalBattle() {
   font-size: 12px;
   color: var(--muted-foreground);
 }
-.battle-header-right {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  flex-shrink: 0;
-}
 .battle-window-actions {
   display: flex;
 }
 .battle-auto-indicator {
-  display: inline-flex;
-  flex-direction: column;
-  gap: 4px;
-  width: max-content;
+  display: flex;
+  grid-column: 1 / -1;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
 }
 .battle-auto-indicator > span {
+  flex-shrink: 0;
   color: var(--accent);
   font-size: 12px;
 }
-/* The track derives its entire width from the status text, with no box or counter. */
+.battle-auto-decision {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.battle-planned-action {
+  overflow: hidden;
+  color: var(--accent);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+/* Keep the wait track with the decision text on the same row as the mode label. */
 .auto-countdown-line {
   width: 100%;
   height: 2px;
@@ -1098,14 +1151,34 @@ function closeLocalBattle() {
   color: var(--muted-foreground);
   font-size: 13px;
 }
-.battle-resume-button {
+.auto-advanced > summary {
+  min-height: 44px;
+  padding: 10px 0;
+  cursor: pointer;
+  font-size: 14px;
+}
+.battle-resources,
+.monster-effects {
+  margin: 0;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.battle-minimized {
   position: fixed;
-  right: 80px;
-  bottom: calc(18px + env(safe-area-inset-bottom));
-  z-index: 3050;
-  width: 46px;
-  height: 46px;
-  box-shadow: var(--shadow);
+  right: calc(var(--fab-inset) + var(--fab-size) + 12px);
+  bottom: calc(var(--fab-inset) + env(safe-area-inset-bottom));
+  z-index: 1090;
+  display: flex;
+  flex-direction: row-reverse;
+  align-items: flex-end;
+  gap: 12px;
+  width: max-content;
+  max-width: calc(100% - var(--fab-inset) - var(--fab-size) - 24px);
+  pointer-events: none;
+}
+.battle-resume-button {
+  pointer-events: auto;
 }
 .battle-resume-button.is-auto-running {
   animation: battle-running-pulse 1.8s ease-in-out infinite;
@@ -1114,12 +1187,8 @@ function closeLocalBattle() {
   animation: battle-running-icon 1.8s ease-in-out infinite;
 }
 .battle-floating-logs {
-  position: fixed;
-  right: 138px;
-  bottom: calc(18px + env(safe-area-inset-bottom));
-  z-index: 3049;
-  width: min(300px, calc(100vw - 154px));
-  pointer-events: none;
+  width: 300px;
+  min-width: 0;
   overflow: clip;
 }
 .battle-log-stack {
@@ -1129,8 +1198,8 @@ function closeLocalBattle() {
   margin: 6px 0 0;
   padding: 8px 10px;
   border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--surface-raised) 82%, transparent);
-  backdrop-filter: blur(6px);
+  border-radius: 8px;
+  background: var(--surface-raised);
   color: var(--foreground);
   font-size: 12px;
   line-height: 1.5;
@@ -1200,17 +1269,6 @@ function closeLocalBattle() {
   }
   .battle-body {
     flex: 1;
-  }
-  .battle-floating-logs {
-    right: 132px;
-    bottom: calc(14px + env(safe-area-inset-bottom));
-    width: min(280px, calc(100vw - 144px));
-  }
-  .battle-resume-button {
-    right: 72px;
-    bottom: calc(14px + env(safe-area-inset-bottom));
-    width: 50px;
-    height: 50px;
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -25,9 +25,13 @@ import StatGroupsPanel from '@/components/hentaiverse/StatGroupsPanel.vue'
 import ChallengePanel from '@/components/hentaiverse/ChallengePanel.vue'
 import ItemWorldPanel from '@/components/hentaiverse/ItemWorldPanel.vue'
 import { HentaiVerseBusi } from '@/core/hentaiverse/hentaiVerseBusi'
-import { HENTAIVERSE_SECTIONS } from '@/core/hentaiverse/hentaiVerseProtocol'
+import {
+  HENTAIVERSE_SECTIONS,
+  isHentaiVerseBattleStart,
+} from '@/core/hentaiverse/hentaiVerseProtocol'
 import type {
   HentaiVerseAbilityActionName,
+  HentaiVerseBattleSnapshot,
   HentaiVerseEquipmentDetail,
   HentaiVerseFormSection,
   HentaiVerseFormData,
@@ -133,9 +137,16 @@ function updateCharacterSummary(nextPage: HentaiVersePage) {
 
 function setPage(nextPage: HentaiVersePage) {
   page.value = nextPage
+  battleBlocked.value = false
   if (nextPage.equipment)
     currentTarget.value.equip_slot = nextPage.equipment.selectedSlot || undefined
   updateCharacterSummary(nextPage)
+}
+
+function openBattle(snapshot: HentaiVerseBattleSnapshot) {
+  page.value = undefined
+  battleBlocked.value = true
+  showHentaiVerseBattleSnapshot(snapshot)
 }
 
 async function loadSection(
@@ -165,9 +176,7 @@ async function loadSection(
     const result = await busi.getPage(currentTarget.value)
     if (currentRequest !== requestId) return
     if (result.battle) {
-      page.value = undefined
-      battleBlocked.value = true
-      showHentaiVerseBattleSnapshot(result.battle)
+      openBattle(result.battle)
       return
     }
     if (!result.page?.authenticated)
@@ -193,7 +202,7 @@ async function runDomainAction(
     const result = await request()
     if (currentRequest !== requestId || memberId !== authState.memberId) return
     if (result.battle) {
-      showHentaiVerseBattleSnapshot(result.battle)
+      openBattle(result.battle)
       notify.success(t('已进入 HentaiVerse 战斗'))
     } else if (result.page) {
       if (!result.page.authenticated)
@@ -211,55 +220,54 @@ async function runDomainAction(
 }
 
 async function submitForm(section: HentaiVerseFormSection, data: HentaiVerseFormData) {
-  if (section === 'persona' && data.persona_create) {
-    try {
-      await dialogs.confirm(t('人格创建后无法删除，确定继续吗？'), t('创建人格'), {
-        type: 'warning',
-      })
-    } catch {
-      return
-    }
-  }
-  if (
-    (['arena', 'ringOfBlood', 'grindfest'].includes(section) && data.initid) ||
-    section === 'itemWorld'
-  ) {
-    try {
-      const sectionLabel =
-        HENTAIVERSE_SECTIONS.find((item) => item.key === section)?.label || t('战斗')
-      const challenge = page.value?.challenges?.find((item) => item.id === data.initid)
-      const entryId = Array.isArray(data['eqids[]']) ? data['eqids[]'][0] : ''
-      const entryInfo = entryId ? page.value?.itemWorld?.entryInfo[entryId] : undefined
-      const details = challenge
-        ? t('{p0}，{p1} 轮，入场费用 {p2}。', {
-            p0: t(challenge.name),
-            p1: challenge.rounds,
-            p2: t(challenge.entryCost || '无'),
-          })
-        : entryInfo
-          ? t('{p0} 轮，消耗 {p1} 世界种子。', { p0: entryInfo.rounds, p1: entryInfo.cost })
-          : ''
-      await dialogs.confirm(
-        t('{p0}即将进入{p1}，进入后需要完成或退出当前战斗。确定继续吗？', {
-          p0: details,
-          p1: t(sectionLabel),
-        }),
-        t('确认开始战斗'),
-        {
-          type: 'warning',
-          confirmButtonText: t('开始战斗'),
-          cancelButtonText: t('暂不进入'),
-        },
-      )
-    } catch {
-      return
-    }
-  }
+  if (loading.value) return
+  const currentRequest = ++requestId
+  const memberId = authState.memberId
+  const target = { ...currentTarget.value }
   loading.value = true
   try {
-    const result = await busi.submitForm(section, data, currentTarget.value)
+    try {
+      if (section === 'persona' && data.persona_create) {
+        await dialogs.confirm(t('人格创建后无法删除，确定继续吗？'), t('创建人格'), {
+          type: 'warning',
+        })
+      }
+      if (isHentaiVerseBattleStart(section, data)) {
+        const sectionLabel =
+          HENTAIVERSE_SECTIONS.find((item) => item.key === section)?.label || t('战斗')
+        const challenge = page.value?.challenges?.find((item) => item.id === data.initid)
+        const entryId = Array.isArray(data['eqids[]']) ? data['eqids[]'][0] : ''
+        const entryInfo = entryId ? page.value?.itemWorld?.entryInfo[entryId] : undefined
+        const details = challenge
+          ? t('{p0}，{p1} 轮，入场费用 {p2}。', {
+              p0: t(challenge.name),
+              p1: challenge.rounds,
+              p2: t(challenge.entryCost || '无'),
+            })
+          : entryInfo
+            ? t('{p0} 轮，消耗 {p1} 世界种子。', { p0: entryInfo.rounds, p1: entryInfo.cost })
+            : ''
+        await dialogs.confirm(
+          t('{p0}即将进入{p1}，进入后需要完成或退出当前战斗。确定继续吗？', {
+            p0: details,
+            p1: t(sectionLabel),
+          }),
+          t('确认开始战斗'),
+          {
+            type: 'warning',
+            confirmButtonText: t('开始战斗'),
+            cancelButtonText: t('暂不进入'),
+          },
+        )
+      }
+    } catch {
+      return
+    }
+    if (currentRequest !== requestId || memberId !== authState.memberId) return
+    const result = await busi.submitForm(section, data, target)
+    if (currentRequest !== requestId || memberId !== authState.memberId) return
     if (result.battle) {
-      showHentaiVerseBattleSnapshot(result.battle)
+      openBattle(result.battle)
       notify.success(t('已进入 HentaiVerse 战斗'))
     } else if (result.page) {
       if (!result.page.authenticated)
@@ -268,9 +276,10 @@ async function submitForm(section: HentaiVerseFormSection, data: HentaiVerseForm
       notify.success(t('HentaiVerse 设置已更新'))
     }
   } catch (submitError) {
-    notify.error(submitError instanceof Error ? submitError.message : t('提交失败'))
+    if (currentRequest === requestId && memberId === authState.memberId)
+      notify.error(submitError instanceof Error ? submitError.message : t('提交失败'))
   } finally {
-    loading.value = false
+    if (currentRequest === requestId) loading.value = false
   }
 }
 
