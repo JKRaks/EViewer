@@ -91,4 +91,19 @@ small {
   font-size: 11px;
   color: var(--placeholder);
 }
+@media (max-width: 767px) {
+  .equipment-detail {
+    font-size: 14px;
+  }
+  h4 {
+    font-size: 14px;
+  }
+  small {
+    font-size: 12px;
+  }
+  summary {
+    min-height: 44px;
+    align-content: center;
+  }
+}
 </style>

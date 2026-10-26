@@ -4,7 +4,10 @@ import type {
   HentaiVersePageTarget,
 } from './model/hentaiVerse'
 import { parseEquipmentData, readEquipmentSources } from './hentaiVerseEquipment'
-import { translateHentaiVerseText } from './hentaiVerseTranslations'
+import {
+  translateHentaiVerseDescription,
+  translateHentaiVerseText,
+} from './hentaiVerseTranslations'
 
 export const HENTAIVERSE_ARMORY_SCREENS = [
   'organize',
@@ -167,7 +170,7 @@ function readArmoryControls(form: HTMLFormElement): ArmoryControl[] {
         label: translated(node.getAttribute('data-name') || label),
         cp: node.hasAttribute('data-cp') ? Number(node.getAttribute('data-cp')) : undefined,
         disabled: node.disabled || !!node.getAttribute('data-disabled'),
-        help: translated(node.getAttribute('data-disabled') || ''),
+        help: translateHentaiVerseDescription(node.getAttribute('data-disabled') || ''),
       }
       const existing = controls.get(node.name)
       if (radio && existing) {
@@ -258,13 +261,14 @@ function readModifyActions(form: HTMLFormElement, script: string): ArmoryAction[
         button.disabled ||
         !!confirmButton?.disabled ||
         (!!handler && !confirmButton && !actionValue && button.name !== 'action'),
-      help: translated(confirmButton?.title || button.title || ''),
+      help: translateHentaiVerseDescription(confirmButton?.title || button.title || ''),
       confirmation: [...confirmationDocument.querySelectorAll('p, tr')]
-        .map((n) => translated(text(n)))
+        .map((n) => translateHentaiVerseDescription(text(n)))
         .filter(Boolean),
       hidden,
       charm: handler === 'pop_setcharm' || button.id === 'setcharm',
-      blockedReason: button.disabled && button.title ? translated(button.title) : '',
+      blockedReason:
+        button.disabled && button.title ? translateHentaiVerseDescription(button.title) : '',
     }
   })
 }
@@ -418,7 +422,7 @@ export function parseHentaiVerseArmory(
       id: input.value,
       name: translated(text(input.closest('label'))),
       category,
-      status: text(row.children[1]),
+      status: translated(text(row.children[1])),
       disabled: input.disabled && !protectedEquipment,
       protected: protectedEquipment,
       credits: raw?.c || 0,
@@ -470,7 +474,9 @@ export function parseHentaiVerseArmory(
     hidden,
     controls: readArmoryControls(form),
     actions: modify ? readModifyActions(form, script) : [],
-    descriptions: [...document.querySelectorAll('#equipblurb > p')].map((n) => translated(text(n))),
+    descriptions: [...document.querySelectorAll('#equipblurb > p')].map((n) =>
+      translateHentaiVerseDescription(text(n)),
+    ),
     balance: Number(script.match(/const credit_balance\s*=\s*(\d+)/)?.[1] || 0),
     modify,
     modificationLinks: readLinks(document, '#equipmodify_outer a[href]', target.world),
@@ -488,7 +494,7 @@ export function parseHentaiVerseArmory(
               : 'Capacity',
       ),
       lines: [...node.querySelectorAll('p,tr,.eqcharm')]
-        .map((n) => translated(text(n)))
+        .map((n) => translateHentaiVerseDescription(text(n)))
         .filter(Boolean),
     })),
   }

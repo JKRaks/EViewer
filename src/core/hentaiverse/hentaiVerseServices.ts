@@ -1,5 +1,9 @@
 import type { HentaiVerseFormData, HentaiVersePageTarget } from './model/hentaiVerse'
-import { decodeHentaiVerseGlyphs, translateHentaiVerseText } from './hentaiVerseTranslations'
+import {
+  decodeHentaiVerseGlyphs,
+  translateHentaiVerseDescription,
+  translateHentaiVerseText,
+} from './hentaiVerseTranslations'
 
 export interface HentaiVerseMonsterUpgrade {
   label: string
@@ -89,7 +93,15 @@ export interface HentaiVerseServicesPage {
   mail?: {
     filter: string
     hidden: HentaiVerseFormData
-    rows: { columns: string[]; query?: Record<string, string> }[]
+    rows: {
+      columns: string[]
+      fields: {
+        label: string
+        value: string
+        kind: 'subject' | 'sender' | 'time' | 'status' | 'other'
+      }[]
+      query?: Record<string, string>
+    }[]
     empty: string
     compose?: {
       to: string
@@ -116,6 +128,10 @@ function text(element: Element | null | undefined) {
 
 function translated(element: Element | null | undefined) {
   return translateHentaiVerseText(text(element))
+}
+
+function description(element: Element | null | undefined) {
+  return translateHentaiVerseDescription(text(element))
 }
 
 function queryFrom(element: Element): Record<string, string> | undefined {
@@ -186,7 +202,7 @@ function parseLottery(document: Document, target: HentaiVersePageTarget): Hentai
       cost: translated(rightRows[1]),
       held: translated(rightRows.find((node) => /^You hold /.test(text(node)))),
       stock: translated(rightRows.find((node) => /^Stock:/.test(text(node)))),
-      rules: [...right.querySelectorAll('p')].map(translated),
+      rules: [...right.querySelectorAll('p')].map(description),
       hidden: hiddenFields(form),
       canBuy: Boolean(form) && available('submit_buy'),
       canGolden: Boolean(form) && available('submit_glt'),
@@ -209,11 +225,45 @@ function parseMail(document: Document, target: HentaiVersePageTarget): HentaiVer
       },
     ]
   })
+  const headingRow = root.querySelector('#mmail_list tr:has(th)')
+  const headings = [...(headingRow?.children || [])].map(text)
+  const fieldKinds = {
+    subject: ['subject'],
+    sender: ['sender', 'from', 'recipient', 'to'],
+    time: ['sent', 'date', 'time', 'received', 'expires', 'expiration'],
+    status: ['status', 'state'],
+  } as const
   const rows = [...root.querySelectorAll('#mmail_list tr')].flatMap((row) => {
     if (row.querySelector('th, #mmail_nnm')) return []
-    const columns = [...row.querySelectorAll('td')].map(translated)
+    const cells = [...row.querySelectorAll('td')]
+    // Mail subjects, player names and message bodies are user content. Only recognized
+    // source headings/status cells may pass through the translation/capture pipeline.
+    const fields = cells.map((cell, index) => {
+      const heading = headings[index] || cell.getAttribute('data-label') || ''
+      const normalized = heading
+        .replace(/[:：]$/, '')
+        .trim()
+        .toLowerCase()
+      const kind = (Object.entries(fieldKinds).find(([, labels]) =>
+        (labels as readonly string[]).includes(normalized),
+      )?.[0] || 'other') as 'subject' | 'sender' | 'time' | 'status' | 'other'
+      const value =
+        text(cell) ||
+        [...cell.querySelectorAll('img')]
+          .map((image) => image.alt || image.title)
+          .filter(Boolean)
+          .join(' · ')
+      return {
+        label: heading ? translateHentaiVerseText(heading) : '',
+        value: kind === 'status' ? translateHentaiVerseText(value) : value,
+        kind,
+      }
+    })
+    const columns = fields.map((field) => field.value)
     const source = row.matches('[onclick]') ? row : row.querySelector('a[href], [onclick]')
-    return columns.length ? [{ columns, query: source ? queryFrom(source) : undefined }] : []
+    return columns.length
+      ? [{ columns, fields, query: source ? queryFrom(source) : undefined }]
+      : []
   })
   const form = root.querySelector('#mailform')
   const inputValue = (name: string) =>
@@ -225,7 +275,7 @@ function parseMail(document: Document, target: HentaiVersePageTarget): HentaiVer
       return [
         {
           id,
-          name: translated(node),
+          name: node.closest('#mm_equip') ? text(node) : translated(node),
           quantity: text(node.closest('tr')?.querySelector('td:last-child')),
           pane: node.closest('#mm_equip') ? 'equip' : 'item',
           locked: node.getAttribute('data-locked') === '1',
@@ -238,11 +288,13 @@ function parseMail(document: Document, target: HentaiVersePageTarget): HentaiVer
       const index = node.getAttribute('onclick')?.match(/remove_attachment\((\d+)/)?.[1]
       return index === undefined
         ? []
-        : [{ index, label: translated(node.closest('tr') || node.parentElement) || '附件' }]
+        : [{ index, label: text(node.closest('tr') || node.parentElement) || '附件' }]
     },
   )
   const content = root.querySelector('#mmail_left')?.cloneNode(true) as Element | undefined
   content?.querySelectorAll('script, input, textarea, img').forEach((node) => node.remove())
+  content?.querySelectorAll('br').forEach((node) => node.replaceWith('\n'))
+  content?.querySelectorAll('p, div, tr').forEach((node) => node.append('\n'))
   const script = [...document.scripts]
     .filter((node) => !node.src)
     .map((node) => node.textContent)
@@ -275,8 +327,8 @@ function parseMail(document: Document, target: HentaiVersePageTarget): HentaiVer
             hidden: hiddenFields(form),
           }
         : undefined,
-      help: [...root.querySelectorAll('#mmail_attachhelp p')].map(translated),
-      content: translated(content),
+      help: [...root.querySelectorAll('#mmail_attachhelp p')].map(description),
+      content: content?.textContent?.trim() || '',
       attachments,
       removable,
       canReturn: Boolean(root.querySelector('[onclick*="return_mail("]')),
@@ -359,7 +411,7 @@ function parseMonsterLab(document: Document): HentaiVerseServicesPage {
         hidden: hiddenFields(create),
         descriptions: [
           ...root.querySelectorAll('#monstercreate_info p, #monstercreate_info li'),
-        ].map(translated),
+        ].map(description),
         stats,
         attacks,
       },
@@ -374,7 +426,7 @@ function parseMonsterLab(document: Document): HentaiVerseServicesPage {
         ? node
         : node.querySelector('[onclick], a[href]')
       return {
-        name: translated(node),
+        name: text(node),
         description: '',
         query: source ? queryFrom(source) : undefined,
       }
@@ -388,7 +440,7 @@ function parseMonsterLab(document: Document): HentaiVerseServicesPage {
         ? [
             {
               label: value === 'food' ? '喂养全部怪物' : '为全部怪物使用快乐药丸',
-              description: translated(image.parentElement?.parentElement),
+              description: description(image.parentElement?.parentElement),
               data: { ...hiddenFields(document.querySelector('#feed_form')), feed_all: value },
             },
           ]
@@ -414,7 +466,7 @@ function parseMonsterLab(document: Document): HentaiVerseServicesPage {
         ? [
             {
               label: '解锁怪物槽位',
-              description: translated(unlock.parentElement?.parentElement),
+              description: description(unlock.parentElement?.parentElement),
               data: { unlock_slot: '1' },
             },
           ]
@@ -428,7 +480,7 @@ function monsterUpgradeHelp(image: Element | null) {
   if (!html) return ''
   const fragment = new DOMParser().parseFromString(html.replace(/\\'/g, "'"), 'text/html')
   decodeHentaiVerseGlyphs(fragment)
-  return translated(fragment.body)
+  return description(fragment.body)
 }
 
 function parseMonsterDetail(document: Document, root: Element): HentaiVerseServicesPage {
@@ -459,7 +511,7 @@ function parseMonsterDetail(document: Document, root: Element): HentaiVerseServi
       return {
         label: translateHentaiVerseText(stat.toUpperCase()),
         value: action?.[1] || '',
-        description: text(row.children[2]),
+        description: description(row.children[2]),
         level: text(row.children[1]),
         help: monsterUpgradeHelp(image),
         disabled: !action,
@@ -472,7 +524,7 @@ function parseMonsterDetail(document: Document, root: Element): HentaiVerseServi
     return {
       label: translated(row.children[0]),
       value: action?.[1] || '',
-      description: translated(row.children[3]),
+      description: description(row.children[3]),
       level: `${row.querySelectorAll('.mcu1').length} / ${row.querySelectorAll('.mcu0, .mcu1').length}`,
       help: monsterUpgradeHelp(image),
       disabled: !action,
@@ -485,7 +537,7 @@ function parseMonsterDetail(document: Document, root: Element): HentaiVerseServi
         ? [
             {
               label: value === 'food' ? '喂养怪物' : '使用快乐药丸',
-              description: translated(image.parentElement?.parentElement),
+              description: description(image.parentElement?.parentElement),
               data: { ...hiddenFields(document.querySelector('#food_form')), food_action: value },
             },
           ]
@@ -501,7 +553,7 @@ function parseMonsterDetail(document: Document, root: Element): HentaiVerseServi
     /e\(["']delete_monster["']\)\.value\s*=\s*["']([a-zA-Z0-9_-]+)["']/,
   )?.[1]
   const detail: HentaiVerseMonsterDetail = {
-    name: translated(header?.children[1]),
+    name: text(header?.children[1]),
     summary: [
       text(header?.children[0]),
       translated(header?.children[2]),
@@ -509,7 +561,7 @@ function parseMonsterDetail(document: Document, root: Element): HentaiVerseServi
     ]
       .filter(Boolean)
       .join(' · '),
-    notice: translated(root.querySelector('#monsterstats_rename')),
+    notice: description(root.querySelector('#monsterstats_rename')),
     groups,
     perks,
     food,
@@ -558,7 +610,7 @@ function parseMonsterDetail(document: Document, root: Element): HentaiVerseServi
         name: input.value,
         placeholder: input.placeholder,
         controls,
-        details: [...row.children].slice(3).map(translated),
+        details: [...row.children].slice(3).map(description),
       }
     })
     detail.skills = {

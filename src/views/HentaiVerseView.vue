@@ -450,7 +450,8 @@ onMounted(() => {
     </header>
 
     <CampScene :compact="activeSection !== 'character'" />
-    <div v-if="authState.source === 'local'" class="hv-local-help">
+    <details v-if="authState.source === 'local'" class="hv-local-help" :open="!authState.loggedIn">
+      <summary>{{ t('连接说明') }}</summary>
       <p>
         {{
           t(
@@ -462,7 +463,7 @@ onMounted(() => {
         t('打开 HentaiVerse')
       }}</a>
       <RouterLink :to="ASSISTANT_SETTINGS">{{ t('安装或更新浏览器助手') }}</RouterLink>
-    </div>
+    </details>
     <Notice
       v-if="!authState.loggedIn"
       :title="t('请先在账号信息中完成当前连接模式的登录验证。')"
@@ -496,28 +497,35 @@ onMounted(() => {
 
       <main class="hv-content">
         <div class="hv-mobile-navigation">
-          <SelectField
-            v-model="hentaiVerseWorld"
-            :aria-label="t('世界')"
-            :disabled="loading || hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
-          >
-            <option value="persistent" :label="t('永久世界')" />
-            <option value="isekai" :label="t('异世界')" />
-          </SelectField>
+          <label>
+            <span>{{ t('世界') }}</span>
+            <SelectField
+              v-model="hentaiVerseWorld"
+              :aria-label="t('世界')"
+              :disabled="
+                loading || hentaiVerseState.actionPending || hentaiVerseState.battleLoading
+              "
+            >
+              <option value="persistent" :label="t('永久世界')" />
+              <option value="isekai" :label="t('异世界')" />
+            </SelectField>
+          </label>
+          <label>
+            <span>{{ t('功能') }}</span>
+            <SelectField
+              v-model="activeSection"
+              :aria-label="t('HentaiVerse 页面')"
+              @change="loadSection"
+            >
+              <option
+                v-for="item in availableSections"
+                :key="item.key"
+                :label="`${t(HENTAIVERSE_SECTION_GROUPS.find((group) => group.key === item.group)?.label)} · ${t(item.label)}`"
+                :value="item.key"
+              ></option>
+            </SelectField>
+          </label>
         </div>
-        <SelectField
-          v-model="activeSection"
-          class="hv-mobile-navigation"
-          :aria-label="t('HentaiVerse 页面')"
-          @change="loadSection"
-        >
-          <option
-            v-for="item in availableSections"
-            :key="item.key"
-            :label="t(item.label)"
-            :value="item.key"
-          ></option>
-        </SelectField>
 
         <div v-if="loading && !page" class="hv-loading">
           <SkeletonBlock :rows="7" />
@@ -713,6 +721,10 @@ onMounted(() => {
 .hv-local-help p {
   margin: 0 0 4px;
 }
+.hv-local-help summary {
+  cursor: pointer;
+  padding: 8px 0;
+}
 
 .hv-local-help a {
   display: inline-flex;
@@ -836,6 +848,19 @@ onMounted(() => {
   width: 100%;
   margin-bottom: 18px;
 }
+.hv-mobile-navigation label {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.hv-mobile-navigation label > span {
+  color: var(--muted-foreground);
+  font-size: 13px;
+}
+.hv-mobile-navigation :deep(.ui-select) {
+  width: 100%;
+  min-width: 0;
+}
 
 .hv-notice {
   margin-bottom: 10px;
@@ -875,7 +900,13 @@ onMounted(() => {
   }
 
   .hv-mobile-navigation {
-    display: block;
+    display: grid;
+    grid-template-columns: minmax(100px, 0.75fr) minmax(0, 1.25fr);
+    gap: 10px;
+  }
+
+  .hv-local-help summary {
+    min-height: 44px;
   }
 }
 </style>

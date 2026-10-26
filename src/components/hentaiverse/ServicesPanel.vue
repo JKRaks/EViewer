@@ -134,7 +134,7 @@ function mailAction(action: string, label: string, extra: HentaiVerseFormData = 
     void submit(
       data,
       label,
-      `${t(item?.name || String(extra.select_pane))} × ${extra.select_count}${item?.quantity ? `\n${t('库存')}：${item.quantity}` : ''}`,
+      `${item?.name || String(extra.select_pane)} × ${extra.select_count}${item?.quantity ? `\n${t('库存')}：${item.quantity}` : ''}`,
     )
   } else if (action === 'attach_cod')
     void submit(data, label, `${t('货到付款金额')}：${extra.action_value} Credits`)
@@ -204,9 +204,12 @@ function createMonster(attack: string) {
           >{{ t(option.name) }}</ActionButton
         >
       </div>
-      <p v-for="description in data.monsterCreation.descriptions" :key="description">
-        {{ t(description) }}
-      </p>
+      <details v-if="data.monsterCreation.descriptions.length" class="rules">
+        <summary>{{ t('怪物类型说明') }}</summary>
+        <p v-for="description in data.monsterCreation.descriptions" :key="description">
+          {{ t(description) }}
+        </p>
+      </details>
       <div class="monster-stats">
         <section v-for="group in data.monsterCreation.stats" :key="group.title">
           <h4>{{ t(group.title) }}</h4>
@@ -235,21 +238,27 @@ function createMonster(attack: string) {
 
     <template v-if="data.lottery">
       <header>
-        <p>{{ t(data.lottery.date) }}</p>
+        <p class="muted">{{ t(data.lottery.date) }}</p>
+        <p class="section-label">{{ t('本期大奖') }}</p>
         <h3>{{ t(data.lottery.prize) }}</h3>
       </header>
       <div class="lottery-columns">
         <div>
-          <ul class="stat-list">
-            <li v-for="stat in data.lottery.stats" :key="stat">{{ t(stat) }}</li>
-          </ul>
+          <details class="rules prize-details">
+            <summary>{{ t('大奖属性') }}</summary>
+            <ul class="stat-list">
+              <li v-for="stat in data.lottery.stats" :key="stat">{{ t(stat) }}</li>
+            </ul>
+          </details>
+          <h4>{{ t('其他奖品') }}</h4>
           <p v-for="prize in data.lottery.prizes" :key="prize">{{ t(prize) }}</p>
         </div>
         <div class="purchase">
-          <p>{{ t(data.lottery.funds) }}</p>
-          <p>{{ t(data.lottery.cost) }}</p>
-          <p>{{ t(data.lottery.held) }}</p>
+          <h4>{{ t('彩票与费用') }}</h4>
+          <p class="held-tickets">{{ t(data.lottery.held) }}</p>
           <p>{{ t(data.lottery.stock) }}</p>
+          <p>{{ t(data.lottery.funds) }}</p>
+          <p class="cost-note">{{ t(data.lottery.cost) }}</p>
           <label class="field"
             >{{ t('彩票数量')
             }}<NumberField
@@ -272,14 +281,16 @@ function createMonster(attack: string) {
               @click="lotteryAction('golden_tickets')"
               >{{ t('使用黄金彩票') }}</ActionButton
             >
-            <ActionButton
-              variant="destructive"
-              :disabled="loading || !data.lottery.canOptOut"
-              @click="lotteryAction('prize_optout')"
-              >{{ t('放弃大奖') }}</ActionButton
-            >
           </div>
         </div>
+      </div>
+      <div class="danger-zone">
+        <ActionButton
+          variant="destructive"
+          :disabled="loading || !data.lottery.canOptOut"
+          @click="lotteryAction('prize_optout')"
+          >{{ t('放弃大奖') }}</ActionButton
+        >
       </div>
       <details class="rules">
         <summary>{{ t('彩票规则') }}</summary>
@@ -297,18 +308,27 @@ function createMonster(attack: string) {
           :title="!row.query ? t('此链接的源站参数暂不支持，请在源站查看。') : undefined"
           @click="row.query && emit('navigate', row.query)"
         >
-          <span v-for="(column, columnIndex) in row.columns" :key="columnIndex">{{
-            t(column)
-          }}</span>
+          <span
+            v-for="(field, fieldIndex) in row.fields"
+            :key="fieldIndex"
+            class="mail-field"
+            :class="`mail-field--${field.kind}`"
+          >
+            <span class="mail-field-label">{{
+              field.label || t('字段 {p0}', { p0: fieldIndex + 1 })
+            }}</span>
+            <span class="mail-field-value">{{ field.value || '—' }}</span>
+          </span>
         </button>
       </div>
       <p v-else-if="!data.mail.compose && !data.mail.content" class="empty">
         {{ t(data.mail.empty || '暂无邮件') }}
       </p>
       <p v-if="!data.mail.compose && data.mail.content" class="mail-content">
-        {{ t(data.mail.content) }}
+        {{ data.mail.content }}
       </p>
       <div v-if="data.mail.compose" class="compose">
+        <h3>{{ t('邮件内容') }}</h3>
         <label class="field"
           >{{ t('收件人') }}<TextField v-model="draft.to" :maxlength="50" :disabled="loading"
         /></label>
@@ -319,23 +339,6 @@ function createMonster(attack: string) {
           >{{ t('邮件正文')
           }}<TextField v-model="draft.body" type="textarea" :rows="9" :disabled="loading"
         /></label>
-        <div class="service-actions">
-          <ActionButton
-            :disabled="loading || !draft.to.trim()"
-            @click="mailAction('send', '发送邮件')"
-            >{{ t('发送邮件') }}</ActionButton
-          ><ActionButton
-            variant="outline"
-            :disabled="loading"
-            @click="mailAction('save', '保存草稿')"
-            >{{ t('保存草稿') }}</ActionButton
-          ><ActionButton
-            variant="destructive"
-            :disabled="loading"
-            @click="mailAction('discard', '丢弃邮件')"
-            >{{ t('丢弃邮件') }}</ActionButton
-          >
-        </div>
         <details class="rules">
           <summary>{{ t('添加附件') }}</summary>
           <div class="attachment-fields">
@@ -347,7 +350,7 @@ function createMonster(attack: string) {
                 @change="attachment.id = ''"
                 ><option value="item">{{ t('物品') }}</option>
                 <option value="equip">{{ t('装备') }}</option>
-                <option value="credits">Credits</option>
+                <option value="credits">{{ t('信用点') }}</option>
                 <option value="hath">Hath</option></SelectField
               ></label
             >
@@ -363,7 +366,7 @@ function createMonster(attack: string) {
                   :value="item.id"
                   :disabled="item.locked"
                 >
-                  {{ t(item.name) }} {{ item.quantity ? `×${item.quantity}` : '' }}
+                  {{ item.name }} {{ item.quantity ? `×${item.quantity}` : '' }}
                 </option></SelectField
               ></label
             >
@@ -384,41 +387,98 @@ function createMonster(attack: string) {
           >
         </details>
       </div>
-      <div v-if="data.mail.removable.length || data.mail.canReturn" class="service-actions">
-        <ActionButton
-          v-for="item in data.mail.removable"
-          :key="item.index"
-          variant="outline"
-          :disabled="loading || !canRemoveAttachment"
-          :title="!canRemoveAttachment ? t('无法确认领取费用，暂不能领取附件。') : undefined"
-          @click="
-            mailAction('attach_remove', data.mail.state === 0 ? '移除附件' : '领取附件', {
-              action_value: item.index,
-            })
-          "
-          >{{ t(data.mail.state === 0 ? '移除附件' : '领取附件') }} ·
-          {{ t(item.label) }}</ActionButton
+      <section v-if="data.mail.compose || data.mail.removable.length" class="mail-fees">
+        <h3>{{ t('附件与费用') }}</h3>
+        <dl class="fee-list">
+          <template v-if="data.mail.compose"
+            ><dt>{{ t('邮资') }}</dt>
+            <dd>
+              {{
+                data.mail.sendCost === undefined
+                  ? t('源站未提供邮资')
+                  : `${data.mail.sendCost.toLocaleString()} ${t('信用点')}`
+              }}
+            </dd></template
+          >
+          <dt>{{ t('货到付款金额') }}</dt>
+          <dd>
+            {{
+              data.mail.cod === undefined
+                ? t('源站未提供费用')
+                : `${data.mail.cod.toLocaleString()} ${t('信用点')}`
+            }}
+          </dd>
+          <dt>{{ t('附件数量') }}</dt>
+          <dd>{{ data.mail.attachmentCount ?? t('未知') }}</dd>
+        </dl>
+      </section>
+      <section v-if="data.mail.removable.length" class="attachment-claims">
+        <h3>{{ t(data.mail.state === 0 ? '已添加附件' : '领取附件') }}</h3>
+        <p v-if="!canRemoveAttachment" class="muted" role="status">
+          {{ t('无法确认领取费用，暂不能领取附件。') }}
+        </p>
+        <div class="claim-list">
+          <ActionButton
+            v-for="item in data.mail.removable"
+            :key="item.index"
+            variant="outline"
+            :disabled="loading || !canRemoveAttachment"
+            :title="!canRemoveAttachment ? t('无法确认领取费用，暂不能领取附件。') : undefined"
+            @click="
+              mailAction('attach_remove', data.mail.state === 0 ? '移除附件' : '领取附件', {
+                action_value: item.index,
+              })
+            "
+            >{{ t(data.mail.state === 0 ? '移除附件' : '领取附件') }} ·
+            {{ item.label }}</ActionButton
+          >
+        </div>
+      </section>
+      <div v-if="data.mail.canSetCod" class="cod-fields">
+        <label class="field"
+          >{{ t('货到付款金额')
+          }}<NumberField
+            v-model="attachment.cod"
+            :aria-label="t('货到付款金额')"
+            :min="0"
+            :step="1"
+            :disabled="loading" /></label
         ><ActionButton
-          v-if="data.mail.canReturn"
-          variant="destructive"
-          :disabled="loading"
-          @click="mailAction('return_message', '退回邮件')"
-          >{{ t('退回邮件') }}</ActionButton
-        >
-      </div>
-      <div v-if="data.mail.canSetCod" class="service-actions">
-        <NumberField
-          v-model="attachment.cod"
-          :aria-label="t('货到付款金额')"
-          :min="0"
-          :step="1"
-          :disabled="loading"
-        /><ActionButton
           :disabled="loading || !Number.isInteger(attachment.cod) || attachment.cod < 0"
           @click="
             mailAction('attach_cod', '设置货到付款', { action_value: String(attachment.cod) })
           "
           >{{ t('设置货到付款') }}</ActionButton
+        >
+      </div>
+      <div v-if="data.mail.compose" class="compose-actions">
+        <div class="service-actions">
+          <ActionButton
+            :disabled="loading || !draft.to.trim()"
+            @click="mailAction('send', '发送邮件')"
+            >{{ t('发送邮件') }}</ActionButton
+          ><ActionButton
+            variant="outline"
+            :disabled="loading"
+            @click="mailAction('save', '保存草稿')"
+            >{{ t('保存草稿') }}</ActionButton
+          >
+        </div>
+      </div>
+      <div v-if="data.mail.compose || data.mail.canReturn" class="danger-zone">
+        <ActionButton
+          v-if="data.mail.compose"
+          variant="destructive"
+          :disabled="loading"
+          @click="mailAction('discard', '丢弃邮件')"
+          >{{ t('丢弃邮件') }}</ActionButton
+        >
+        <ActionButton
+          v-if="data.mail.canReturn"
+          variant="destructive"
+          :disabled="loading"
+          @click="mailAction('return_message', '退回邮件')"
+          >{{ t('退回邮件') }}</ActionButton
         >
       </div>
       <details v-if="data.mail.help.length" class="rules">
@@ -432,7 +492,7 @@ function createMonster(attack: string) {
         {{ t('尚未拥有怪物。解锁槽位后可在实验室创建怪物。') }}
       </p>
       <div v-for="(monster, index) in data.monsters" :key="index" class="monster-row">
-        <p>{{ t(monster.name) }}</p>
+        <p>{{ monster.name }}</p>
         <ActionButton
           v-if="monster.query"
           variant="outline"
@@ -460,7 +520,7 @@ function createMonster(attack: string) {
 <style scoped>
 .hv-services {
   min-width: 0;
-  padding: 16px 0;
+  padding: 16px 0 max(16px, env(safe-area-inset-bottom));
 }
 .hv-services h3 {
   font-size: 17px;
@@ -528,18 +588,18 @@ function createMonster(attack: string) {
 }
 .mail-row {
   display: grid;
-  grid-template-columns: 1fr 2fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
   gap: 10px;
   text-align: left;
   width: 100%;
   background: transparent;
   border: 0;
   border-bottom: 1px solid var(--border-soft);
-  padding: 12px 0;
+  padding: 14px 0;
   color: inherit;
   cursor: pointer;
 }
-.mail-row span {
+.mail-field {
   overflow-wrap: anywhere;
   min-width: 0;
 }
@@ -568,6 +628,99 @@ function createMonster(attack: string) {
   margin: 0;
   font-variant-numeric: tabular-nums;
 }
+.mail-field {
+  display: grid;
+  gap: 4px;
+  align-content: start;
+}
+.mail-field-label {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.mail-field--subject {
+  order: -1;
+}
+.mail-field--subject .mail-field-value {
+  font-weight: 600;
+}
+.mail-field-value {
+  white-space: pre-wrap;
+}
+.mail-row:disabled {
+  cursor: default;
+}
+.mail-row:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+.mail-row:not(:disabled):hover {
+  background: var(--muted);
+}
+.fee-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 10px;
+  margin: 0;
+}
+.fee-list dt {
+  color: var(--muted-foreground);
+}
+.fee-list dd {
+  margin: 0;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+.mail-fees,
+.attachment-claims {
+  border-top: 1px solid var(--border-soft);
+  padding-top: 16px;
+  margin-top: 16px;
+}
+.claim-list {
+  display: grid;
+  gap: 8px;
+}
+.claim-list .ui-button {
+  white-space: normal;
+  height: auto;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+.cod-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+  margin-top: 16px;
+}
+.cod-fields .field {
+  margin: 0;
+}
+.danger-zone {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  border-top: 1px solid var(--border-soft);
+  margin-top: 20px;
+  padding-top: 16px;
+}
+.section-label {
+  font-size: 12px;
+  color: var(--muted-foreground);
+  margin-bottom: 4px;
+}
+.held-tickets {
+  font-weight: 600;
+}
+.cost-note {
+  border-inline-start: 3px solid var(--border-soft);
+  padding-inline-start: 10px;
+}
+.prize-details {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
 @media (max-width: 767px) {
   .lottery-columns,
   .attachment-fields {
@@ -582,7 +735,40 @@ function createMonster(attack: string) {
     font-size: 16px;
   }
   .mail-row {
-    grid-template-columns: 1fr 2fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px 16px;
+  }
+  .mail-field--subject,
+  .mail-field--other {
+    grid-column: 1 / -1;
+  }
+  .cod-fields {
+    grid-template-columns: 1fr;
+  }
+  .monster-row {
+    flex-wrap: wrap;
+    padding: 12px 0;
+  }
+  .monster-row p {
+    flex: 1 1 180px;
+  }
+  .hv-services :deep(.ui-button),
+  .rules summary,
+  .hv-services :deep(input),
+  .hv-services :deep(select) {
+    min-height: 44px;
+  }
+  .hv-services :deep(input),
+  .hv-services :deep(textarea),
+  .hv-services :deep(select) {
+    font-size: 16px;
+  }
+  .claim-list .ui-button {
+    width: 100%;
+    justify-content: flex-start;
+  }
+  .danger-zone .ui-button {
+    flex: 1 1 160px;
   }
 }
 </style>
