@@ -632,6 +632,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Novice: '新手',
     Apprentice: '学徒',
     Journeyman: '熟练者',
+    Champion: '冠军',
     Default: '默认',
     Token: '代币',
     Crystal: '水晶',
@@ -698,7 +699,9 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Bubble-Gum': '泡泡糖',
     'Soul Fragment': '灵魂碎片',
     'Monster Chow': '怪物饲料',
+    'Monster Edibles': '怪物食品',
     'Monster Cuisine': '怪物佳肴',
+    'Token of Blood': '鲜血代币',
     'Chaos Token': '混沌令牌',
     'Crystal of Swiftness': '迅捷水晶',
     'Crystal of Vigor': '活力水晶',
@@ -840,6 +843,8 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Coalesced Mana': '凝聚魔力',
     'Ether Tap': '以太汲取',
     'Spirit Stance': '灵力姿态',
+    'Searing Skin': '灼热皮肤',
+    'Deep Burns': '深度灼伤',
     'Fierce Strike': '凶猛打击',
     'Burning Tail': '烈焰尾击',
     'Bamboo Spikes': '竹刺',
@@ -872,6 +877,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'First Blood': '初次见血',
     'Fresh Meat': '新鲜血肉',
     'Dark Skies': '阴暗天空',
+    'Growing Storm': '风暴渐起',
     'Learning Curves': '学习曲线',
     'The Road Less Traveled': '少有人走的路',
     'Stepping Stones': '垫脚石',
@@ -921,6 +927,12 @@ const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
   'The next magical attack against the target has a chance to be absorbed and partially converted to MP.':
     '目标受到的下一次魔法攻击有概率被吸收，并将部分伤害转化为魔力。',
   'Places a heal over time effect on the target.': '为目标施加持续恢复生命的效果。',
+  'The target is weakened, making it deal less damage, and preventing it from scoring critical hits.':
+    '目标陷入虚弱，造成的伤害降低，且无法造成暴击。',
+  'You can exchange this token for the chance to face a legendary monster by itself in the Ring of Blood.':
+    '可消耗此代币，在鲜血之环单独挑战一只传说怪物。',
+  'Mid-level monsters like to feed on something slightly more palatable, like these scrumptious edibles.':
+    '中等级怪物更喜欢稍微可口的食物，例如这些美味食品。',
   'Bash an enemy with your shield to stun it, which opens up for devastating strikes with your weapon.':
     '用盾牌猛击敌人使其眩晕，为后续强力武器攻击创造机会。',
   'Focus a powerful strike on a single enemy.': '集中力量，对单个敌人发动强力打击。',
@@ -1439,6 +1451,10 @@ function translateBattleDefense(value: string) {
 }
 
 function translateBattleEvent(source: string): string {
+  if (/^Initializing random encounter\s*\.\.\.$/i.test(source)) return '正在开始随机遭遇战……'
+  const spiritStance = source.match(/^Spirit Stance (Engaged|Disengaged)[.!]?$/i)
+  if (spiritStance)
+    return `灵力姿态已${spiritStance[1]!.toLowerCase() === 'engaged' ? '开启' : '关闭'}。`
   const initializing = source.match(
     /^Initializing arena challenge #(\d+) \(Round (\d+)\s*\/\s*(\d+)\)\s*\.\.\.$/i,
   )
@@ -1465,6 +1481,7 @@ function translateBattleEvent(source: string): string {
   const tokenBonus = source.match(/^Arena Token Bonus!\s*(.+)$/i)
   if (tokenBonus) return `竞技场代币奖励：${translateBattleTerms(tokenBonus[1]!)}。`
   if (/^Arena challenge cleared[.!]?$/i.test(source)) return '竞技场挑战已通关！'
+  if (/^Arena challenge failed[.!]?$/i.test(source)) return '竞技场挑战失败！'
   if (/^the grindfest has ended[.!]?$/i.test(source)) return '混战祭已结束。'
   if (/^Stop beating dead ponies\.$/i.test(source)) return '目标已被击败，请选择其他目标。'
   const reachedLevel = source.match(/^You have reached Level ([\d,]+)!$/i)
@@ -1485,6 +1502,13 @@ function translateBattleEvent(source: string): string {
   const ongoingDamage = source.match(/^(.+?) hits (.+?) for ([\d,.]+) damage\.$/i)
   if (ongoingDamage)
     return `“${translateBattleTerms(ongoingDamage[1]!)}”对 ${preserveBattleName(ongoingDamage[2]!)} 造成 ${ongoingDamage[3]} 点伤害。`
+  const passiveDamage = source.match(
+    /^(.+?) was (hit|crit|glanced) for ([\d,.]+) (?:points? of )?(.+?) damage[.!]?$/i,
+  )
+  if (passiveDamage) {
+    const outcome = passiveDamage[2]!.toLowerCase()
+    return `${preserveBattleName(passiveDamage[1]!)} ${outcome === 'glanced' ? '被擦中，受到' : '受到'} ${passiveDamage[3]} 点${translateBattleTerms(passiveDamage[4]!)}${outcome === 'crit' ? '暴击' : ''}伤害。`
+  }
   const enemySkill = source.match(
     /^(.+?) (casts|uses) (.+?), (?:which (hits|glances|crits)!|but misses the attack\.)$/i,
   )
@@ -1540,8 +1564,9 @@ function translateBattleEvent(source: string): string {
   const evadedAttack = source.match(/^You evade the attack from (.+?)\.$/i)
   if (evadedAttack) return `你闪避了 ${preserveBattleName(evadedAttack[1]!)} 的攻击。`
 
-  const targetEvaded = source.match(/^(.+?) (?:evades|dodges) your attack\.$/i)
-  if (targetEvaded) return `${preserveBattleName(targetEvaded[1]!)} 闪避了你的攻击。`
+  const targetEvaded = source.match(/^(.+?) (?:deftly )?(?:evades|dodges) your (attack|spell)\.$/i)
+  if (targetEvaded)
+    return `${preserveBattleName(targetEvaded[1]!)} 闪避了你的${targetEvaded[2]!.toLowerCase() === 'spell' ? '法术' : '攻击'}。`
 
   const gainedEffect = source.match(/^(You|.+?) gains? the effect (.+?)\.$/i)
   if (gainedEffect) {
@@ -1609,6 +1634,9 @@ function translateBattleEvent(source: string): string {
   }
   if (/^With the light of a new dawn, your experience in all things increases\.$/i.test(source))
     return '新一天的曙光使你的各项熟练度有所提升。'
+  const obtainedItems = source.match(/^You (?:obtained|obtain) ([\d,]+)x \[(.+?)\][.!]?$/i)
+  if (obtainedItems)
+    return `你获得了 ${obtainedItems[1]} 个[${translateBattleTerms(obtainedItems[2]!)}]。`
   const obtained = source.match(/^You (?:gain|obtained|obtain) (?:a |an )?(.+?)\.$/i)
   if (obtained) return `你获得了 ${translateBattleTerms(obtained[1]!)}。`
   const nextRound = source.match(
