@@ -76,10 +76,7 @@ export async function performHentaiVerseBattleAction(
       action.target === 'enemy' &&
       !current.monsters.some(
         (monster) =>
-          monster.id === target &&
-          !monster.defeated &&
-          monster.healthPercent !== undefined &&
-          monster.healthPercent > 0,
+          monster.id === target && !monster.defeated && monster.healthPercent !== undefined,
       )
     )
       throw new Error('自动战斗目标已不可用，已暂停')

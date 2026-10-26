@@ -385,6 +385,7 @@ export interface HentaiVerseBattleMonster {
   id: number
   name: string
   status: string
+  /** Approximate source bar percentage; a living monster can round down to zero. */
   healthPercent?: number
   magicPercent?: number
   defeated: boolean

@@ -1328,7 +1328,15 @@ function parseMonsters(document: Document): HentaiVerseBattleMonster[] {
       const name = rawName ? rawName.charAt(0).toUpperCase() + rawName.slice(1) : ''
       if (!name || monsters.has(id)) return
       const level = cleanText(node.querySelector('.btm2 > div:nth-child(2)')?.textContent)
-      const health = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="health"]'))
+      // The source rounds living monsters' health bars down to 0px. Death is
+      // represented by nbardead.png (or an explicit state), not the bar width.
+      const defeated =
+        Array.from(node.querySelectorAll<HTMLImageElement>('img')).some((image) =>
+          /\/nbardead\.png(?:[?#]|$)/i.test(image.getAttribute('src') || ''),
+        ) || /(?:^|\s)(?:dead|defeated)(?:\s|$)/i.test(node.className)
+      const health = defeated
+        ? 0
+        : readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="health"]'))
       const magic = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="magic"]'))
       const status = level ? formatSystemMessage('等级 {p0}', { p0: level }) : ''
       const log = document.querySelector('#textlog')?.textContent || ''
@@ -1339,7 +1347,7 @@ function parseMonsters(document: Document): HentaiVerseBattleMonster[] {
         status,
         healthPercent: health,
         magicPercent: magic,
-        defeated: health === 0 || /(?:^|\s)(?:dead|defeated)(?:\s|$)/i.test(node.className),
+        defeated,
         spiritPercent: readBattleBarPercent(
           node.querySelector<HTMLImageElement>('img[alt="spirit"]'),
         ),
