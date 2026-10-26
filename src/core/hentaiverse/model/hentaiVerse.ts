@@ -1,4 +1,19 @@
+import type { HentaiVerseArmoryPage } from '../hentaiVerseArmory'
+import type { HentaiVerseBazaarPage } from '../hentaiVerseBazaar'
+import type { HentaiVerseServicesPage } from '../hentaiVerseServices'
+
+export type HentaiVerseServiceSection =
+  | 'armory'
+  | 'itemShop'
+  | 'market'
+  | 'shrine'
+  | 'monsterLab'
+  | 'moogleMail'
+  | 'weaponLottery'
+  | 'armorLottery'
+
 export type HentaiVerseSection =
+  | HentaiVerseServiceSection
   | 'character'
   | 'equipment'
   | 'abilities'
@@ -9,8 +24,10 @@ export type HentaiVerseSection =
   | 'ringOfBlood'
   | 'grindfest'
   | 'itemWorld'
+  | 'tower'
 
 export type HentaiVerseFormSection =
+  | HentaiVerseServiceSection
   | 'character'
   | 'persona'
   | 'equipment'
@@ -22,14 +39,26 @@ export type HentaiVerseFormSection =
   | 'ringOfBlood'
   | 'grindfest'
   | 'itemWorld'
+  | 'tower'
 
 export interface HentaiVersePageTarget {
+  world?: 'persistent' | 'isekai'
   s?: string
   ss?: string
   encounter?: string
   equip_slot?: string
   tree?: string
   filter?: string
+  screen?: string
+  'eqids[]'?: string
+  itemid?: string
+  tradelog?: string
+  playerstock?: string
+  marketstock?: string
+  lottery?: string
+  create?: string
+  slot?: string
+  pane?: string
 }
 
 export type HentaiVerseFormData = Record<string, string | number | boolean | string[]>
@@ -246,6 +275,8 @@ export interface HentaiVerseInventoryPage {
 }
 
 export interface HentaiVersePage {
+  world?: 'persistent' | 'isekai'
+  season?: string
   section: HentaiVerseSection
   title: string
   characterName: string
@@ -258,6 +289,9 @@ export interface HentaiVersePage {
   attributes: HentaiVerseAttribute[]
   personas: HentaiVersePersona[]
   equipment?: HentaiVerseEquipmentPage
+  armory?: HentaiVerseArmoryPage
+  bazaar?: HentaiVerseBazaarPage
+  services?: HentaiVerseServicesPage
   equipmentSources?: string[]
   abilities?: HentaiVerseAbilityPage
   training?: HentaiVerseTrainingPage
@@ -351,6 +385,7 @@ export interface HentaiVerseBattleMonster {
   id: number
   name: string
   status: string
+  /** Approximate source bar percentage; a living monster can round down to zero. */
   healthPercent?: number
   magicPercent?: number
   defeated: boolean

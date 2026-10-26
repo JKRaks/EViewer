@@ -260,6 +260,13 @@ export async function requestConnector(
     !identity.capabilities.includes('hentaiverse')
   )
     throw new Error(formatSystemMessage('请前往设置更新浏览器助手，以支持 HentaiVerse 本机请求'))
+  const targetUrl = new URL(input.url)
+  if (
+    targetUrl.hostname === 'hentaiverse.org' &&
+    (targetUrl.pathname.startsWith('/isekai/') || targetUrl.searchParams.get('s') === 'Bazaar') &&
+    !identity.capabilities.includes('hentaiverse-services')
+  )
+    throw new Error(formatSystemMessage('请前往设置更新浏览器助手，以支持 HentaiVerse 本机请求'))
   const id = `request-${Date.now()}-${++sequence}`
   return new Promise((resolve, reject) => {
     const signal = options.signal

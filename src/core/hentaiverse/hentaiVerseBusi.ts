@@ -1,6 +1,7 @@
 import { formatSystemMessage } from '@/i18n'
 import { eurlEnum } from '@/core/common/enum/eurlEnum'
-import { connectionSettings, currentTransportSignal } from '@/core/connector/connectionSettings'
+import { connectionSettings } from '@/core/connector/connectionSettings'
+import { currentHentaiVerseSignal, hentaiVerseWorld } from './hentaiVerseWorld'
 import { requestLocalHentaiVerse } from '@/core/connector/hentaiVerseTransport'
 import type {
   HentaiVerseAbilityActionName,
@@ -30,7 +31,7 @@ export class HentaiVerseBusi {
 
   /** Fetch each versioned source asset once; failed requests can be retried separately from the page. */
   getEquipmentDetails(source: string) {
-    const key = `${connectionSettings.mode}:${source}`
+    const key = `${connectionSettings.mode}:${hentaiVerseWorld.value}:${source}`
     const cached = this.equipmentDataCache.get(key)
     if (cached) return cached
     const request = this.fetchEquipmentData(source)
@@ -339,9 +340,16 @@ export class HentaiVerseBusi {
     path: string,
     options: { method?: 'GET' | 'POST'; query?: Record<string, unknown>; body?: unknown } = {},
   ) {
-    const signal = currentTransportSignal()
+    const signal = currentHentaiVerseSignal()
+    options = {
+      ...options,
+      query: { ...options.query, world: hentaiVerseWorld.value },
+      ...(options.body
+        ? { body: { ...(options.body as object), world: hentaiVerseWorld.value } }
+        : {}),
+    }
     if (connectionSettings.mode === 'local') {
-      const response = await requestLocalHentaiVerse(path, options)
+      const response = await requestLocalHentaiVerse(path, options, signal)
       signal.throwIfAborted()
       if (response.status < 200 || response.status >= 300)
         throw new Error(readError(response.text, response.status))

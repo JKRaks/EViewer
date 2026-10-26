@@ -53,7 +53,7 @@ export function selectCombatTarget(
   const monsters = battle.monsters.filter(
     (monster) =>
       !monster.defeated &&
-      (monster.healthPercent ?? 0) > 0 &&
+      monster.healthPercent !== undefined &&
       !hasActiveBattleEffect(monster.activeEffects, [
         'sleep',
         'asleep',
@@ -152,7 +152,7 @@ export function decideBuffMaintenance(state: CombatTacticsContext): AutoBattleDe
   if (
     !settings.maintainBuffs ||
     health <= healAt + 5 ||
-    battle.monsters.filter((monster) => !monster.defeated && (monster.healthPercent ?? 0) > 0)
+    battle.monsters.filter((monster) => !monster.defeated && monster.healthPercent !== undefined)
       .length < 2
   )
     return
@@ -185,7 +185,7 @@ export function decideWeaponSkill(state: CombatTacticsContext): AutoBattleDecisi
   const monsters = battle.monsters.filter(
     (monster) =>
       !monster.defeated &&
-      (monster.healthPercent ?? 0) > 0 &&
+      monster.healthPercent !== undefined &&
       monster.activeEffects !== undefined &&
       !hasActiveBattleEffect(monster.activeEffects, [
         'sleep',
@@ -203,7 +203,7 @@ export function decideWeaponSkill(state: CombatTacticsContext): AutoBattleDecisi
     reason: string
   }> = []
   const livingCount = battle.monsters.filter(
-    (monster) => !monster.defeated && (monster.healthPercent ?? 0) > 0,
+    (monster) => !monster.defeated && monster.healthPercent !== undefined,
   ).length
   const protectedTarget = battle.monsters.some(
     (monster) =>
@@ -294,7 +294,7 @@ export function decideDebuff(state: CombatTacticsContext): AutoBattleDecision | 
   const { battle, settings, actions, context } = state
   if (settings.debuffs === 'off') return
   const living = battle.monsters.filter(
-    (monster) => !monster.defeated && (monster.healthPercent ?? 0) > 0,
+    (monster) => !monster.defeated && monster.healthPercent !== undefined,
   )
   const monsters = living.filter(
     (monster) =>
@@ -357,7 +357,7 @@ export function selectOffensiveSpell(
 ): HentaiVerseBattleAction | undefined {
   const { battle, settings, actions } = state
   const living = battle.monsters.filter(
-    (monster) => !monster.defeated && (monster.healthPercent ?? 0) > 0,
+    (monster) => !monster.defeated && monster.healthPercent !== undefined,
   )
   // Multi-target spells can wake controlled secondary targets even when aiming elsewhere.
   if (

@@ -139,6 +139,15 @@ const HENTAIVERSE_PAGE_ROUTES = new Set([
   'Battle:rb',
   'Battle:gr',
   'Battle:iw',
+  'Battle:tw',
+  'Bazaar:am',
+  'Bazaar:is',
+  'Bazaar:mk',
+  'Bazaar:ss',
+  'Bazaar:ml',
+  'Bazaar:mm',
+  'Bazaar:lt',
+  'Bazaar:la',
 ])
 
 /**
@@ -426,13 +435,23 @@ function getAllowedAuthCookieHeader(cookieHeader = '', includeIgneous = false) {
 }
 
 function parseHentaiVersePageTarget(query) {
+  const world = query.get('world') || 'persistent'
+  if (!['persistent', 'isekai'].includes(world)) throw new Error('HentaiVerse 世界参数不正确')
+  const sourcePath = world === 'isekai' ? '/isekai/' : '/'
   const section = query.get('s') || ''
   const subsection = query.get('ss') || ''
-  if (!section && !subsection) return new URL('/', HENTAIVERSE_ORIGIN)
+  if (!section && !subsection) return new URL(sourcePath, HENTAIVERSE_ORIGIN)
   if (!HENTAIVERSE_PAGE_ROUTES.has(`${section}:${subsection}`)) {
     throw new Error('不允许访问该 HentaiVerse 页面')
   }
-  const target = new URL('/', HENTAIVERSE_ORIGIN)
+  if (subsection === 'tw' && world !== 'isekai') throw new Error('塔挑战仅在异世界开放')
+  if (
+    world === 'isekai' &&
+    ((section === 'Character' && subsection === 'tr') ||
+      (section === 'Bazaar' && ['ml', 'lt', 'la'].includes(subsection)))
+  )
+    throw new Error('该页面仅在常驻世界开放')
+  const target = new URL(sourcePath, HENTAIVERSE_ORIGIN)
   target.searchParams.set('s', section)
   target.searchParams.set('ss', subsection)
   const encounter = query.get('encounter')
@@ -460,6 +479,79 @@ function parseHentaiVersePageTarget(query) {
       throw new Error('装备分类格式不正确')
     target.searchParams.set('filter', filter)
   }
+  if (section === 'Bazaar') {
+    const equipmentFilters = [
+      'weapon_1handed',
+      'weapon_2handed',
+      'weapon_staff',
+      'shield',
+      'armor_cloth',
+      'armor_light',
+      'armor_heavy',
+    ]
+    const screens = {
+      am: ['organize', 'modify', 'repair', 'soulbind', 'purchase', 'sell', 'salvage'],
+      mk: ['browseitems', 'buyorders', 'sellorders', 'marketlog', 'tradelog'],
+    }
+    const filters = {
+      am: ['equipped', 'new', ...equipmentFilters, 'salvaged'],
+      is: ['all', 're', 'in', 'sc', 'cr', 'ma', 'sp'],
+      mk: ['co', 'ma', 'tr', 'ar', 'fi', 'mo'],
+      mm: ['inbox', 'new', 'read', 'sent'],
+    }
+    const screen = query.get('screen')
+    if (screen) {
+      if (!screens[subsection]?.includes(screen)) throw new Error('集市页面类型不正确')
+      target.searchParams.set('screen', screen)
+    }
+    if (filter) {
+      if (!filters[subsection]?.includes(filter)) throw new Error('集市分类不正确')
+      target.searchParams.set('filter', filter)
+    }
+    if (subsection === 'am') {
+      const ids = query.getAll('eqids[]')
+      if (ids.length > 1 || ids.some((id) => !/^[1-9]\d{0,11}$/.test(id)))
+        throw new Error('装备详情编号不正确')
+      ids.forEach((id) => target.searchParams.append('eqids[]', id))
+    }
+    if (subsection === 'mk') {
+      for (const name of ['itemid', 'tradelog', 'playerstock', 'marketstock']) {
+        const value = query.get(name)
+        if (!value) continue
+        const valid =
+          name === 'itemid'
+            ? /^[1-9]\d{0,11}$/.test(value)
+            : name === 'tradelog'
+              ? /^(?:user|item)-[1-9]\d{0,11}$/.test(value)
+              : value === 'on'
+        if (!valid) throw new Error('市场查询参数不正确')
+        target.searchParams.set(name, value)
+      }
+    }
+    const lottery = query.get('lottery')
+    if (lottery) {
+      if (!['lt', 'la'].includes(subsection) || !/^\d{1,12}$/.test(lottery))
+        throw new Error('彩票期数不正确')
+      target.searchParams.set('lottery', lottery)
+    }
+    const create = query.get('create')
+    if (create) {
+      if (subsection !== 'ml' || create !== 'new') throw new Error('怪物创建参数不正确')
+      target.searchParams.set('create', create)
+    }
+    if (subsection === 'ml') {
+      const slot = query.get('slot')
+      const pane = query.get('pane')
+      if (slot) {
+        if (!/^[1-9]\d{0,11}$/.test(slot)) throw new Error('怪物槽位格式不正确')
+        target.searchParams.set('slot', slot)
+      }
+      if (pane) {
+        if (pane !== 'skills') throw new Error('怪物面板格式不正确')
+        target.searchParams.set('pane', pane)
+      }
+    }
+  }
   return target
 }
 
@@ -475,12 +567,21 @@ const HENTAIVERSE_FORM_ROUTES = {
   ringOfBlood: { s: 'Battle', ss: 'rb' },
   grindfest: { s: 'Battle', ss: 'gr' },
   itemWorld: { s: 'Battle', ss: 'iw' },
+  tower: { s: 'Battle', ss: 'tw' },
+  armory: { s: 'Bazaar', ss: 'am' },
+  itemShop: { s: 'Bazaar', ss: 'is' },
+  market: { s: 'Bazaar', ss: 'mk' },
+  shrine: { s: 'Bazaar', ss: 'ss' },
+  monsterLab: { s: 'Bazaar', ss: 'ml' },
+  moogleMail: { s: 'Bazaar', ss: 'mm' },
+  weaponLottery: { s: 'Bazaar', ss: 'lt' },
+  armorLottery: { s: 'Bazaar', ss: 'la' },
 }
 
 function parseHentaiVerseEquipmentSource(path, cookieHeader) {
   const match =
     typeof path === 'string' &&
-    path.match(/^\/dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-([1-9]\d{0,19})\.js$/)
+    path.match(/^\/(?:isekai\/)?dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-([1-9]\d{0,19})\.js$/)
   if (!match) throw new Error('不允许访问该装备数据资源')
   const cookie = getAllowedAuthCookieHeader(cookieHeader)
   const memberId = cookie.match(/(?:^|; )ipb_member_id=(\d+)(?:;|$)/)?.[1]
@@ -492,15 +593,134 @@ function parseHentaiVerseEquipmentSource(path, cookieHeader) {
 function isAllowedHentaiVerseFormField(section, name, value) {
   if (name === 'eqids[]') {
     return (
-      ['equipment', 'itemWorld'].includes(section) &&
+      ['equipment', 'itemWorld', 'armory'].includes(section) &&
       Array.isArray(value) &&
-      value.length === 1 &&
-      value.every((id) => typeof id === 'string' && /^\d{1,12}$/.test(id))
+      value.length >= 1 &&
+      value.length <= (section === 'armory' ? 2000 : 1) &&
+      value.every((id) => typeof id === 'string' && /^[1-9]\d{0,11}$/.test(id))
     )
   }
+  if (section === 'moogleMail' && name === 'message_body')
+    return typeof value === 'string' && value.length <= 65536 && !value.includes('\0')
   const scalar =
     typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean'
   if (!scalar || String(value).length > 4096 || /[\0\r\n]/.test(String(value))) return false
+  const string = String(value)
+  const digits = /^\d{1,12}$/.test(string)
+  const token = /^[A-Za-z0-9_-]{0,512}$/.test(string)
+  if (section === 'armory') {
+    if (name === 'postoken') return token
+    if (['set_pinned', 'set_stored'].includes(name)) return ['-1', '0', '1'].includes(string)
+    if (name === 'set_locked') return ['-1', '0', '1', '2'].includes(string)
+    if (['replace_charms', 'sell_salvage'].includes(name)) return string === 'on'
+    if (name === 'action')
+      return [
+        'soulbind',
+        'repair',
+        'pin',
+        'lock',
+        'protect',
+        'unequip',
+        'rename',
+        'upgrade',
+        'setcharm',
+      ].includes(string)
+    if (name === 'eqname') return string.length <= 50
+    if (['targetlevel', 'charmtype', 'pouchtype'].includes(name)) return string === '' || digits
+    return false
+  }
+  if (section === 'itemShop') {
+    if (name === 'storetoken') return token
+    if (name === 'select_mode') return ['item_pane', 'shop_pane'].includes(string)
+    if (name === 'select_item') return /^[1-9]\d{0,11}$/.test(string)
+    return name === 'select_count' && /^[1-9]\d{0,4}$/.test(string)
+  }
+  if (section === 'market') {
+    if (name === 'marketoken') return token
+    if (name === 'account_amount') return /^\d{1,9}$/.test(string)
+    if (name === 'account_withdraw') return string === '▲ Withdraw ▲'
+    if (name === 'account_deposit') return string === '▼ \u00a0 Deposit \u00a0 ▼'
+    if (/^(buy|sell)order_batchcount$/.test(name)) return /^[1-9]\d{0,7}$/.test(string)
+    if (/^(buy|sell)order_batchprice$/.test(name))
+      return (
+        /^\d{1,9}$/.test(string) &&
+        Number(string) >= 10 &&
+        Number(string) <= 100000000 &&
+        (() => {
+          let scaled = Number(string)
+          let step = 1
+          while (scaled >= 1000) {
+            scaled /= 10
+            step *= 10
+          }
+          step *= scaled >= 500 ? 5 : scaled >= 200 ? 2 : 1
+          return Number(string) % step === 0
+        })()
+      )
+    // Submit labels are supplied by the source form and can vary with order state.
+    if (name === 'buyorder_update' || name === 'sellorder_update')
+      return string.trim().length > 0 && string.length <= 64
+    return false
+  }
+  if (section === 'shrine') {
+    if (name === 'select_item') return /^[1-9]\d{0,11}$/.test(string)
+    if (name === 'select_reward_type')
+      return [
+        '',
+        'weapon_1handed',
+        'weapon_2handed',
+        'weapon_staff',
+        'shield',
+        'armor_cloth',
+        'armor_light',
+        'armor_heavy',
+      ].includes(string)
+    return name === 'select_reward_slot' && ['', '11', '12', '13', '14', '15'].includes(string)
+  }
+  if (section === 'monsterLab') {
+    if (name === 'unlock_slot') return string === '1'
+    if (name === 'selected_class')
+      return ['', '1', '2', '3', '4', '5', '6', '7', '8', '10', '12', '13', '14', '15'].includes(
+        string,
+      )
+    if (name === 'selected_patk') return string === '' || /^[a-z]{3,4}$/.test(string)
+    if (name === 'food_action') return ['food', 'drugs'].includes(string)
+    if (name === 'feed_all') return ['food', 'drugs'].includes(string)
+    if (name === 'rename_monster') return string.length > 0 && string.length <= 100
+    if (['chaos_upgrade', 'crystal_upgrade'].includes(name)) return /^[a-z]{1,24}$/.test(string)
+    if (['chaos_count', 'crystal_count'].includes(name))
+      return ['', '1', '5', '10'].includes(string)
+    if (name === 'update_skills') return /^[A-Za-z0-9_-]{0,64}$/.test(string)
+    // Skill rows and options come from the source form; higher-level monsters
+    // expose further rows through the same field protocol.
+    if (/^skill_name_\d{1,2}$/.test(name)) return string.length <= 30
+    if (/^skill_(?:type|elem)_\d{1,2}$/.test(name)) return /^[a-z]{1,12}$/.test(string)
+    if (name === 'delete_monster') return /^[A-Za-z0-9_-]{1,64}$/.test(string)
+    return false
+  }
+  if (section === 'moogleMail') {
+    if (name === 'mmtoken') return token
+    if (name === 'action')
+      return [
+        'send',
+        'save',
+        'discard',
+        'attach_add',
+        'attach_remove',
+        'return_message',
+        'attach_cod',
+      ].includes(string)
+    if (['action_value', 'select_item', 'select_count'].includes(name))
+      return string === '' || digits
+    if (name === 'select_pane') return ['', 'item', 'equip', 'credits', 'hath'].includes(string)
+    if (['message_to_name', 'message_subject'].includes(name)) return string.length <= 50
+    return false
+  }
+  if (['weaponLottery', 'armorLottery'].includes(section)) {
+    if (name === 'posttoken') return token
+    if (name === 'ticket_count') return string === '' || /^[1-9]\d{0,11}$/.test(string)
+    return ['golden_tickets', 'prize_optout'].includes(name) && ['', '1'].includes(string)
+  }
   const fields = {
     character: /^(attr_apply|str_delta|dex_delta|agi_delta|end_delta|int_delta|wis_delta)$/,
     persona: /^(persona_set|persona_rename|persona_create)$/,
@@ -514,6 +734,7 @@ function isAllowedHentaiVerseFormField(section, name, value) {
     ringOfBlood: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
     grindfest: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
     itemWorld: /^[a-z][a-z0-9_[\]-]{0,63}$/i,
+    tower: /^(initid|postoken)$/,
   }
   return fields[section]?.test(name) === true
 }
@@ -525,7 +746,7 @@ async function requestHentaiVerse(request, target, method, body, contentType) {
         ? 'application/json'
         : 'text/html,application/xhtml+xml,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
-    Referer: `${HENTAIVERSE_ORIGIN}/`,
+    Referer: `${HENTAIVERSE_ORIGIN}${target.pathname.startsWith('/isekai/') ? '/isekai/' : '/'}`,
     'User-Agent': request.headers.get('user-agent') || 'Mozilla/5.0',
   })
   if (contentType) headers.set('Content-Type', contentType)
@@ -544,7 +765,8 @@ async function requestHentaiVerse(request, target, method, body, contentType) {
     response.headers.get('location')
   ) {
     const location = new URL(response.headers.get('location'), target)
-    if (location.origin === HENTAIVERSE_ORIGIN && location.pathname === '/') {
+    if (location.origin === HENTAIVERSE_ORIGIN && ['/', '/isekai/'].includes(location.pathname)) {
+      location.searchParams.set('world', location.pathname === '/isekai/' ? 'isekai' : 'persistent')
       const next = parseHentaiVersePageTarget(location.searchParams)
       await response.body?.cancel()
       headers.delete('Content-Type')
@@ -602,6 +824,8 @@ async function handleHentaiVerseRequest(request, requestUrl) {
     if (contentLength > 131072) return jsonResponse(request, { error: '请求内容过大' }, 413)
     const body = await request.json()
     if (requestUrl.pathname === '/hentaiverse/action') {
+      if (body.world && !['persistent', 'isekai'].includes(body.world))
+        return jsonResponse(request, { error: 'HentaiVerse 世界参数不正确' }, 400)
       const { token, mode, target = 0, skill = 0 } = body || {}
       const modes = new Set(['attack', 'magic', 'items', 'spirit', 'defend', 'focus'])
       if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{6,128}$/.test(token) || !modes.has(mode)) {
@@ -629,7 +853,7 @@ async function handleHentaiVerseRequest(request, requestUrl) {
         request,
         await requestHentaiVerse(
           request,
-          new URL('/json', HENTAIVERSE_ORIGIN),
+          new URL(body.world === 'isekai' ? '/isekai/json' : '/json', HENTAIVERSE_ORIGIN),
           'POST',
           payload,
           'application/json',
@@ -644,6 +868,8 @@ async function handleHentaiVerseRequest(request, requestUrl) {
         return jsonResponse(request, { error: 'HentaiVerse 表单格式不正确' }, 400)
       }
       const entries = Object.entries(data)
+      if (section === 'monsterLab' && Object.hasOwn(data, 'delete_monster') && entries.length !== 1)
+        return jsonResponse(request, { error: '删除怪物不能与其他动作同时提交' }, 400)
       if (
         !entries.length ||
         entries.length > 400 ||
@@ -651,15 +877,27 @@ async function handleHentaiVerseRequest(request, requestUrl) {
       ) {
         return jsonResponse(request, { error: 'HentaiVerse 表单包含不允许的字段' }, 400)
       }
-      const target = new URL('/', HENTAIVERSE_ORIGIN)
-      target.searchParams.set('s', route.s)
-      target.searchParams.set('ss', route.ss)
-      if (section === 'itemWorld' && body?.target?.filter) {
-        const pageTarget = parseHentaiVersePageTarget(
-          new URLSearchParams({ ...route, filter: body.target.filter }),
-        )
-        target.search = pageTarget.search
+      const targetQuery = new URLSearchParams()
+      if (body.target && (typeof body.target !== 'object' || Array.isArray(body.target)))
+        return jsonResponse(request, { error: 'HentaiVerse 页面参数不正确' }, 400)
+      for (const [name, value] of Object.entries(body.target || {})) {
+        if (name === 'eqids[]' && Array.isArray(value))
+          value.forEach((id) => targetQuery.append(name, String(id)))
+        else if (typeof value === 'string') targetQuery.set(name, value)
+        else return jsonResponse(request, { error: 'HentaiVerse 页面参数不正确' }, 400)
       }
+      Object.entries({ ...route, world: body.world || 'persistent' }).forEach(([name, value]) =>
+        targetQuery.set(name, value),
+      )
+      const target = parseHentaiVersePageTarget(targetQuery)
+      if (
+        ['weaponLottery', 'armorLottery'].includes(section) &&
+        (target.searchParams.has('lottery') ||
+          ['ticket_count', 'golden_tickets', 'prize_optout'].filter(
+            (name) => data[name] !== undefined && String(data[name]) !== '',
+          ).length !== 1)
+      )
+        return jsonResponse(request, { error: '彩票动作或期数不正确' }, 400)
       const form = new URLSearchParams(
         entries.flatMap(([name, value]) =>
           (Array.isArray(value) ? value : [value]).map((item) => [name, String(item)]),
