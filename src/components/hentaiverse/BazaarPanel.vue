@@ -7,10 +7,13 @@ import SelectField from '@/components/primitives/SelectField.vue'
 import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
 import RadioChoice from '@/components/primitives/RadioChoice.vue'
 import { t } from '@/i18n'
+import { createReusableTemplate, useMediaQuery } from '@vueuse/core'
+import ModalPanel from '@/components/primitives/ModalPanel.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import EmptyState from '@/components/primitives/EmptyState.vue'
 import {
   buildHentaiVerseMarketOrder,
+  buildHentaiVerseMarketTransfer,
   buildHentaiVerseShopTransaction,
   hentaiVerseMarketPriceStep,
   type HentaiVerseBazaarItem,
@@ -24,6 +27,10 @@ const emit = defineEmits<{
   navigate: [query: Record<string, string>]
   submit: [data: HentaiVerseFormData, label: string]
 }>()
+const mobile = useMediaQuery('(max-width: 767px)')
+const detailOpen = ref(false)
+const [DefineItemDetails, ItemDetails] = createReusableTemplate()
+const [DefineItemAction, ItemAction] = createReusableTemplate()
 const selected = ref<HentaiVerseBazaarItem>()
 const count = ref(1)
 const transferAmount = ref(1)
@@ -40,6 +47,7 @@ watch(
   () => props.data,
   (data) => {
     selected.value = undefined
+    detailOpen.value = false
     reward.value = ''
     count.value = 1
     for (const order of data.orders)
@@ -52,6 +60,59 @@ const items = computed(() =>
     (item) =>
       (props.data.kind !== 'itemShop' || item.mode === mode.value) &&
       item.name.toLowerCase().includes(query.value.toLowerCase()),
+  ),
+)
+watch(mobile, (isMobile) => {
+  if (!isMobile) detailOpen.value = false
+})
+watch(items, (visibleItems) => {
+  if (selected.value && !visibleItems.includes(selected.value)) {
+    selected.value = undefined
+    detailOpen.value = false
+    count.value = 1
+    reward.value = ''
+  }
+})
+
+// Builders are pure; expose their existing validation without submitting or notifying.
+function transactionError(build: () => HentaiVerseFormData): string {
+  try {
+    build()
+    return ''
+  } catch (error) {
+    return error instanceof Error ? error.message : String(error)
+  }
+}
+const shopError = computed(() =>
+  selected.value && props.data.kind === 'itemShop'
+    ? transactionError(() =>
+        buildHentaiVerseShopTransaction(props.data, selected.value!, count.value),
+      )
+    : '',
+)
+const orderErrors = computed(() =>
+  Object.fromEntries(
+    props.data.orders.map((order) => [
+      order.side,
+      transactionError(() =>
+        buildHentaiVerseMarketOrder(
+          props.data,
+          order,
+          drafts[order.side]!.count,
+          drafts[order.side]!.price,
+        ),
+      ),
+    ]),
+  ),
+)
+const transferErrors = computed(() =>
+  Object.fromEntries(
+    props.data.transfers.map((transfer) => [
+      transfer.name,
+      transactionError(() =>
+        buildHentaiVerseMarketTransfer(props.data, transfer, transferAmount.value),
+      ),
+    ]),
   ),
 )
 const selectedKind = computed(() => {
@@ -141,17 +202,16 @@ function submitOrder(order: HentaiVerseMarketOrder) {
 }
 
 function submitTransfer(transfer: HentaiVerseBazaarPage['transfers'][number]) {
-  const amount = transferAmount.value
-  const limit = transfer.name === 'account_deposit' ? props.data.credits : props.data.marketBalance
-  if (!Number.isInteger(amount) || amount < 1 || amount > Math.min(999999999, limit)) {
-    notify.error(t('金额无效或余额不足'))
-    return
+  try {
+    const data = buildHentaiVerseMarketTransfer(props.data, transfer, transferAmount.value)
+    void confirmSubmit(
+      data,
+      t(transfer.label),
+      `${t(transfer.label)}：${transferAmount.value.toLocaleString()} C`,
+    )
+  } catch (error) {
+    notify.error(error instanceof Error ? t(error.message) : String(error))
   }
-  void confirmSubmit(
-    { ...props.data.hidden, account_amount: String(amount), [transfer.name]: transfer.value },
-    t(transfer.label),
-    `${t(transfer.label)}：${amount.toLocaleString()} C`,
-  )
 }
 
 function submitShrine() {
@@ -178,10 +238,88 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
   selected.value = item
   count.value = 1
   reward.value = ''
+  detailOpen.value = true
 }
 </script>
 
 <template>
+  <DefineItemDetails>
+    <div class="bazaar-detail">
+      <h3 v-if="selected && !mobile">{{ t(selected.name) }}</h3>
+      <template v-if="data.kind === 'itemShop' && selected">
+        <p v-if="selected.description">{{ t(selected.description) }}</p>
+        <p>
+          {{ t('单价') }} {{ selected.price.toLocaleString() }} C · {{ t('库存') }}
+          {{ selected.stock.toLocaleString() }}
+        </p>
+        <label class="bazaar-quantity"
+          >{{ t('数量') }}
+          <NumberField
+            v-model="count"
+            @change="count = Number(count) || 0"
+            :min="1"
+            :max="Math.max(1, maximum)"
+            :disabled="loading"
+            :aria-label="t('数量')"
+          />
+        </label>
+        <p>
+          {{ t('总额') }} <strong>{{ (count * selected.price).toLocaleString() }} C</strong>
+        </p>
+        <p v-if="shopError" class="bazaar-validation" role="status">{{ t(shopError) }}</p>
+      </template>
+      <template v-else-if="data.kind === 'shrine'">
+        <p v-for="paragraph in shrineParagraphs" :key="paragraph">{{ t(paragraph) }}</p>
+        <template v-if="selected">
+          <p>
+            {{ t('消耗祭品') }} {{ selected.required.toLocaleString() }} · {{ t('库存') }}
+            {{ selected.stock.toLocaleString() }}
+          </p>
+          <SelectField
+            v-if="selectedKind === 'trophy'"
+            v-model="reward"
+            :placeholder="t('选择奖励类型')"
+            :aria-label="t('选择奖励类型')"
+            :disabled="loading"
+          >
+            <option
+              v-for="entry in data.rewards"
+              :key="`${entry.type}:${entry.slot}`"
+              :value="`${entry.type}:${entry.slot}`"
+              :label="`${t(rewardGroup[entry.type] || '')} ${t(entry.label)}`.trim()"
+            />
+          </SelectField>
+          <p v-else>{{ t('奖励') }}：{{ t('随机奖励') }}</p>
+        </template>
+      </template>
+      <p v-else>{{ t('选择物品查看详情') }}</p>
+    </div>
+  </DefineItemDetails>
+  <DefineItemAction>
+    <ActionButton
+      v-if="selected"
+      class="bazaar-item-action"
+      :loading="loading"
+      :disabled="
+        confirming ||
+        (data.kind === 'itemShop'
+          ? !!shopError
+          : !availableReward || selected.stock < selected.required || selected.required < 1)
+      "
+      @click="data.kind === 'itemShop' ? submitShop() : submitShrine()"
+      >{{
+        data.kind === 'shrine'
+          ? t('提交祭品')
+          : selected.mode === 'shop_pane'
+            ? t('购买物品')
+            : t('出售物品')
+      }}</ActionButton
+    >
+  </DefineItemAction>
+  <ModalPanel v-if="mobile" v-model="detailOpen" :title="selected?.name || t('物品详情')" sheet>
+    <ItemDetails />
+    <template #footer><ItemAction /></template>
+  </ModalPanel>
   <section class="bazaar-panel" :aria-busy="loading">
     <nav v-if="data.navigation.length" class="bazaar-nav" :aria-label="t('市场页面')">
       <ActionButton
@@ -226,7 +364,7 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
     <div v-if="data.kind === 'market' && data.transfers.length" class="bazaar-transfer">
       <NumberField
         v-model="transferAmount"
-        @change="transferAmount = Number(transferAmount) || 1"
+        @change="transferAmount = Number(transferAmount) || 0"
         :min="1"
         :max="999999999"
         :disabled="loading"
@@ -235,10 +373,18 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
       <ActionButton
         v-for="transfer in data.transfers"
         :key="transfer.name"
-        :disabled="loading || confirming"
+        :disabled="loading || confirming || !!transferErrors[transfer.name]"
         @click="submitTransfer(transfer)"
         >{{ t(transfer.label) }}</ActionButton
       >
+      <p
+        v-for="transfer in data.transfers.filter((entry) => transferErrors[entry.name])"
+        :key="`${transfer.name}-error`"
+        class="bazaar-validation"
+        role="status"
+      >
+        {{ t(transfer.label) }}：{{ t(transferErrors[transfer.name]) }}
+      </p>
     </div>
 
     <template v-if="data.kind === 'itemShop' || data.kind === 'shrine'">
@@ -247,7 +393,6 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
           v-if="data.kind === 'itemShop'"
           v-model="mode"
           :disabled="loading"
-          @change="selected = undefined"
         >
           <RadioChoice value="shop_pane">{{ t('购买') }}</RadioChoice
           ><RadioChoice value="item_pane">{{ t('出售') }}</RadioChoice>
@@ -279,64 +424,9 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
           </button>
           <EmptyState v-if="!items.length" :description="t(data.emptyReason || '没有匹配的物品')" />
         </div>
-        <div class="bazaar-detail">
-          <h3 v-if="selected">{{ t(selected.name) }}</h3>
-          <template v-if="data.kind === 'itemShop' && selected">
-            <p v-if="selected.description">{{ t(selected.description) }}</p>
-            <p>{{ t('单价') }} {{ selected.price.toLocaleString() }} C</p>
-            <NumberField
-              v-model="count"
-              @change="count = Number(count) || 1"
-              :min="1"
-              :max="Math.max(1, maximum)"
-              :disabled="loading"
-              :aria-label="t('数量')"
-            />
-            <p>
-              {{ t('总额') }} <strong>{{ (count * selected.price).toLocaleString() }} C</strong>
-            </p>
-            <ActionButton
-              :loading="loading"
-              :disabled="confirming || maximum < 1"
-              @click="submitShop"
-              >{{ selected.mode === 'shop_pane' ? t('购买物品') : t('出售物品') }}</ActionButton
-            >
-          </template>
-          <template v-else-if="data.kind === 'shrine'">
-            <p v-for="paragraph in shrineParagraphs" :key="paragraph">{{ t(paragraph) }}</p>
-            <template v-if="selected">
-              <p>
-                {{ t('消耗祭品') }} {{ selected.required.toLocaleString() }} /
-                {{ selected.stock.toLocaleString() }}
-              </p>
-              <SelectField
-                v-if="selectedKind === 'trophy'"
-                v-model="reward"
-                :placeholder="t('选择奖励类型')"
-                :disabled="loading"
-              >
-                <option
-                  v-for="entry in data.rewards"
-                  :key="`${entry.type}:${entry.slot}`"
-                  :value="`${entry.type}:${entry.slot}`"
-                  :label="`${t(rewardGroup[entry.type] || '')} ${t(entry.label)}`.trim()"
-                />
-              </SelectField>
-              <p v-else>{{ t('随机奖励') }}</p>
-              <ActionButton
-                :loading="loading"
-                :disabled="
-                  confirming ||
-                  !availableReward ||
-                  selected.stock < selected.required ||
-                  selected.required < 1
-                "
-                @click="submitShrine"
-                >{{ t('提交祭品') }}</ActionButton
-              >
-            </template>
-          </template>
-          <p v-else>{{ t('选择物品查看详情') }}</p>
+        <div v-if="!mobile" class="bazaar-desktop-detail">
+          <ItemDetails />
+          <ItemAction />
         </div>
       </div>
     </template>
@@ -351,7 +441,7 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
             >{{ t('批数') }} × {{ data.batchSize
             }}<NumberField
               v-model="drafts[order.side]!.count"
-              @change="drafts[order.side]!.count = Number(drafts[order.side]!.count) || 1"
+              @change="drafts[order.side]!.count = Number(drafts[order.side]!.count) || 0"
               :min="1"
               :max="order.maxCount"
               :disabled="loading"
@@ -359,7 +449,7 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
           <label
             >{{ t('每批价格') }} (C)<NumberField
               v-model="drafts[order.side]!.price"
-              @change="drafts[order.side]!.price = Number(drafts[order.side]!.price) || 10"
+              @change="drafts[order.side]!.price = Number(drafts[order.side]!.price) || 0"
               :min="10"
               :max="100000000"
               :step="hentaiVerseMarketPriceStep(drafts[order.side]!.price)"
@@ -369,15 +459,29 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
             {{ t('总额') }}
             {{ (drafts[order.side]!.count * drafts[order.side]!.price).toLocaleString() }} C
           </p>
-          <ActionButton :loading="loading" :disabled="confirming" @click="submitOrder(order)">{{
-            order.side === 'buy' ? t('提交买单') : t('提交卖单')
-          }}</ActionButton>
+          <p v-if="orderErrors[order.side]" class="bazaar-validation" role="status">
+            {{ t(orderErrors[order.side]) }}
+          </p>
+          <ActionButton
+            :loading="loading"
+            :disabled="confirming || !!orderErrors[order.side]"
+            @click="submitOrder(order)"
+            >{{ order.side === 'buy' ? t('提交买单') : t('提交卖单') }}</ActionButton
+          >
         </article>
       </div>
       <EmptyState v-if="data.emptyReason" :description="t(data.emptyReason)" />
       <div v-for="(table, index) in data.tables" :key="index" class="bazaar-table-block">
         <h3>{{ t(table.title) }}</h3>
-        <div class="bazaar-table-scroll">
+        <div
+          class="bazaar-table-scroll"
+          :class="{
+            'bazaar-table-entries':
+              table.headers.length > 0 &&
+              table.rows.every((row) => row.cells.length === table.headers.length) &&
+              !['市场卖单', '市场买单', '价格历史'].includes(table.title),
+          }"
+        >
           <table>
             <thead v-if="table.headers.length">
               <tr>
@@ -386,7 +490,7 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
             </thead>
             <tbody>
               <tr v-for="(row, i) in table.rows" :key="i">
-                <td v-for="(cell, j) in row.cells" :key="j">
+                <td v-for="(cell, j) in row.cells" :key="j" :data-label="t(table.headers[j] || '')">
                   <button
                     v-if="j === 0 && row.query"
                     class="bazaar-link"
@@ -416,6 +520,12 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
 </template>
 
 <style scoped>
+.bazaar-validation {
+  color: var(--muted-foreground);
+  font-size: 13px;
+  margin: 0;
+  overflow-wrap: anywhere;
+}
 .bazaar-panel {
   display: grid;
   gap: 16px;
@@ -430,7 +540,7 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
   gap: 8px 16px;
   align-items: center;
 }
-.bazaar-tools :deep(.TextField) {
+.bazaar-tools :deep(.ui-input) {
   width: min(100%, 300px);
 }
 .bazaar-item-layout {
@@ -439,6 +549,7 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
   gap: 20px;
 }
 .bazaar-items {
+  min-width: 0;
   display: grid;
   align-content: start;
   gap: 4px;
@@ -446,22 +557,37 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
   overflow: auto;
 }
 .bazaar-items > button {
+  min-width: 0;
+  overflow-wrap: anywhere;
   text-align: left;
   display: grid;
   gap: 4px;
   padding: 10px 12px;
   border: 1px solid transparent;
   border-radius: 6px;
-  color: var(--el-text-color-primary);
-  background: var(--el-fill-color-light);
+  color: var(--foreground);
+  background: var(--muted);
   cursor: pointer;
 }
 .bazaar-items > button.selected {
-  border-color: var(--el-color-primary);
-  background: var(--el-color-primary-light-9);
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 .bazaar-items small {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
+}
+.bazaar-desktop-detail {
+  display: grid;
+  align-content: start;
+  gap: 16px;
+  min-width: 0;
+}
+.bazaar-quantity {
+  display: grid;
+  gap: 6px;
+}
+.bazaar-item-action {
+  justify-self: start;
 }
 .bazaar-detail {
   display: grid;
@@ -474,7 +600,7 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
   margin: 0;
   overflow-wrap: anywhere;
 }
-.bazaar-detail :deep(.SelectField) {
+.bazaar-detail :deep(.ui-select) {
   width: 100%;
   max-width: 320px;
 }
@@ -488,7 +614,7 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
   justify-items: start;
   gap: 10px;
   padding: 14px;
-  border: 1px solid var(--el-border-color-light);
+  border: 1px solid var(--border-soft);
   border-radius: 6px;
 }
 .bazaar-orders label {
@@ -509,6 +635,7 @@ h3 {
   overflow: auto;
 }
 table {
+  font-variant-numeric: tabular-nums;
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
@@ -517,15 +644,18 @@ th,
 td {
   text-align: left;
   padding: 9px 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
+  border-bottom: 1px solid var(--border-soft);
   white-space: nowrap;
 }
+.bazaar-table-scroll:not(.bazaar-table-entries) :is(th, td):not(:first-child) {
+  text-align: right;
+}
 th {
-  color: var(--el-text-color-secondary);
+  color: var(--muted-foreground);
   font-weight: 500;
 }
 .bazaar-link {
-  color: var(--el-color-primary);
+  color: var(--accent);
   cursor: pointer;
   padding: 0;
   background: none;
@@ -539,10 +669,83 @@ th {
     grid-template-columns: 1fr;
   }
   .bazaar-items {
-    max-height: 340px;
+    max-height: none;
+    overflow: visible;
   }
-  .bazaar-panel :deep(input) {
+  .bazaar-panel :deep(input:not([type='radio'])),
+  .bazaar-panel :deep(select) {
     font-size: 16px;
+  }
+  .bazaar-panel :deep(button),
+  .bazaar-panel :deep(input:not([type='radio'])),
+  .bazaar-panel :deep(select),
+  .bazaar-panel :deep(.ui-radio) {
+    min-height: 44px;
+  }
+  .bazaar-orders article {
+    padding: 16px 0;
+    border: 0;
+    border-top: 1px solid var(--border-soft);
+    border-radius: 0;
+  }
+  .bazaar-orders label,
+  .bazaar-orders :deep(.ui-input-number) {
+    width: 100%;
+  }
+  .bazaar-table-entries {
+    overflow: visible;
+  }
+  .bazaar-table-entries table,
+  .bazaar-table-entries tbody {
+    display: block;
+  }
+  .bazaar-table-entries thead {
+    display: none;
+  }
+  .bazaar-table-entries tr {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 4px 12px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border-soft);
+  }
+  .bazaar-table-entries td {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px 8px;
+    padding: 0;
+    border: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    min-width: 0;
+  }
+  .bazaar-table-entries td:first-child {
+    grid-column: 1 / -1;
+  }
+  .bazaar-table-entries td::before {
+    content: attr(data-label);
+    color: var(--muted-foreground);
+  }
+  .bazaar-table-entries .bazaar-link {
+    width: 100%;
+  }
+  .bazaar-table-entries td:has(.bazaar-link)::before {
+    display: none;
+  }
+  .bazaar-detail :deep(input),
+  .bazaar-detail :deep(select) {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .bazaar-detail .bazaar-quantity,
+  .bazaar-detail :deep(.ui-input-number),
+  .bazaar-detail :deep(.ui-select) {
+    width: 100%;
+    max-width: none;
+  }
+  .bazaar-item-action {
+    min-height: 44px;
+    width: 100%;
   }
   .bazaar-transfer {
     gap: 8px;

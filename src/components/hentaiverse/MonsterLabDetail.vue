@@ -35,7 +35,7 @@ watch(
 
 function request(data: HentaiVerseFormData, label: string, description: string) {
   if (!props.loading)
-    emit('request', data, label, `${t(props.data.name)}\n${t(label)}\n${description}`)
+    emit('request', data, label, `${props.data.name}\n${t(label)}\n${description}`)
 }
 
 function upgrade(option: HentaiVerseMonsterUpgrade, kind: 'crystal' | 'chaos') {
@@ -66,62 +66,81 @@ function saveSkills() {
 <template>
   <section class="monster-detail">
     <header>
-      <h3>{{ t(data.name) }}</h3>
+      <h3>{{ data.name }}</h3>
+      <p class="section-label">{{ t('怪物状态') }}</p>
       <p class="muted">{{ t(data.summary) }}</p>
     </header>
     <p v-if="data.notice" class="monster-notice">{{ t(data.notice) }}</p>
     <template v-if="!data.skills">
-      <div class="monster-food">
-        <div v-for="food in data.food" :key="food.label">
-          <p>{{ t(food.description) }}</p>
-          <ActionButton
-            :disabled="loading"
-            @click="request(food.data, food.label, t(food.description))"
-            >{{ t(food.label) }}</ActionButton
-          >
+      <section v-if="data.food.length" class="food-section">
+        <h4>{{ t('饲料与照料') }}</h4>
+        <div class="monster-food">
+          <div v-for="food in data.food" :key="food.label">
+            <p>{{ t(food.description) }}</p>
+            <ActionButton
+              :disabled="loading"
+              @click="request(food.data, food.label, t(food.description))"
+              >{{ t(food.label) }}</ActionButton
+            >
+          </div>
         </div>
-      </div>
-      <label class="field count-field"
-        >{{ t('升级次数')
-        }}<SelectField v-model="count" :disabled="loading"
-          ><option value="1">1</option>
-          <option value="5">5</option>
-          <option value="10">10</option></SelectField
-        ></label
-      >
-      <div class="monster-groups">
-        <section v-for="group in data.groups" :key="group.title">
-          <h4>{{ t(group.title) }}</h4>
-          <div v-for="option in group.upgrades" :key="option.label" class="upgrade-row">
+      </section>
+      <section class="upgrade-section">
+        <h4>{{ t('培养与升级') }}</h4>
+        <label class="field count-field"
+          >{{ t('升级次数')
+          }}<SelectField v-model="count" :disabled="loading"
+            ><option value="1">1</option>
+            <option value="5">5</option>
+            <option value="10">10</option></SelectField
+          ></label
+        >
+        <div class="monster-groups">
+          <section v-for="group in data.groups" :key="group.title">
+            <h4>{{ t(group.title) }}</h4>
+            <div v-for="option in group.upgrades" :key="option.label" class="upgrade-row">
+              <div>
+                <strong>{{ t(option.label) }}</strong>
+                <span class="level-value">{{ t('加成') }} {{ option.level }}</span>
+                <p class="upgrade-cost">
+                  <span>{{ t('升级消耗与库存') }}</span> {{ t(option.description) }}
+                </p>
+                <details v-if="option.help" class="upgrade-help">
+                  <summary>{{ t('升级说明') }}</summary>
+                  <p class="muted">{{ t(option.help) }}</p>
+                </details>
+              </div>
+              <ActionButton
+                size="sm"
+                :disabled="loading || option.disabled"
+                @click="upgrade(option, 'crystal')"
+                >{{ t('灌注水晶') }}</ActionButton
+              >
+            </div>
+          </section>
+        </div>
+        <section v-if="data.perks.length">
+          <h4>{{ t('怪物特性') }}</h4>
+          <div v-for="option in data.perks" :key="option.label" class="upgrade-row">
             <div>
               <strong>{{ t(option.label) }}</strong>
-              <span>{{ option.description }} ({{ t('加成') }} {{ option.level }})</span>
-              <p v-if="option.help" class="muted">{{ t(option.help) }}</p>
+              <span class="level-value">{{ option.level }}</span>
+              <p class="upgrade-cost">
+                <span>{{ t('升级消耗与库存') }}</span> {{ t(option.description) }}
+              </p>
+              <details v-if="option.help" class="upgrade-help">
+                <summary>{{ t('升级说明') }}</summary>
+                <p class="muted">{{ t(option.help) }}</p>
+              </details>
             </div>
             <ActionButton
               size="sm"
               :disabled="loading || option.disabled"
-              @click="upgrade(option, 'crystal')"
-              >{{ t('灌注水晶') }}</ActionButton
+              @click="upgrade(option, 'chaos')"
+              >{{ t('升级怪物特性') }}</ActionButton
             >
           </div>
         </section>
-      </div>
-      <section v-if="data.perks.length">
-        <h4>{{ t('怪物特性') }}</h4>
-        <div v-for="option in data.perks" :key="option.label" class="upgrade-row">
-          <div>
-            <strong>{{ t(option.label) }}</strong> <span>{{ option.level }}</span>
-            <p>{{ t(option.description) }}</p>
-            <p v-if="option.help" class="muted">{{ t(option.help) }}</p>
-          </div>
-          <ActionButton
-            size="sm"
-            :disabled="loading || option.disabled"
-            @click="upgrade(option, 'chaos')"
-            >{{ t('升级怪物特性') }}</ActionButton
-          >
-        </div>
       </section>
       <section v-if="data.metrics.length">
         <h4>{{ t('其他属性') }}</h4>
@@ -145,8 +164,11 @@ function saveSkills() {
             request({ ...data.renameHidden, rename_monster: name.trim() }, '命名怪物', name.trim())
           "
           >{{ t('命名怪物') }}</ActionButton
-        ><ActionButton
-          v-if="data.deleteData"
+        >
+      </section>
+      <section v-if="data.deleteData" class="danger-zone">
+        <p class="muted">{{ t('删除怪物无法撤销。') }}</p>
+        <ActionButton
           variant="destructive"
           :disabled="loading"
           @click="request(data.deleteData, '删除怪物', t('删除怪物无法撤销。'))"
@@ -161,7 +183,7 @@ function saveSkills() {
           }}<TextField
             v-model="skills[row.nameField]"
             :maxlength="30"
-            :placeholder="t(row.placeholder)"
+            :placeholder="row.placeholder"
             :disabled="loading"
         /></label>
         <label v-for="control in row.controls" :key="control.name" class="field"
@@ -202,9 +224,11 @@ function saveSkills() {
   color: var(--muted-foreground);
 }
 .monster-notice {
-  color: var(--el-color-warning);
+  color: var(--warning);
+  background: var(--warning-soft);
+  padding: 10px 12px;
+  border-radius: 6px;
 }
-.monster-food,
 .monster-manage {
   display: flex;
   flex-wrap: wrap;
@@ -252,13 +276,93 @@ function saveSkills() {
   border-bottom: 1px solid var(--border-soft);
   padding-bottom: 16px;
 }
+.monster-food {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 12px;
+}
+.monster-food > div {
+  border: 1px solid var(--border-soft);
+  padding: 12px;
+  border-radius: 6px;
+  min-width: 0;
+}
+.upgrade-section {
+  display: grid;
+  gap: 16px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 18px;
+}
+.section-label,
+.upgrade-cost > span {
+  color: var(--muted-foreground);
+  font-size: 12px;
+}
+.level-value {
+  display: block;
+  color: var(--muted-foreground);
+  margin-top: 4px;
+  font-variant-numeric: tabular-nums;
+}
+.upgrade-row > div {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.upgrade-help summary {
+  cursor: pointer;
+  color: var(--muted-foreground);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.upgrade-help summary::before {
+  content: '+';
+}
+.upgrade-help[open] summary::before {
+  content: '−';
+}
+.danger-zone {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  border-top: 1px solid var(--border-soft);
+  padding-top: 16px;
+}
+.monster-detail {
+  padding-bottom: env(safe-area-inset-bottom);
+}
 @media (max-width: 767px) {
   .monster-detail :deep(input),
   .monster-detail :deep(select) {
     font-size: 16px;
   }
-  .monster-groups {
+  .monster-groups,
+  .monster-food {
     grid-template-columns: 1fr;
+  }
+  .monster-detail :deep(.ui-button),
+  .monster-detail :deep(input),
+  .monster-detail :deep(select),
+  .upgrade-help summary {
+    min-height: 44px;
+  }
+  .upgrade-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+  }
+  .upgrade-row .ui-button,
+  .monster-food .ui-button {
+    width: 100%;
+  }
+  .monster-manage .ui-button,
+  .danger-zone .ui-button {
+    flex: 1 1 150px;
+  }
+  .count-field {
+    max-width: none;
   }
   .monster-manage .field {
     flex: 1 1 100%;

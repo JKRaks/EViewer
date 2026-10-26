@@ -499,6 +499,16 @@
 .ui-dialog[data-state='closed'] {
   animation: dialog-fade-out var(--motion-fast) ease-in;
 }
+.ui-dialog.ui-dialog--stacked {
+  z-index: 5001;
+}
+[data-slot='dialog-overlay'].ui-dialog-overlay--stacked {
+  z-index: 5000;
+}
+.ui-dialog [data-slot='dialog-title'] {
+  padding-inline-end: 40px;
+  overflow-wrap: anywhere;
+}
 .ui-dialog__body {
   overflow-y: auto;
   min-height: 0;

@@ -1,5 +1,8 @@
 import type { HentaiVerseFormData, HentaiVersePageTarget } from './model/hentaiVerse'
-import { translateHentaiVerseText } from './hentaiVerseTranslations'
+import {
+  translateHentaiVerseDescription,
+  translateHentaiVerseText,
+} from './hentaiVerseTranslations'
 
 export interface HentaiVerseBazaarLink {
   label: string
@@ -119,10 +122,23 @@ function readLinks(root: Element | null, selector = 'a[href]'): HentaiVerseBazaa
 }
 
 function readTable(table: Element, title: string): HentaiVerseBazaarTable {
-  const headers = [...table.querySelectorAll('tr:first-child th')].map((node) =>
+  const sourceRows = [
+    ...table.querySelectorAll(
+      ':scope > thead > tr, :scope > tbody > tr, :scope > tfoot > tr, :scope > tr',
+    ),
+  ]
+  const headingRows = sourceRows.filter((row) => row.parentElement?.tagName === 'THEAD')
+  const firstRow = sourceRows[0]
+  const headerRow =
+    headingRows.at(-1) ||
+    (firstRow?.children.length && [...firstRow.children].every((cell) => cell.tagName === 'TH')
+      ? firstRow
+      : undefined)
+  const headers = [...(headerRow?.querySelectorAll(':scope > th, :scope > td') || [])].map((node) =>
     translateHentaiVerseText(text(node)),
   )
-  const rows = [...table.querySelectorAll('tr')].flatMap((row) => {
+  const rows = sourceRows.flatMap((row) => {
+    if (headingRows.includes(row) || row === headerRow) return []
     const cells = [...row.querySelectorAll(':scope > td')].map((node) =>
       translateHentaiVerseText(text(node)),
     )
@@ -156,7 +172,7 @@ function parseItemShop(document: Document, page: HentaiVerseBazaarPage) {
         name: translateHentaiVerseText(text(node)),
         stock: Number(args[2]),
         price: Number(args[3]),
-        description: popup?.[1] ? translateHentaiVerseText(popup[1]) : '',
+        description: popup?.[1] ? translateHentaiVerseDescription(popup[1]) : '',
         mode,
         required: 1,
       })
@@ -179,8 +195,10 @@ function parseMarket(document: Document, page: HentaiVerseBazaarPage) {
     value: input.value,
     label: input.name === 'account_deposit' ? '存入市场' : '从市场取回',
   }))
-  page.itemName = text(root.querySelector('#market_itemheader > div:nth-child(2)'))
-  page.itemInfo = translateHentaiVerseText(text(root.querySelector('#market_iteminfo')))
+  page.itemName = translateHentaiVerseText(
+    text(root.querySelector('#market_itemheader > div:nth-child(2)')),
+  )
+  page.itemInfo = translateHentaiVerseDescription(text(root.querySelector('#market_iteminfo')))
   const script = [...document.scripts]
     .filter((entry) => !entry.src)
     .map((entry) => entry.textContent)
@@ -260,7 +278,7 @@ function parseShrine(document: Document, page: HentaiVerseBazaarPage) {
     page.shrineInfo.push({
       kind,
       paragraphs: [...(root?.querySelectorAll('p, li') || [])]
-        .map((node) => translateHentaiVerseText(text(node)))
+        .map((node) => translateHentaiVerseDescription(text(node)))
         .filter(Boolean),
     })
   }
@@ -381,4 +399,22 @@ export function buildHentaiVerseMarketOrder(
     [order.priceName]: String(price),
     [order.actionName]: order.actionValue,
   }
+}
+
+/** Validate the observed market account form without sending a request. */
+export function buildHentaiVerseMarketTransfer(
+  page: HentaiVerseBazaarPage,
+  transfer: HentaiVerseBazaarPage['transfers'][number],
+  amount: number,
+): HentaiVerseFormData {
+  const limit = transfer.name === 'account_deposit' ? page.credits : page.marketBalance
+  if (
+    page.kind !== 'market' ||
+    !page.transfers.includes(transfer) ||
+    !Number.isInteger(amount) ||
+    amount < 1 ||
+    amount > Math.min(999999999, limit)
+  )
+    throw new Error('金额无效或余额不足')
+  return { ...page.hidden, account_amount: String(amount), [transfer.name]: transfer.value }
 }

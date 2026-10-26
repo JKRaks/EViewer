@@ -16,6 +16,50 @@ const ATTRIBUTE_LABELS: Record<string, string> = {
   wis: '智慧',
 }
 
+// Short interface labels are exact matches, so words such as “Light” do not
+// accidentally replace ordinary words inside descriptions or equipment names.
+const INTERFACE_LABEL_TRANSLATIONS: Record<string, string> = {
+  All: '全部',
+  New: '新获得',
+  Cloth: '布甲',
+  Light: '轻甲',
+  Heavy: '重甲',
+  Locked: '已锁定',
+  Protected: '受保护',
+  Pinned: '已置顶',
+  Unlocked: '未锁定',
+  Unprotected: '未保护',
+  Unassigned: '未分配',
+  Available: '可用',
+  Unavailable: '不可用',
+  Used: '已使用',
+  Remaining: '剩余',
+  Required: '所需',
+  Owned: '持有',
+  Date: '日期',
+  Time: '时间',
+  Status: '状态',
+  Type: '类型',
+  Name: '名称',
+  Amount: '数量',
+  Balance: '余额',
+  Unread: '未读',
+  Read: '已读',
+  Draft: '草稿',
+  Sender: '寄件人',
+  Recipient: '收件人',
+  From: '寄件人',
+  To: '收件人',
+  Received: '收件时间',
+  Expires: '到期时间',
+  Expiration: '到期时间',
+  State: '状态',
+  Attachments: '附件',
+}
+const LOWERCASE_INTERFACE_LABELS = Object.fromEntries(
+  Object.entries(INTERFACE_LABEL_TRANSLATIONS).map(([key, value]) => [key.toLowerCase(), value]),
+)
+
 const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
   navigation: {
     Character: '角色',
@@ -44,6 +88,38 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Isekai: '异世界',
   },
   bazaar: {
+    'ManBearPig Tail': '人熊猪的尾巴',
+    'Holy Hand Grenade of Antioch': '安提阿神圣手榴弹',
+    'Mithra Flower': '米丝拉之花',
+    'Dalek Voicebox': '戴立克发声器',
+    'Broken Glasses': '破损的眼镜',
+    'Noodly Appendage': '面条状附肢',
+    'Precursor Artifact': '先驱者文物',
+    'Rare Artifact': '稀有文物',
+    'Energy Cell': '能量电池',
+    'Low-Grade Cloth': '低级布料',
+    'Mid-Grade Cloth': '中级布料',
+    'High-Grade Cloth': '高级布料',
+    'Low-Grade Leather': '低级皮革',
+    'Mid-Grade Leather': '中级皮革',
+    'High-Grade Leather': '高级皮革',
+    'Low-Grade Metals': '低级金属',
+    'Mid-Grade Metals': '中级金属',
+    'High-Grade Metals': '高级金属',
+    'Low-Grade Wood': '低级木材',
+    'Mid-Grade Wood': '中级木材',
+    'High-Grade Wood': '高级木材',
+    'Scrap Cloth': '碎布',
+    'Scrap Leather': '碎皮',
+    'Scrap Metal': '废金属',
+    'Scrap Wood': '碎木',
+    'Binding of Slaughter': '杀戮结晶',
+    'Binding of Balance': '平衡结晶',
+    'Binding of Destruction': '毁灭结晶',
+    'Binding of Protection': '防护结晶',
+    'Binding of Warding': '守护结晶',
+    'Binding of the Fleet': '迅捷结晶',
+    'Binding of the Nimble': '灵巧结晶',
     'Browse Items': '浏览物品',
     'My Buy Orders': '我的买单',
     'My Sell Orders': '我的卖单',
@@ -330,6 +406,58 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Create New Persona': '创建新人格',
   },
   equipment: {
+    Pinned: '已置顶',
+    Stored: '已存放',
+    Locked: '已锁定',
+    Protected: '受保护',
+    Equipped: '已装备',
+    'One-Handed Weapons': '单手武器',
+    'Two-Handed Weapons': '双手武器',
+    'Unassigned Level': '未定级',
+    'Required Level': '所需等级',
+    'Item Level': '装备等级',
+    'Potency Tier': '潜能阶数',
+    'Potency Level': '潜能等级',
+    'Damage Taken': '承受伤害',
+    Ethereal: '虚空',
+    Fiery: '炽热',
+    Arctic: '极寒',
+    Shocking: '雷击',
+    Tempestuous: '风暴',
+    Hallowed: '神圣',
+    Demonic: '恶魔',
+    Radiant: '光辉',
+    Mystic: '神秘',
+    Charged: '充能',
+    Agile: '敏捷',
+    Reinforced: '强化',
+    Savage: '狂野',
+    Frugal: '节约',
+    Cobalt: '钴蓝',
+    Ruby: '红宝石',
+    Zircon: '锆石',
+    Amber: '琥珀',
+    Cotton: '棉布',
+    Gossamer: '薄纱',
+    Ironsilk: '铁丝绸',
+    Phase: '相位',
+    Leather: '皮革',
+    Drakehide: '龙皮',
+    Kevlar: '凯夫拉',
+    Shade: '暗影',
+    Chainmail: '锁子甲',
+    Plate: '板甲',
+    Cap: '兜帽',
+    Robe: '长袍',
+    Gloves: '手套',
+    Pants: '长裤',
+    Shoes: '鞋',
+    Breastplate: '胸甲',
+    Cuirass: '胸铠',
+    Gauntlets: '护手',
+    Leggings: '护腿',
+    Greaves: '护胫',
+    Boots: '靴',
     'One-handed Weapon': '单手武器',
     'Two-handed Weapon': '双手武器',
     Shield: '盾牌',
@@ -959,7 +1087,7 @@ const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
   'You can either use the standard bar which uses pips for charges, or a more utilitarian (and skinnable) bar that has numerical bars for everything.':
     '选择使用默认点状状态条，或显示明确数值的实用型状态条。',
   'By default, as you gain levels, Snowflake will start accepting more lower-tier trophies for a higher-trophy roll in the Shrine. You can override this behavior here.':
-    '设置神社献祭时是否自动将低阶奖杯合并为更高阶抽取。',
+    '设置神殿献祭时是否自动将低阶奖杯合并为更高阶抽取。',
   'Here you can set up which spells will appear on the battle screen quickbar.':
     '配置战斗界面快捷栏中显示的技能。',
   'Here you can set which spells will be automatically cast at the start of each battle.':
@@ -1047,7 +1175,7 @@ export const HENTAIVERSE_SETTING_GROUPS = [
     description: '控制每套装备是否保存独立的能力、物品和快捷栏配置。',
   },
   { key: 'vitals', title: '状态条样式', description: '选择战斗中的生命、魔力和灵力显示方式。' },
-  { key: 'trophy', title: '奖杯升级', description: '控制神社献祭时低阶奖杯的自动升级策略。' },
+  { key: 'trophy', title: '奖杯升级', description: '控制神殿献祭时低阶奖杯的自动升级策略。' },
   { key: 'quickbar', title: '战斗快捷栏', description: '设置战斗界面快捷栏中的技能顺序。' },
   {
     key: 'autocast',
@@ -1156,6 +1284,11 @@ export function translateHentaiVerseText(value: string) {
 function translateHentaiVerseTextInChinese(value: string): string {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
+  if (LOWERCASE_INTERFACE_LABELS[source.toLowerCase()])
+    return LOWERCASE_INTERFACE_LABELS[source.toLowerCase()]!
+  // Older collected candidates and mixed source labels may use the text entry
+  // point even when an exact description is already available.
+  if (DESCRIPTION_TRANSLATIONS[source]) return DESCRIPTION_TRANSLATIONS[source]!
   if (LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()])
     return LOWERCASE_TERM_TRANSLATIONS[source.toLowerCase()]!
   const monsterUpgrade = source.match(/^Next upgrade available at powerlevel\s*(\d+)$/i)
@@ -1249,7 +1382,7 @@ function translateHentaiVerseDescriptionInChinese(value: string) {
     'You can use this token to unlock monster slots in the Monster Lab, as well as to upgrade your monsters.':
       '可用于在怪物实验室解锁怪物槽位或升级怪物。',
     'These fragments can be used in the forge to permanently soulbind an equipment piece to you, which will make it level as you do.':
-      '可在军械库用于永久灵魂绑定装备，使装备随角色一同升级。',
+      '可在装备库用于永久灵魂绑定装备，使装备随角色一同升级。',
     'Non-discerning monsters like to munch on this chow.': '可用于喂养对食物要求不高的怪物。',
     'High-level monsters would very much prefer this highly refined level of dining if you wish to parlay their favor.':
       '高等级怪物偏爱的精制饲料，可用于维持它们的状态。',
@@ -1679,6 +1812,14 @@ export function decodeHentaiVerseGlyphs(root: ParentNode) {
 
 // Reuse the established glossary for labels that were parsed before a language switch.
 registerMessages(interfaceMessages)
+registerMessages(
+  Object.fromEntries(
+    Object.entries(INTERFACE_LABEL_TRANSLATIONS).map(([source, translated]) => [
+      translated,
+      source,
+    ]),
+  ),
+)
 registerMessages(
   Object.fromEntries(
     [

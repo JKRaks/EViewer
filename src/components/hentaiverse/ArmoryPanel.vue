@@ -1,9 +1,13 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, ref, watch } from 'vue'
+import { createReusableTemplate, useMediaQuery } from '@vueuse/core'
+import ModalPanel from '@/components/primitives/ModalPanel.vue'
 import { t } from '@/i18n'
 import { dialogs } from '@/components/primitives/feedback'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import CheckField from '@/components/primitives/CheckField.vue'
+import SelectField from '@/components/primitives/SelectField.vue'
+import TextField from '@/components/primitives/TextField.vue'
 import EquipmentDetail from './EquipmentDetail.vue'
 import type {
   HentaiVerseEquipmentDetail,
@@ -31,6 +35,9 @@ let active = true
 onBeforeUnmount(() => {
   active = false
 })
+const mobile = useMediaQuery('(max-width: 767px)')
+const operationOpen = ref(false)
+const [DefineArmoryOperation, ArmoryOperation] = createReusableTemplate()
 const selected = ref<string[]>([]),
   search = ref(''),
   page = ref(1)
@@ -45,6 +52,13 @@ const labels: Record<string, string> = {
   sell: '出售装备',
   salvage: '分解装备',
 }
+function navigateChoice(kind: 'tabs' | 'filters', value: string | undefined) {
+  const link = props.data[kind].find(
+    (item) => item.query[kind === 'tabs' ? 'screen' : 'filter'] === value,
+  )
+  if (link && !link.active && !props.loading) emit('navigate', link.query)
+}
+
 const details = computed(() => ({ ...props.details, ...props.data.inlineDetails }))
 const charmSelection = computed(() => getArmoryCharmSelection(props.data, values.value))
 const filtered = computed(() =>
@@ -92,6 +106,7 @@ watch(
   () => props.data,
   (data) => {
     selected.value = []
+    operationOpen.value = false
     page.value = 1
     search.value = ''
     values.value = {}
@@ -103,6 +118,9 @@ watch(
   },
   { immediate: true },
 )
+watch([mobile, () => selected.value.length], ([isMobile, count]) => {
+  if (!isMobile || !count) operationOpen.value = false
+})
 watch(search, () => {
   page.value = 1
 })
@@ -225,24 +243,157 @@ async function submit(action?: ArmoryAction) {
 </script>
 
 <template>
+  <DefineArmoryOperation>
+    <div v-if="data.modify || selected.length" class="armory-operation">
+      <div class="armory-controls">
+        <template v-for="control in data.controls" :key="control.name">
+          <CheckField
+            v-if="control.type === 'checkbox'"
+            v-model="checked[control.name]"
+            :disabled="loading || control.disabled"
+            >{{ t(control.label) }}</CheckField
+          >
+          <label v-else
+            >{{ t(control.label)
+            }}<select
+              v-if="control.options.length"
+              v-model="values[control.name]"
+              :disabled="loading || control.disabled"
+            >
+              <option
+                v-for="option in control.options"
+                :key="option.value"
+                :value="option.value"
+                :disabled="option.disabled"
+                :title="t(option.help || '')"
+              >
+                {{ t(option.label) }}
+              </option></select
+            ><input
+              v-else
+              v-model="values[control.name]"
+              :type="control.type === 'number' ? 'number' : 'text'"
+              :disabled="loading || control.disabled"
+          /></label>
+        </template>
+      </div>
+      <p v-if="data.actions.some((action) => action.charm)" role="status">
+        <template v-if="charmSelection"
+          >{{ t('护符点数') }}: {{ charmSelection.usedCp }} / {{ charmSelection.maxCp }}
+          <span v-if="charmSelection.reason">{{ t(charmSelection.reason) }}</span></template
+        >
+        <template v-else>{{ t('源站未提供完整护符改造数据，暂不能提交此操作。') }}</template>
+      </p>
+      <div v-if="selected.length" class="armory-summary" aria-live="polite">
+        <strong>{{ t('已选 {p0} 件', { p0: selected.length }) }}</strong>
+        <p v-if="credits && (data.screen !== 'salvage' || checked.sell_salvage)">
+          {{ t('点数：{p0}', { p0: credits.toLocaleString() }) }}
+        </p>
+        <p
+          v-for="material in materials"
+          :key="material.name"
+          :class="{
+            shortage:
+              ['repair', 'soulbind'].includes(data.screen) && material.count > material.owned,
+          }"
+        >
+          {{ t(material.name) }} × {{ material.count }} ({{ t('持有') }} {{ material.owned }})
+        </p>
+      </div>
+      <div v-if="data.modify" class="armory-actions">
+        <div v-for="(action, index) in data.actions" :key="index">
+          <ActionButton
+            :disabled="
+              loading ||
+              (action.charm ? !charmSelection?.allowed || !!action.blockedReason : action.disabled)
+            "
+            :title="t(action.help)"
+            @click="submit(action)"
+            >{{ t(action.label) }}</ActionButton
+          ><small v-if="action.help">{{ t(action.help) }}</small>
+        </div>
+      </div>
+      <ActionButton
+        v-else-if="!mobile"
+        variant="default"
+        :disabled="!canSubmit"
+        :loading="loading"
+        @click="submit()"
+        >{{ t(labels[data.screen] || data.screen) }}</ActionButton
+      >
+    </div>
+  </DefineArmoryOperation>
+  <ModalPanel
+    v-if="mobile && !data.modify"
+    v-model="operationOpen"
+    :title="t(labels[data.screen])"
+    sheet
+  >
+    <ArmoryOperation />
+    <template #footer>
+      <ActionButton
+        class="armory-submit"
+        variant="default"
+        :disabled="!canSubmit"
+        :loading="loading"
+        @click="submit()"
+      >
+        {{ t(labels[data.screen] || data.screen) }}
+      </ActionButton>
+    </template>
+  </ModalPanel>
   <section class="armory-panel">
-    <nav class="armory-tabs" :aria-label="t('装备库')">
+    <div class="armory-mobile-navigation">
+      <label>
+        <span>{{ t('操作') }}</span>
+        <SelectField
+          :model-value="data.screen"
+          :disabled="loading"
+          :aria-label="t('装备库操作')"
+          @change="navigateChoice('tabs', $event)"
+        >
+          <option v-for="tab in data.tabs" :key="tab.query.screen" :value="tab.query.screen">
+            {{ t(tab.label) }}
+          </option>
+        </SelectField>
+      </label>
+      <label v-if="data.filters.length">
+        <span>{{ t('装备分类') }}</span>
+        <SelectField
+          :model-value="data.filters.find((filter) => filter.active)?.query.filter"
+          :disabled="loading"
+          :aria-label="t('装备分类')"
+          @change="navigateChoice('filters', $event)"
+        >
+          <option
+            v-for="filter in data.filters"
+            :key="filter.query.filter"
+            :value="filter.query.filter"
+          >
+            {{ t(filter.label) }}
+          </option>
+        </SelectField>
+      </label>
+    </div>
+    <nav class="armory-tabs armory-navigation" :aria-label="t('装备库')">
       <ActionButton
         v-for="tab in data.tabs"
         :key="tab.query.screen"
         :variant="tab.active ? 'default' : 'outline'"
         :disabled="loading"
+        :aria-current="tab.active ? 'page' : undefined"
         @click="emit('navigate', tab.query)"
         >{{ t(tab.label) }}</ActionButton
       >
     </nav>
-    <nav class="armory-tabs" :aria-label="t('装备分类')">
+    <nav class="armory-tabs armory-filters armory-navigation" :aria-label="t('装备分类')">
       <ActionButton
         v-for="filter in data.filters"
         :key="filter.query.filter"
         size="sm"
         :variant="filter.active ? 'secondary' : 'ghost'"
         :disabled="loading"
+        :aria-current="filter.active ? 'page' : undefined"
         @click="emit('navigate', filter.query)"
         >{{ t(filter.label) }}</ActionButton
       >
@@ -263,7 +414,7 @@ async function submit(action?: ArmoryAction) {
     </p>
     <template v-if="!data.modify">
       <div class="armory-toolbar">
-        <input
+        <TextField
           v-model="search"
           type="search"
           :placeholder="t('搜索装备')"
@@ -287,6 +438,12 @@ async function submit(action?: ArmoryAction) {
           t('清空选择')
         }}</ActionButton>
       </div>
+      <div v-if="mobile && selected.length" class="armory-selection-bar" role="status">
+        <strong>{{ t('已选 {p0} 件', { p0: selected.length }) }}</strong>
+        <ActionButton variant="default" @click="operationOpen = true">{{
+          t('查看操作')
+        }}</ActionButton>
+      </div>
       <div class="armory-list">
         <article
           v-for="equipment in visible"
@@ -299,9 +456,12 @@ async function submit(action?: ArmoryAction) {
               :disabled="loading || equipment.disabled"
               @update:model-value="toggle(equipment.id, $event)"
               ><strong>{{ t(equipment.name) }}</strong></CheckField
-            ><span>{{ equipment.status }}</span>
+            >
           </div>
-          <small>{{ t(equipment.category) }}</small>
+          <div class="equipment-meta">
+            <span v-if="equipment.category">{{ t(equipment.category) }}</span>
+            <span v-if="equipment.status">{{ t(equipment.status) }}</span>
+          </div>
           <details v-if="details[equipment.id]">
             <summary>{{ t('装备属性') }}</summary>
             <EquipmentDetail :data="details[equipment.id]!" />
@@ -335,80 +495,7 @@ async function submit(action?: ArmoryAction) {
         <p v-for="(line, i) in section.lines" :key="i">{{ t(line) }}</p>
       </section>
     </div>
-    <div class="armory-controls">
-      <template v-for="control in data.controls" :key="control.name">
-        <CheckField
-          v-if="control.type === 'checkbox'"
-          v-model="checked[control.name]"
-          :disabled="loading || control.disabled"
-          >{{ t(control.label) }}</CheckField
-        >
-        <label v-else
-          >{{ t(control.label)
-          }}<select
-            v-if="control.options.length"
-            v-model="values[control.name]"
-            :disabled="loading || control.disabled"
-          >
-            <option
-              v-for="option in control.options"
-              :key="option.value"
-              :value="option.value"
-              :disabled="option.disabled"
-              :title="t(option.help || '')"
-            >
-              {{ t(option.label) }}
-            </option></select
-          ><input
-            v-else
-            v-model="values[control.name]"
-            :type="control.type === 'number' ? 'number' : 'text'"
-            :disabled="loading || control.disabled"
-        /></label>
-      </template>
-    </div>
-    <p v-if="data.actions.some((action) => action.charm)" role="status">
-      <template v-if="charmSelection"
-        >{{ t('护符点数') }}: {{ charmSelection.usedCp }} / {{ charmSelection.maxCp }}
-        <span v-if="charmSelection.reason">{{ t(charmSelection.reason) }}</span></template
-      >
-      <template v-else>{{ t('源站未提供完整护符改造数据，暂不能提交此操作。') }}</template>
-    </p>
-    <div v-if="selected.length" class="armory-summary">
-      <p v-if="credits && (data.screen !== 'salvage' || checked.sell_salvage)">
-        {{ t('点数：{p0}', { p0: credits.toLocaleString() }) }}
-      </p>
-      <p
-        v-for="material in materials"
-        :key="material.name"
-        :class="{
-          shortage: ['repair', 'soulbind'].includes(data.screen) && material.count > material.owned,
-        }"
-      >
-        {{ t(material.name) }} × {{ material.count }} ({{ t('持有') }} {{ material.owned }})
-      </p>
-    </div>
-    <div v-if="data.modify" class="armory-actions">
-      <div v-for="(action, index) in data.actions" :key="index">
-        <ActionButton
-          :disabled="
-            loading ||
-            (action.charm ? !charmSelection?.allowed || !!action.blockedReason : action.disabled)
-          "
-          :title="t(action.help)"
-          @click="submit(action)"
-          >{{ t(action.label) }}</ActionButton
-        ><small v-if="action.help">{{ t(action.help) }}</small>
-      </div>
-    </div>
-    <ActionButton
-      v-else
-      variant="default"
-      :disabled="!canSubmit"
-      :loading="loading"
-      @click="submit()"
-      >{{ t(labels[data.screen] || data.screen) }}</ActionButton
-    >
+    <ArmoryOperation v-if="!mobile || data.modify" />
   </section>
 </template>
 
@@ -417,6 +504,9 @@ async function submit(action?: ArmoryAction) {
   display: grid;
   gap: 16px;
   min-width: 0;
+}
+.armory-mobile-navigation {
+  display: none;
 }
 .armory-tabs,
 .armory-toolbar,
@@ -427,7 +517,8 @@ async function submit(action?: ArmoryAction) {
   align-items: center;
   gap: 8px;
 }
-.armory-panel p {
+.armory-panel p,
+.armory-operation p {
   margin: 0;
   white-space: pre-line;
   overflow-wrap: anywhere;
@@ -454,18 +545,68 @@ async function submit(action?: ArmoryAction) {
   background: var(--accent-soft);
 }
 .equipment-row {
+  min-width: 0;
+}
+.equipment-row :deep(.ui-checkbox) {
+  width: 100%;
+  align-items: flex-start;
+}
+.equipment-row :deep([data-slot='checkbox']) {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+.equipment-meta {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-left: 24px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.armory-filters {
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+}
+.armory-operation {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.armory-selection-bar {
+  display: flex;
   justify-content: space-between;
-  gap: 10px;
+  align-items: center;
+  gap: 12px;
+  position: sticky;
+  top: env(safe-area-inset-top, 0px);
+  z-index: 5;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.armory-submit {
+  width: 100%;
+  min-height: 44px;
+}
+.armory-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  align-items: baseline;
+}
+.armory-operation > .ui-button {
+  justify-self: start;
 }
 .equipment-row strong {
   overflow-wrap: anywhere;
 }
-.equipment-row > span {
-  flex-shrink: 0;
-}
-.armory-panel small {
+.armory-panel small,
+.armory-operation small {
   display: block;
   color: var(--muted-foreground);
   margin-top: 5px;
@@ -475,7 +616,9 @@ async function submit(action?: ArmoryAction) {
   margin: 6px 0;
 }
 .armory-panel input,
-.armory-panel select {
+.armory-panel select,
+.armory-operation input,
+.armory-operation select {
   min-width: 0;
   max-width: 100%;
   border: 1px solid var(--border);
@@ -502,7 +645,7 @@ async function submit(action?: ArmoryAction) {
   margin: 0 0 8px;
 }
 .shortage {
-  color: var(--el-color-danger, #dc2626);
+  color: var(--destructive);
 }
 .empty {
   padding: 20px;
@@ -514,10 +657,63 @@ async function submit(action?: ArmoryAction) {
   .armory-panel select {
     font-size: 16px;
   }
-  .equipment-row {
-    align-items: flex-start;
+  .armory-panel {
+    gap: 12px;
+    padding-bottom: calc(80px + env(safe-area-inset-bottom));
   }
-  .armory-toolbar input {
+  .armory-navigation {
+    display: none;
+  }
+  .armory-mobile-navigation {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    gap: 10px;
+  }
+  .armory-mobile-navigation label {
+    display: grid;
+    min-width: 0;
+    gap: 6px;
+    font-size: 13px;
+    color: var(--muted-foreground);
+  }
+  .armory-panel :deep(.ui-button),
+  .armory-panel :deep(.ui-checkbox),
+  .armory-panel :deep(input),
+  .armory-panel :deep(select),
+  .armory-panel :deep([data-slot='select-trigger']) {
+    min-height: 44px;
+  }
+  .armory-panel :deep(input),
+  .armory-panel :deep(select),
+  .armory-operation input,
+  .armory-operation select {
+    font-size: 16px;
+    min-height: 44px;
+  }
+  .armory-panel summary {
+    min-height: 44px;
+    margin: 0;
+    align-content: center;
+  }
+  .armory-toolbar > .ui-input {
+    flex-basis: 100%;
+  }
+  .armory-toolbar > .ui-button {
+    flex: 1 1 auto;
+  }
+  .armory-controls {
+    align-items: stretch;
+  }
+  .armory-controls > label {
+    flex: 1 1 100%;
+    min-width: 0;
+    justify-content: space-between;
+  }
+  .armory-controls select,
+  .armory-controls input {
+    flex: 1;
+  }
+  .armory-operation > .ui-button {
     width: 100%;
   }
   .armory-actions > div {
