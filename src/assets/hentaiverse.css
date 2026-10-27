@@ -88,6 +88,28 @@
 .hv-view.hv-theme .ui-button {
   border-radius: 5px;
 }
+.hv-dialog .ui-button {
+  border-radius: 5px;
+}
+:is(.hv-view.hv-theme, .hv-dialog) .ui-button[data-variant='default'] {
+  border: 1px solid var(--accent);
+  background: var(--accent);
+  color: var(--accent-foreground);
+}
+:is(.hv-view.hv-theme, .hv-dialog) .ui-button[data-variant='outline'] {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  color: var(--foreground);
+}
+:is(.hv-view.hv-theme, .hv-dialog) .ui-button[data-variant='secondary'] {
+  border: 1px solid var(--border);
+  background: var(--accent-soft);
+  color: var(--foreground);
+}
+:is(.hv-view.hv-theme, .hv-dialog) .ui-button:focus-visible {
+  outline: 2px solid var(--accent-ring);
+  outline-offset: 2px;
+}
 .hv-view.hv-theme .pixel-title,
 .hv-view.hv-theme .equipment-slot-label,
 .hv-view.hv-theme .candidate-name {
@@ -159,6 +181,9 @@
   }
 }
 @media (max-width: 767px) {
+  .hv-dialog .ui-button {
+    min-height: 44px;
+  }
   .battle-panel.hv-theme .battle-vital-label {
     flex-direction: column;
     align-items: flex-start;

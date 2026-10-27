@@ -7,6 +7,7 @@ import TextField from '@/components/primitives/TextField.vue'
 import NumberField from '@/components/primitives/NumberField.vue'
 import SelectField from '@/components/primitives/SelectField.vue'
 import MonsterLabDetail from './MonsterLabDetail.vue'
+import EquipmentDetail from './EquipmentDetail.vue'
 import type { HentaiVerseFormData } from '@/core/hentaiverse/model/hentaiVerse'
 import type { HentaiVerseServicesPage } from '@/core/hentaiverse/hentaiVerseServices'
 
@@ -16,6 +17,15 @@ const emit = defineEmits<{
   submit: [data: HentaiVerseFormData, label: string]
 }>()
 const ticketCount = ref(1)
+const lotteryTotal = computed(() => {
+  const price = props.data.lottery?.unitPrice
+  const total = price === undefined ? undefined : price * ticketCount.value
+  return Number.isSafeInteger(ticketCount.value) &&
+    ticketCount.value > 0 &&
+    Number.isSafeInteger(total)
+    ? total
+    : undefined
+})
 const confirming = ref(false)
 let mounted = true
 onBeforeUnmount(() => {
@@ -65,7 +75,8 @@ function lotteryAction(action: 'ticket_count' | 'golden_tickets' | 'prize_optout
   const lottery = props.data.lottery
   if (
     !lottery ||
-    (action === 'ticket_count' && (!Number.isInteger(ticketCount.value) || ticketCount.value < 1))
+    (action === 'ticket_count' &&
+      (!Number.isSafeInteger(ticketCount.value) || ticketCount.value < 1))
   )
     return
   const label =
@@ -86,7 +97,7 @@ function lotteryAction(action: 'ticket_count' | 'golden_tickets' | 'prize_optout
     action === 'prize_optout'
       ? t('放弃本期大奖后无法恢复。')
       : action === 'ticket_count'
-        ? `${lottery.cost} ${t('数量')}：${ticketCount.value}`
+        ? `${lottery.cost} ${t('数量')}：${ticketCount.value}${lotteryTotal.value === undefined ? '' : ` · ${t('总费用')}：${lotteryTotal.value.toLocaleString()} ${lottery.currency}`}`
         : t('消耗一张黄金彩票，增加本期彩票数量。'),
   )
 }
@@ -237,61 +248,102 @@ function createMonster(attack: string) {
     </template>
 
     <template v-if="data.lottery">
-      <header>
-        <p class="muted">{{ t(data.lottery.date) }}</p>
-        <p class="section-label">{{ t('本期大奖') }}</p>
-        <h3>{{ t(data.lottery.prize) }}</h3>
-      </header>
       <div class="lottery-columns">
-        <div>
-          <details class="rules prize-details">
-            <summary>{{ t('大奖属性') }}</summary>
+        <section class="lottery-rewards" :aria-label="t('本期大奖')">
+          <header class="lottery-heading">
+            <p class="muted">{{ t(data.lottery.date) }}</p>
+            <p class="section-label">{{ t('本期大奖') }}</p>
+            <h3>{{ t(data.lottery.prize) }}</h3>
+          </header>
+          <EquipmentDetail v-if="data.lottery.equipment" :data="data.lottery.equipment" />
+          <details v-else-if="data.lottery.stats.length" class="rules prize-details">
+            <summary>{{ t('完整属性') }}</summary>
             <ul class="stat-list">
               <li v-for="stat in data.lottery.stats" :key="stat">{{ t(stat) }}</li>
             </ul>
           </details>
-          <h4>{{ t('其他奖品') }}</h4>
-          <p v-for="prize in data.lottery.prizes" :key="prize">{{ t(prize) }}</p>
-        </div>
-        <div class="purchase">
+          <section class="lottery-other-prizes" :aria-label="t('其他奖品')">
+            <h4>{{ t('其他奖品') }}</h4>
+            <ol v-if="data.lottery.rankedPrizes?.length" class="lottery-prize-list" start="2">
+              <li v-for="prize in data.lottery.rankedPrizes" :key="prize.rank" :value="prize.rank">
+                <span class="prize-rank">{{ t('第 {p0} 奖', { p0: prize.rank }) }}</span>
+                <span>{{ t(prize.reward) }}</span>
+              </li>
+            </ol>
+            <ul v-else class="lottery-prize-list">
+              <li v-for="prize in data.lottery.prizes" :key="prize">{{ t(prize) }}</li>
+            </ul>
+          </section>
+        </section>
+        <section class="purchase" :aria-label="t('彩票与费用')">
           <h4>{{ t('彩票与费用') }}</h4>
-          <p class="held-tickets">{{ t(data.lottery.held) }}</p>
-          <p>{{ t(data.lottery.stock) }}</p>
-          <p>{{ t(data.lottery.funds) }}</p>
-          <p class="cost-note">{{ t(data.lottery.cost) }}</p>
-          <label class="field"
-            >{{ t('彩票数量')
-            }}<NumberField
+          <p v-if="data.lottery.held" class="held-tickets">{{ t(data.lottery.held) }}</p>
+          <p v-if="data.lottery.stock" class="muted">{{ t(data.lottery.stock) }}</p>
+          <p v-if="data.lottery.funds" class="muted">{{ t(data.lottery.funds) }}</p>
+          <dl class="lottery-costs">
+            <dt>{{ t('单价') }}</dt>
+            <dd>
+              {{
+                data.lottery.unitPrice === undefined
+                  ? t(data.lottery.cost)
+                  : `${data.lottery.unitPrice.toLocaleString()} ${data.lottery.currency}`
+              }}
+            </dd>
+          </dl>
+          <p v-if="data.lottery.unitPrice !== undefined" class="muted cost-source">
+            {{ t(data.lottery.cost) }}
+          </p>
+          <label class="field">
+            {{ t('彩票数量') }}
+            <NumberField
               v-model="ticketCount"
               :min="1"
               :step="1"
-              :disabled="loading || !data.lottery.canBuy"
-          /></label>
-          <div class="service-actions">
+              :disabled="loading || confirming || !data.lottery.canBuy"
+            />
+          </label>
+          <dl class="lottery-costs total-cost" aria-live="polite">
+            <dt>{{ t('总费用') }}</dt>
+            <dd>
+              {{
+                lotteryTotal === undefined
+                  ? '—'
+                  : `${lotteryTotal.toLocaleString()} ${data.lottery.currency}`
+              }}
+            </dd>
+          </dl>
+          <div class="lottery-purchase-actions">
             <ActionButton
+              variant="default"
               :disabled="
-                loading || !data.lottery.canBuy || ticketCount < 1 || !Number.isInteger(ticketCount)
+                loading ||
+                confirming ||
+                !data.lottery.canBuy ||
+                ticketCount < 1 ||
+                !Number.isSafeInteger(ticketCount)
               "
               @click="lotteryAction('ticket_count')"
               >{{ t('购买彩票') }}</ActionButton
             >
             <ActionButton
               variant="outline"
-              :disabled="loading || !data.lottery.canGolden"
+              :disabled="loading || confirming || !data.lottery.canGolden"
               @click="lotteryAction('golden_tickets')"
               >{{ t('使用黄金彩票') }}</ActionButton
             >
           </div>
-        </div>
+        </section>
       </div>
-      <div class="danger-zone">
+      <details class="rules lottery-secondary">
+        <summary>{{ t('其他彩票操作') }}</summary>
+        <p class="muted">{{ t('放弃本期大奖后无法恢复。') }}</p>
         <ActionButton
-          variant="destructive"
-          :disabled="loading || !data.lottery.canOptOut"
+          variant="outline"
+          :disabled="loading || confirming || !data.lottery.canOptOut"
           @click="lotteryAction('prize_optout')"
           >{{ t('放弃大奖') }}</ActionButton
         >
-      </div>
+      </details>
       <details class="rules">
         <summary>{{ t('彩票规则') }}</summary>
         <p v-for="rule in data.lottery.rules" :key="rule">{{ t(rule) }}</p>
@@ -540,8 +592,91 @@ function createMonster(attack: string) {
 }
 .lottery-columns {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1.25fr) minmax(240px, 0.75fr);
   gap: 24px;
+  align-items: start;
+}
+.lottery-rewards,
+.purchase {
+  min-width: 0;
+}
+.lottery-heading h3 {
+  margin: 4px 0 12px;
+  font-size: 20px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.lottery-heading > p:first-child {
+  margin-top: 0;
+}
+.lottery-other-prizes {
+  margin-top: 16px;
+  border-top: 1px solid var(--border-soft);
+}
+.lottery-other-prizes h4 {
+  margin: 12px 0 4px;
+}
+.lottery-prize-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.lottery-prize-list li {
+  display: flex;
+  gap: 12px;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--border-soft);
+  overflow-wrap: anywhere;
+}
+.prize-rank {
+  flex: none;
+  color: var(--muted-foreground);
+  font-size: 12px;
+  padding-top: 2px;
+}
+.purchase {
+  border: 1px solid var(--border-soft);
+  border-radius: 5px;
+  padding: 16px;
+}
+.purchase h4 {
+  margin: 0 0 12px;
+}
+.purchase p {
+  margin: 6px 0;
+}
+.lottery-costs {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 12px;
+  margin: 14px 0;
+}
+.lottery-costs dt {
+  color: var(--muted-foreground);
+}
+.lottery-costs dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.purchase .cost-source {
+  margin: -8px 0 14px;
+  font-size: 12px;
+}
+.total-cost {
+  border-top: 1px solid var(--border-soft);
+  padding-top: 12px;
+}
+.total-cost dd {
+  font-weight: 700;
+}
+.lottery-purchase-actions {
+  display: grid;
+  gap: 8px;
+}
+.lottery-purchase-actions .ui-button {
+  width: 100%;
 }
 .stat-list {
   margin: 0;

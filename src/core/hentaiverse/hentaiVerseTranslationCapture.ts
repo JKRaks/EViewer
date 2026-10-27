@@ -25,7 +25,7 @@ interface CaptureContext {
 
 const settingKey = 'eviewer:hv-translation-capture'
 const recordKey = 'hv-translation-candidates-v1'
-const rulesVersion = 4
+const rulesVersion = 5
 const limit = 1000
 const candidates = new Map<string, TranslationCandidate>()
 let context: CaptureContext | undefined

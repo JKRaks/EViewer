@@ -3,7 +3,11 @@ import type {
   HentaiVerseFormData,
   HentaiVersePageTarget,
 } from './model/hentaiVerse'
-import { parseEquipmentData, readEquipmentSources } from './hentaiVerseEquipment'
+import {
+  parseEquipmentData,
+  parseEquipmentElement,
+  readEquipmentSources,
+} from './hentaiVerseEquipment'
 import {
   translateHentaiVerseDescription,
   translateHentaiVerseText,
@@ -454,12 +458,12 @@ export function parseHentaiVerseArmory(
       inlineDetails,
       parseEquipmentData(`const dynjs_equip = ${JSON.stringify(store)};`),
     )
-  if (selectedId && document.querySelector('#eqstats .eq')) {
-    Object.assign(
-      inlineDetails,
-      parseEquipmentData(
-        `const dynjs_equip = ${JSON.stringify({ [selectedId]: { t: text(document.querySelector('.showequip > div a')), d: document.querySelector('#eqstats')!.innerHTML } })};`,
-      ),
+  const selectedStats = document.querySelector('#eqstats .eq')
+  if (selectedId && selectedStats) {
+    inlineDetails[selectedId] = parseEquipmentElement(
+      selectedStats,
+      selectedId,
+      text(document.querySelector('.showequip > div a')),
     )
   }
   const modify = !!form.querySelector('#equipmodify_outer')

@@ -3,26 +3,30 @@ import { t } from '@/i18n'
 
 import { computed } from 'vue'
 import type { HentaiVerseEquipmentDetail } from '@/core/hentaiverse/model/hentaiVerse'
+import { getEquipmentHighlights } from '@/core/hentaiverse/hentaiVerseEquipment'
 const props = defineProps<{ data: HentaiVerseEquipmentDetail }>()
-const highlights = computed(
-  () => props.data.groups.find((group) => group.title === '装备属性')?.metrics.slice(0, 3) || [],
-)
+const highlights = computed(() => getEquipmentHighlights(props.data))
 </script>
 
 <template>
   <section class="equipment-detail" :aria-label="t('{p0}的属性', { p0: t(data.name) })">
-    <p class="equipment-summary">{{ t(data.summary) }}</p>
+    <div class="equipment-overview">
+      <span v-if="data.summary" class="equipment-summary">{{ t(data.summary) }}</span>
+      <span v-for="status in data.status" :key="status" class="equipment-state">{{
+        t(status)
+      }}</span>
+    </div>
     <p v-if="highlights.length" class="equipment-highlights">
-      <span v-for="metric in highlights" :key="metric.label"
+      <span
+        v-for="metric in highlights"
+        :key="`${metric.group}:${metric.label}`"
+        :title="t(metric.group)"
         >{{ t(metric.label) }} {{ t(metric.value) }}</span
       >
     </p>
     <p v-for="effect in data.effects" :key="effect" class="equipment-effect">{{ t(effect) }}</p>
     <details>
       <summary>{{ t('完整属性') }}</summary>
-      <div class="equipment-status">
-        <p v-for="status in data.status" :key="status">{{ t(status) }}</p>
-      </div>
       <section v-for="group in data.groups" :key="group.title" class="equipment-stat-group">
         <h4>{{ t(group.title) }}</h4>
         <dl>
@@ -47,6 +51,14 @@ const highlights = computed(
   overflow-wrap: anywhere;
   color: var(--muted-foreground);
 }
+.equipment-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px 10px;
+}
+.equipment-state {
+  color: var(--foreground);
+}
 p {
   margin: 4px 0;
 }
@@ -59,16 +71,13 @@ p {
   gap: 4px 12px;
 }
 details {
-  margin-top: 8px;
+  margin-top: 2px;
 }
 summary {
   width: fit-content;
   padding: 4px 0;
   cursor: pointer;
   color: var(--accent);
-}
-.equipment-status {
-  margin: 8px 0;
 }
 h4 {
   margin: 12px 0 6px;
@@ -93,7 +102,7 @@ small {
 }
 @media (max-width: 767px) {
   .equipment-detail {
-    font-size: 14px;
+    font-size: 13px;
   }
   h4 {
     font-size: 14px;

@@ -351,8 +351,8 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Capacity: '容量',
     'Next Tier Materials': '下一阶所需材料',
     'Available Soul Fragments': '可用灵魂碎片',
-    'Inventory Capacity': '库存容量',
-    'Storage Capacity': '仓库容量',
+    'Inventory Capacity': '装备栏容量',
+    'Storage Capacity': '装备仓库容量',
     'Upgrade Tier': '升级阶数',
     Organize: '整理装备',
     Modify: '改造装备',
@@ -411,6 +411,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Locked: '已锁定',
     Protected: '受保护',
     Equipped: '已装备',
+    Salvaged: '已分解',
     'One-Handed Weapons': '单手武器',
     'Two-Handed Weapons': '双手武器',
     'Unassigned Level': '未定级',
@@ -1097,6 +1098,17 @@ const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
   'If you want to automatically dump junk equipment on the closest travelling salesmoogle or break it down into parts, you can do so here. All equipment of the specified qualify and below will be automatically sold or turned in to salvage. If a dropped equipment qualifies for both sell and salvage, the action with the lowest required quality will be taken.':
     '设置掉落装备的自动出售或分解品质阈值；同时符合两项规则时，优先执行品质门槛更低的操作。',
   'There are no available equipment of this type.': '当前分类没有可用装备。',
+  'This page allows you to organize your equipment.': '可在此整理装备。',
+  '📌 Pinned equipment are always sorted before unpinned equipment for each respective equipment type.':
+    '📌 已置顶的装备始终排在同类未置顶装备之前。',
+  '🛡️ Protected equipment require an additional confirmation to select for sell or salvage, to be attached to mooglemails, and to be sacrificed for stat fusion. This protects them from various dangerous actions while not preventing it outright.':
+    '🛡️ 受保护装备在选择出售、分解、作为莫古邮件附件或用于属性融合献祭时，需要额外确认。这可防止误操作，同时保留执行这些操作的能力。',
+  '🔒 Locked equipment are further protected and will not show up on pages with potentially dangerous actions at all. You can still freely repair, upgrade and modify protected and locked equipment. Equips cannot be both locked and protected.':
+    '🔒 已锁定装备不会出现在可能执行危险操作的页面中。受保护和已锁定的装备仍可正常修理、升级和改造。同一件装备不能同时设为锁定与保护。',
+  '📦 Stored equipment are hidden on all equipment lists except for the one on this page, and are not available for any actions. These will not count towards your regular equipment limit unless your equipment storage overflows.':
+    '📦 已存放装备仅在本页列表中显示，不能参与任何操作。除非装备仓库溢出，否则不会占用常规装备栏容量。',
+  '🗡️ Equipped equipment is (obviously) used as an indicator for equipment that is currently equipped, even if it is in a different equipment set or profile. These cannot be stored; attempting this will be silently ignored.':
+    '🗡️ 已装备标记表示该装备正被某个装备套装或角色配置使用，即使当前未切换到该配置。已装备的物品不能存放，存放请求会被源站忽略。',
   'Equipment must be soulbound before you can enter its Item World.':
     '装备必须先完成灵魂绑定才能进入其装备界。',
   'Welcome to the Grindfest. A Grindfest consists of up to 1000 rounds of battle. Starting a Grindfest will consume 1 point of Stamina. There is a small credit reward at the end, if you make it all the way through.':
@@ -1339,6 +1351,11 @@ export function translateHentaiVerseDescription(value: string) {
 function translateHentaiVerseDescriptionInChinese(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
+  const marketInfo = source.match(
+    /^You have ([\d,]+) available to sell\. This item is traded in batches of ([\d,]+); all prices are per batch\. Min price is ([\d,]+ C) for market orders\.(?: Can always be bought for ([\d,]+ C)\.)?$/,
+  )
+  if (marketInfo)
+    return `可出售 ${marketInfo[1]} 件，每批 ${marketInfo[2]} 件，以下价格均按每批计算。挂单最低价格 ${marketInfo[3]}。${marketInfo[4] ? `固定购买价 ${marketInfo[4]}。` : ''}`
   const slowed = source.match(
     /^The target is slowed by ([\d.]+)%, making it attack less frequently\.$/i,
   )

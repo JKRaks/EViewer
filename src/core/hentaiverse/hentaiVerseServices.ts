@@ -1,9 +1,14 @@
-import type { HentaiVerseFormData, HentaiVersePageTarget } from './model/hentaiVerse'
+import type {
+  HentaiVerseEquipmentDetail,
+  HentaiVerseFormData,
+  HentaiVersePageTarget,
+} from './model/hentaiVerse'
 import {
   decodeHentaiVerseGlyphs,
   translateHentaiVerseDescription,
   translateHentaiVerseText,
 } from './hentaiVerseTranslations'
+import { parseEquipmentElement } from './hentaiVerseEquipment'
 
 export interface HentaiVerseMonsterUpgrade {
   label: string
@@ -79,7 +84,11 @@ export interface HentaiVerseServicesPage {
     prize: string
     date: string
     stats: string[]
+    equipment?: HentaiVerseEquipmentDetail
     prizes: string[]
+    rankedPrizes?: { rank: number; reward: string }[]
+    unitPrice?: number
+    currency?: 'GP'
     funds: string
     cost: string
     held: string
@@ -186,6 +195,26 @@ function parseLottery(document: Document, target: HentaiVersePageTarget): Hentai
     ]
   })
   const prize = document.querySelector('#lottery_eqstat .eq')
+  const priceText = text(rightRows[1])
+  // Lottery tickets are quoted in GP. Keep unmatched source text instead of guessing a price.
+  const priceLiteral = priceText.match(
+    /^Each ticket costs ((?:[1-9]\d{0,2}(?:,\d{3})+|[1-9]\d*)) GP\.$/,
+  )?.[1]
+  const priceValue = priceLiteral ? Number(priceLiteral.replace(/,/g, '')) : undefined
+  const unitPrice = Number.isSafeInteger(priceValue) ? priceValue : undefined
+  const prizeRows = [...left.querySelectorAll('div')].filter(
+    (node) =>
+      /^(?:2nd|3rd|4th|5th) Prize:/.test(text(node)) &&
+      ![...node.querySelectorAll('div')].some((child) =>
+        /^(?:2nd|3rd|4th|5th) Prize:/.test(text(child)),
+      ),
+  )
+  const rankedPrizes = prizeRows.flatMap((node) => {
+    const match = text(node).match(
+      /^([2-5])(?:nd|rd|th) Prize:\s*((?:(?![2-5](?:nd|rd|th) Prize:).)+)$/,
+    )
+    return match ? [{ rank: Number(match[1]), reward: translateHentaiVerseText(match[2]!) }] : []
+  })
   return {
     kind: target.ss === 'la' ? 'armorLottery' : 'weaponLottery',
     links,
@@ -195,9 +224,13 @@ function parseLottery(document: Document, target: HentaiVersePageTarget): Hentai
       prize: translated(document.querySelector('#lottery_eqname')),
       date: translated(left.firstElementChild),
       stats: [...(prize?.children || [])].map(translated).filter(Boolean),
-      prizes: [...left.querySelectorAll('div')]
-        .filter((node) => /^\s*[2-5](?:nd|rd|th) Prize:/.test(text(node)))
-        .map(translated),
+      equipment: prize
+        ? parseEquipmentElement(prize, 'lottery', text(document.querySelector('#lottery_eqname')))
+        : undefined,
+      prizes: prizeRows.map(translated),
+      rankedPrizes: rankedPrizes.length === prizeRows.length ? rankedPrizes : undefined,
+      unitPrice,
+      currency: unitPrice === undefined ? undefined : 'GP',
       funds: translated(rightRows[0]),
       cost: translated(rightRows[1]),
       held: translated(rightRows.find((node) => /^You hold /.test(text(node)))),
