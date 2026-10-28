@@ -23,7 +23,13 @@ export interface HentaiVerseBazaarItem {
 export interface HentaiVerseBazaarTable {
   title: string
   headers: string[]
-  rows: { cells: string[]; query?: Record<string, string> }[]
+  rawHeaders?: string[]
+  rows: {
+    cells: string[]
+    rawCells?: string[]
+    primaryCells?: string[]
+    query?: Record<string, string>
+  }[]
 }
 
 export interface HentaiVerseMarketOrder {
@@ -134,21 +140,57 @@ function readTable(table: Element, title: string): HentaiVerseBazaarTable {
     (firstRow?.children.length && [...firstRow.children].every((cell) => cell.tagName === 'TH')
       ? firstRow
       : undefined)
-  const headers = [...(headerRow?.querySelectorAll(':scope > th, :scope > td') || [])].map((node) =>
-    translateHentaiVerseText(text(node)),
+  const rawHeaders = [...(headerRow?.querySelectorAll(':scope > th, :scope > td') || [])].map(text)
+  const marketSchemas: Record<string, string[]> = {
+    物品列表: ['', 'Your Stock', 'Market Bid', 'Market Ask', 'Market Stock'],
+    市场买单: ['Count', 'Price', 'Total'],
+    市场卖单: ['Count', 'Price', 'Total'],
+    价格历史: ['', 'Sold', 'Low', 'Avg', 'High', 'Vol'],
+    最近交易: ['', 'Seller', 'Buyer', 'Sold', 'Price'],
+  }
+  const marketSchema = JSON.stringify(rawHeaders) === JSON.stringify(marketSchemas[title])
+  const marketHeaders: Record<string, string> = {
+    Sold: '成交数量',
+    Low: '最低价',
+    Avg: '均价',
+    High: '最高价',
+    Vol: '成交额',
+    Count: '数量',
+  }
+  const firstHeader: Record<string, string> = {
+    物品列表: '物品',
+    最近交易: '时间',
+    价格历史: '周期',
+  }
+  const headers = rawHeaders.map((header, index) =>
+    marketSchema
+      ? marketHeaders[header] ||
+        (!index && !header ? firstHeader[title] || '' : translateHentaiVerseText(header))
+      : translateHentaiVerseText(header),
   )
   const rows = sourceRows.flatMap((row) => {
     if (headingRows.includes(row) || row === headerRow) return []
-    const cells = [...row.querySelectorAll(':scope > td')].map((node) =>
-      translateHentaiVerseText(text(node)),
+    const nodes = [...row.querySelectorAll(':scope > td')]
+    const rawCells = nodes.map(text)
+    const primaryCells = nodes.map((node) =>
+      [...node.childNodes]
+        .filter((child) => child.nodeType === 3)
+        .map((child) => child.textContent || '')
+        .join('')
+        .trim(),
+    )
+    const cells = rawCells.map((cell, index) =>
+      marketSchema && title === '最近交易' && (index === 1 || index === 2)
+        ? cell
+        : translateHentaiVerseText(cell),
     )
     if (!cells.length) return []
     const location = row
       .getAttribute('onclick')
       ?.match(/document\.location\s*=\s*['"]([^'"]+)['"]/)?.[1]
-    return [{ cells, query: location ? queryFromUrl(location) : undefined }]
+    return [{ cells, rawCells, primaryCells, query: location ? queryFromUrl(location) : undefined }]
   })
-  return { title, headers, rows }
+  return { title, headers, rawHeaders, rows }
 }
 
 function parseItemShop(document: Document, page: HentaiVerseBazaarPage) {
@@ -234,9 +276,21 @@ function parseMarket(document: Document, page: HentaiVerseBazaarPage) {
   for (const [selector, title] of groups) {
     root.querySelectorAll(selector!).forEach((table) => page.tables.push(readTable(table, title!)))
   }
-  page.links = readLinks(root.querySelector('#market_itempage')).filter(
-    (link) => !link.label.match(/^[◀▶]$/),
-  )
+  const detailLinks = [
+    ...readLinks(
+      root.querySelector('#market_itempage'),
+      'a[href]:not(table a):not(#market_itemheader a)',
+    ),
+    ...readLinks(root).filter((link) => link.query.tradelog?.startsWith('item-')),
+  ].filter((link) => !link.label.match(/^[◀▶]$/))
+  page.links = [
+    ...new Map(
+      detailLinks.map((link) => [
+        JSON.stringify(Object.entries(link.query).sort()),
+        link.query.tradelog?.startsWith('item-') ? { ...link, label: '查看完整交易记录' } : link,
+      ]),
+    ).values(),
+  ]
   const empty = root.querySelector(
     '#market_itemlist > p, #market_accountlog > p, #market_tradelog > p',
   )

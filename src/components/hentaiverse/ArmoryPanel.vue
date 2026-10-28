@@ -327,6 +327,7 @@ async function submit(action?: ArmoryAction) {
     v-if="mobile && !data.modify"
     v-model="operationOpen"
     :title="t(labels[data.screen])"
+    content-class="hv-theme hv-dialog"
     sheet
   >
     <ArmoryOperation />
@@ -459,13 +460,16 @@ async function submit(action?: ArmoryAction) {
             >
           </div>
           <div class="equipment-meta">
-            <span v-if="equipment.category">{{ t(equipment.category) }}</span>
+            <span v-if="equipment.category && !details[equipment.id]">{{
+              t(equipment.category)
+            }}</span>
             <span v-if="equipment.status">{{ t(equipment.status) }}</span>
           </div>
-          <details v-if="details[equipment.id]">
-            <summary>{{ t('装备属性') }}</summary>
-            <EquipmentDetail :data="details[equipment.id]!" />
-          </details>
+          <EquipmentDetail
+            v-if="details[equipment.id]"
+            class="equipment-properties"
+            :data="details[equipment.id]!"
+          />
         </article>
         <p v-if="!filtered.length" class="empty">{{ t('没有符合条件的装备') }}</p>
       </div>
@@ -563,6 +567,10 @@ async function submit(action?: ArmoryAction) {
   color: var(--muted-foreground);
   font-size: 13px;
   overflow-wrap: anywhere;
+}
+.equipment-properties {
+  margin-top: 4px;
+  padding-left: 24px;
 }
 .armory-filters {
   border-bottom: 1px solid var(--border);

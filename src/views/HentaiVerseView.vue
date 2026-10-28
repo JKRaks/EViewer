@@ -57,6 +57,8 @@ defineOptions({ name: 'HentaiVerseView' })
 const busi = new HentaiVerseBusi()
 const authState = useAuthState()
 const activeSection = ref<HentaiVerseSection>('character')
+const mobileNavigationGroup = ref<(typeof HENTAIVERSE_SECTION_GROUPS)[number]['key']>('character')
+const mobileSectionsElement = ref<HTMLElement>()
 const page = ref<HentaiVersePage>()
 const loading = ref(false)
 useAppLaunchReadiness(() => loading.value, 'battle')
@@ -136,6 +138,31 @@ const navigationGroups = computed(() =>
     sections: availableSections.value.filter((item) => item.group === group.key),
   })).filter((group) => group.sections.length),
 )
+const mobileNavigationSections = computed(
+  () =>
+    navigationGroups.value.find((group) => group.key === mobileNavigationGroup.value)?.sections ||
+    [],
+)
+
+// Browsing a mobile group only reveals its links; selecting a link loads the page.
+watch(activeSection, (section) => {
+  mobileNavigationGroup.value = HENTAIVERSE_SECTIONS.find((item) => item.key === section)!.group
+})
+
+watch(
+  [activeSection, mobileNavigationSections],
+  () => {
+    const navigation = mobileSectionsElement.value
+    const selected = navigation?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (!navigation?.clientWidth || !selected) return
+    const bounds = navigation.getBoundingClientRect()
+    const item = selected.getBoundingClientRect()
+    if (item.left < bounds.left) navigation.scrollLeft += item.left - bounds.left
+    else if (item.right > bounds.right) navigation.scrollLeft += item.right - bounds.right
+  },
+  { flush: 'post' },
+)
+
 const currentGroup = computed(
   () => HENTAIVERSE_SECTION_GROUPS.find((group) => group.key === currentMeta.value.group)!,
 )
@@ -424,7 +451,7 @@ onMounted(() => {
 <template>
   <div class="hv-view hv-theme">
     <header class="hv-page-header">
-      <div>
+      <div class="hv-header-title">
         <span>{{ t('冒险手帐') }}</span>
         <h1>HentaiVerse</h1>
         <p class="hv-module-description">
@@ -437,6 +464,16 @@ onMounted(() => {
           >
         </p>
       </div>
+      <SelectField
+        v-if="authState.loggedIn"
+        v-model="hentaiVerseWorld"
+        class="hv-mobile-world"
+        :aria-label="t('世界')"
+        :disabled="loading || hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
+      >
+        <option value="persistent" :label="t('永久世界')" />
+        <option value="isekai" :label="t('异世界')" />
+      </SelectField>
       <div class="hv-header-actions">
         <ActionButton :icon="Lightning" @click="resumeBattle">{{ t('恢复战斗') }}</ActionButton>
         <ActionButton
@@ -488,6 +525,7 @@ onMounted(() => {
             :key="item.key"
             type="button"
             :class="{ active: activeSection === item.key }"
+            :aria-current="activeSection === item.key ? 'page' : undefined"
             @click="loadSection(item.key)"
           >
             <PixelIcon :kind="item.key" />{{ t(item.label) }}
@@ -497,34 +535,36 @@ onMounted(() => {
 
       <main class="hv-content">
         <div class="hv-mobile-navigation">
-          <label>
-            <span>{{ t('世界') }}</span>
-            <SelectField
-              v-model="hentaiVerseWorld"
-              :aria-label="t('世界')"
-              :disabled="
-                loading || hentaiVerseState.actionPending || hentaiVerseState.battleLoading
-              "
+          <nav class="hv-mobile-groups" :aria-label="t('HentaiVerse 分区')">
+            <button
+              v-for="group in navigationGroups"
+              :key="group.key"
+              type="button"
+              :aria-pressed="mobileNavigationGroup === group.key"
+              :class="{ active: mobileNavigationGroup === group.key }"
+              aria-controls="hv-mobile-sections"
+              @click="mobileNavigationGroup = group.key"
             >
-              <option value="persistent" :label="t('永久世界')" />
-              <option value="isekai" :label="t('异世界')" />
-            </SelectField>
-          </label>
-          <label>
-            <span>{{ t('功能') }}</span>
-            <SelectField
-              v-model="activeSection"
-              :aria-label="t('HentaiVerse 页面')"
-              @change="loadSection"
+              {{ t(group.label) }}
+            </button>
+          </nav>
+          <nav
+            ref="mobileSectionsElement"
+            id="hv-mobile-sections"
+            class="hv-mobile-sections"
+            :aria-label="t('当前分区功能')"
+          >
+            <button
+              v-for="item in mobileNavigationSections"
+              :key="item.key"
+              type="button"
+              :class="{ active: activeSection === item.key }"
+              :aria-current="activeSection === item.key ? 'page' : undefined"
+              @click="loadSection(item.key)"
             >
-              <option
-                v-for="item in availableSections"
-                :key="item.key"
-                :label="`${t(HENTAIVERSE_SECTION_GROUPS.find((group) => group.key === item.group)?.label)} · ${t(item.label)}`"
-                :value="item.key"
-              ></option>
-            </SelectField>
-          </label>
+              {{ t(item.label) }}
+            </button>
+          </nav>
         </div>
 
         <div v-if="loading && !page" class="hv-loading">
@@ -843,23 +883,23 @@ onMounted(() => {
   letter-spacing: 0;
 }
 
+.hv-mobile-world,
 .hv-mobile-navigation {
   display: none;
-  width: 100%;
-  margin-bottom: 18px;
 }
-.hv-mobile-navigation label {
-  display: grid;
-  gap: 6px;
-  min-width: 0;
+
+/* Keep the shared primitives visually consistent inside the HV feature. */
+.hv-view :deep(.ui-button) {
+  min-height: 36px;
+  border-radius: 5px;
+  box-shadow: none;
+  font-weight: 500;
 }
-.hv-mobile-navigation label > span {
-  color: var(--muted-foreground);
-  font-size: 13px;
-}
-.hv-mobile-navigation :deep(.ui-select) {
-  width: 100%;
-  min-width: 0;
+
+.hv-navigation button:focus-visible,
+.hv-mobile-navigation button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .hv-notice {
@@ -871,11 +911,56 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  .hv-page-header {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 14px;
-    padding-top: 8px;
+  .hv-view.hv-theme .hv-page-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(116px, auto);
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0 12px;
+  }
+
+  .hv-header-title {
+    min-width: 0;
+  }
+
+  .hv-header-title > span,
+  .hv-module-description {
+    display: none;
+  }
+
+  .hv-view.hv-theme .hv-page-header h1 {
+    font-size: 22px;
+  }
+
+  .hv-page-header .hv-character-summary {
+    overflow: hidden;
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .hv-mobile-world {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .hv-header-actions {
+    grid-column: 1 / -1;
+  }
+
+  .hv-view :deep(.camp-scene) {
+    height: 64px;
+    margin-bottom: 10px;
+  }
+
+  .hv-view :deep(.camp-scene .scene-caption) {
+    bottom: 8px;
+    font-size: 10px;
+  }
+
+  .hv-local-help {
+    margin: 4px 0;
   }
 
   .hv-page-header h1 {
@@ -901,8 +986,83 @@ onMounted(() => {
 
   .hv-mobile-navigation {
     display: grid;
-    grid-template-columns: minmax(100px, 0.75fr) minmax(0, 1.25fr);
-    gap: 10px;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .hv-mobile-groups {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    background: var(--muted-soft);
+  }
+
+  .hv-mobile-navigation button {
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--muted-foreground);
+    font-size: 14px;
+    line-height: 1.4;
+    background: transparent;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+  }
+
+  .hv-mobile-groups button.active {
+    color: var(--accent);
+    background: var(--background);
+    border-color: var(--border);
+    font-weight: 700;
+  }
+
+  .hv-mobile-sections {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .hv-mobile-sections button {
+    flex: 0 0 auto;
+    padding-inline: 12px;
+    border-color: var(--border-soft);
+    color: var(--text);
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  .hv-mobile-sections button.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 700;
+  }
+
+  .hv-view :deep(.ui-button) {
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  .hv-view :deep(.ui-button--icon) {
+    min-width: 44px;
+    flex-shrink: 0;
+  }
+
+  .hv-view :deep(input:not([type='checkbox']):not([type='radio'])),
+  .hv-view :deep(select),
+  .hv-view :deep(textarea),
+  .hv-view :deep(.ui-select-trigger) {
+    min-height: 44px;
+    font-size: 16px;
   }
 
   .hv-local-help summary {
