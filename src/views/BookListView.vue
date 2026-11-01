@@ -56,6 +56,15 @@ import GalleryFilters from '@/components/GalleryFilters.vue'
 import Notice from '@/components/primitives/Notice.vue'
 import { cloneGalleryCriteria, galleryTagKey } from '@/core/books/gallerySearchState'
 import { useLayoutMainScrollMemory } from '@/composables/useLayoutMainScrollMemory'
+import { getLayoutScrollTop, getLayoutScrollViewport } from '@/composables/layoutScroll'
+import { authState } from '@/core/auth/authState'
+import { currentTransportSignal, connectionSettings } from '@/core/connector/connectionSettings'
+import {
+  clearGalleryListSession,
+  readGalleryListSession,
+  saveGalleryListSession,
+  type GalleryListSession,
+} from '@/core/books/galleryListSession'
 
 defineOptions({ name: 'BookList' })
 
@@ -115,6 +124,22 @@ let requestController: AbortController | undefined
 let requestVersion = 0
 let appliedRouteCriteria = ''
 let resumeStructuredSearch = false
+let resumeMore = false
+let pendingMoreInput: bookInput | undefined
+let successfulSearchKey = ''
+let appliedScope = ''
+let viewActive = true
+let restoringPosition = false
+let restoredPosition: GalleryListSession | undefined
+const sessionScope = computed(() =>
+  JSON.stringify([
+    connectionSettings.mode,
+    connectionSettings.site,
+    authState.loggedIn,
+    authState.memberId || authState.lastLoginAt || '',
+  ]),
+)
+const searchSessionKey = () => `${sessionScope.value}\n${appliedRouteCriteria}`
 
 const canClearSearch = computed(() => {
   const value = criteria.value
@@ -140,36 +165,137 @@ const canClearSearch = computed(() => {
 const { persistScrollPosition, applyScrollTop, bindScrollListener, unbindScrollListener } =
   useLayoutMainScrollMemory('booklist-scroll-position')
 
+function syncRouteSearch() {
+  const { criteria: serialized, keyword, uploader } = route.query
+  if (route.name !== 'booklist') return
+  const nextCriteria = deserializeGallerySearchCriteria(serialized, keyword, uploader)
+  const signature = serializeGallerySearchCriteria(nextCriteria)
+  if (signature === appliedRouteCriteria && appliedScope === sessionScope.value) return
+  if (appliedScope && appliedScope !== sessionScope.value) {
+    clearGalleryListSession()
+    allBooks.value = []
+    bookOutputs.value = undefined
+    successfulSearchKey = ''
+  }
+  appliedScope = sessionScope.value
+  appliedRouteCriteria = signature
+  criteria.value = nextCriteria
+  appliedCriteria.value = cloneGalleryCriteria(nextCriteria)
+  const routeHasSearch = [serialized, keyword, uploader].some((value) =>
+    Array.isArray(value) ? Boolean(value[0]) : Boolean(value),
+  )
+  if (!routeHasSearch) {
+    requestController?.abort()
+    requestVersion++
+    loading.value = false
+    loadingMore.value = false
+    searchError.value = ''
+    moreError.value = ''
+    resultsStale.value = false
+    bookOutputs.value = undefined
+    allBooks.value = []
+    hasSearched.value = false
+    pendingMoreInput = undefined
+    resumeMore = false
+    resumeStructuredSearch = false
+    restoredPosition = undefined
+    restoringPosition = false
+    return
+  }
+  const session = readGalleryListSession(searchSessionKey())
+  if (session) {
+    beginRequest()
+    activeInput.value = compileGallerySearch(nextCriteria)
+    activeInput.value.pageNxt = session.requestCursor
+    allBooks.value = session.books
+    bookOutputs.value = Object.assign(new bookOutput(), {
+      isSuccess: true,
+      data: session.books,
+      nxtPage: session.nextCursor,
+      prvPage: session.previousCursor,
+      totalCount: session.totalCount,
+    })
+    successfulSearchKey = searchSessionKey()
+    moreError.value = session.moreError
+    searchError.value = ''
+    resultsStale.value = false
+    hasSearched.value = true
+    restoredPosition = session
+    restoringPosition = true
+    void restoreListPosition()
+    return
+  }
+  void executeStructuredSearch(hasSearched.value)
+}
 watch(
-  () => [route.query.criteria, route.query.keyword, route.query.uploader] as const,
-  ([serialized, keyword, uploader]) => {
-    if (route.name !== 'booklist') return
-    const nextCriteria = deserializeGallerySearchCriteria(serialized, keyword, uploader)
-    const signature = serializeGallerySearchCriteria(nextCriteria)
-    if (signature === appliedRouteCriteria) return
-    appliedRouteCriteria = signature
-    criteria.value = nextCriteria
-    appliedCriteria.value = cloneGalleryCriteria(nextCriteria)
-    const routeHasSearch = [serialized, keyword, uploader].some((value) =>
-      Array.isArray(value) ? Boolean(value[0]) : Boolean(value),
-    )
-    if (!routeHasSearch) {
-      requestController?.abort()
-      requestVersion++
-      loading.value = false
-      loadingMore.value = false
-      searchError.value = ''
-      moreError.value = ''
-      resultsStale.value = false
-      bookOutputs.value = undefined
-      allBooks.value = []
-      hasSearched.value = false
-      return
-    }
-    void executeStructuredSearch(hasSearched.value)
-  },
+  () => [route.query.criteria, route.query.keyword, route.query.uploader, sessionScope.value],
+  syncRouteSearch,
   { immediate: true },
 )
+
+function persistListSession() {
+  if (
+    !viewActive ||
+    route.name !== 'booklist' ||
+    restoringPosition ||
+    successfulSearchKey !== searchSessionKey() ||
+    !bookOutputs.value ||
+    resultsStale.value ||
+    loading.value
+  )
+    return
+  const viewport = getLayoutScrollViewport()
+  const element = [...document.querySelectorAll<HTMLElement>('.booklist-view [data-book-id]')].find(
+    (item) => {
+      const bounds = item.getBoundingClientRect()
+      return bounds.bottom > viewport.top && bounds.top < viewport.bottom
+    },
+  )
+  saveGalleryListSession({
+    key: successfulSearchKey,
+    books: allBooks.value,
+    requestCursor: activeInput.value.pageNxt,
+    nextCursor: bookOutputs.value.nxtPage,
+    previousCursor: bookOutputs.value.prvPage,
+    totalCount: bookOutputs.value.totalCount,
+    moreError: moreError.value,
+    scrollTop: getLayoutScrollTop(),
+    anchor: element
+      ? {
+          bookId: element.dataset.bookId!,
+          offset: element.getBoundingClientRect().top - viewport.top,
+        }
+      : undefined,
+  })
+}
+
+async function restoreListPosition() {
+  if (!restoredPosition) return
+  const session = restoredPosition
+  const version = requestVersion
+  await nextTick()
+  requestAnimationFrame(() =>
+    requestAnimationFrame(() => {
+      if (restoredPosition !== session) return
+      if (viewActive && version === requestVersion) {
+        const element = [
+          ...document.querySelectorAll<HTMLElement>('.booklist-view [data-book-id]'),
+        ].find((item) => item.dataset.bookId === session.anchor?.bookId)
+        applyScrollTop(
+          element && session.anchor
+            ? getLayoutScrollTop() +
+                element.getBoundingClientRect().top -
+                getLayoutScrollViewport().top -
+                session.anchor.offset
+            : session.scrollTop,
+        )
+        restoredPosition = undefined
+        restoringPosition = false
+        setupObserver()
+      }
+    }),
+  )
+}
 
 async function submitSearch() {
   try {
@@ -190,6 +316,13 @@ async function submitSearch() {
 }
 
 async function clearSearchConditions() {
+  clearGalleryListSession()
+  successfulSearchKey = ''
+  pendingMoreInput = undefined
+  resumeMore = false
+  resumeStructuredSearch = false
+  restoredPosition = undefined
+  restoringPosition = false
   requestController?.abort()
   requestVersion++
   criteria.value = createGallerySearchCriteria()
@@ -222,37 +355,47 @@ async function executeStructuredSearch(resetScroll: boolean) {
   }
 
   const version = beginRequest()
+  clearGalleryListSession()
+  const key = searchSessionKey()
+  const signal = AbortSignal.any([requestController!.signal, currentTransportSignal()])
   loading.value = true
   activeInput.value = input
   try {
     const result = await new bookListBusi().getBookPageList(input, {
-      signal: requestController?.signal,
+      signal,
     })
-    if (version !== requestVersion) return
+    if (version !== requestVersion || signal.aborted) return
     hasSearched.value = true
     if (!result.isSuccess) throw new Error(result.msg || t('搜索失败，请重试'))
     bookOutputs.value = result
     allBooks.value = result.data ?? []
     searchError.value = ''
     resultsStale.value = false
+    successfulSearchKey = key
     if (resetScroll) applyScrollTop(0)
   } catch (error) {
     if (
       version === requestVersion &&
-      !(error instanceof DOMException && error.name === 'AbortError')
+      !signal.aborted &&
+      !(error instanceof Error && error.name === 'AbortError')
     ) {
       searchError.value = error instanceof Error ? error.message : t('搜索失败，请重试')
       resultsStale.value = allBooks.value.length > 0
       hasSearched.value = true
     }
   } finally {
-    if (version === requestVersion) loading.value = false
+    if (version === requestVersion) {
+      loading.value = false
+      persistListSession()
+    }
   }
 }
 
 async function loadMore(retry = false) {
   if (
     loadingMore.value ||
+    !viewActive ||
+    restoringPosition ||
     loading.value ||
     imageSearchLoading.value ||
     resultsStale.value ||
@@ -265,25 +408,45 @@ async function loadMore(retry = false) {
   loadingMore.value = true
   moreError.value = ''
   const version = requestVersion
+  if (!requestController || requestController.signal.aborted)
+    requestController = new AbortController()
+  const signal = AbortSignal.any([requestController.signal, currentTransportSignal()])
+  const nextInput = pendingMoreInput
+    ? cloneBookInput(pendingMoreInput)
+    : cloneBookInput(activeInput.value)
+  nextInput.pageNxt = bookOutputs.value.nxtPage
+  nextInput.pagePrev = undefined
+  pendingMoreInput = nextInput
   try {
-    const nextInput = cloneBookInput(activeInput.value)
-    nextInput.pageNxt = bookOutputs.value.nxtPage
-    nextInput.pagePrev = undefined
     const result = await new bookListBusi().getBookPageList(nextInput, {
-      signal: requestController?.signal,
+      signal,
     })
-    if (version !== requestVersion) return
-    if (!result.isSuccess) throw new Error(result.msg || t('后续画册加载失败'))
+    if (version !== requestVersion || signal.aborted) return
+    if (!result.isSuccess) throw new Error(result.msg || t('加载失败'))
     const knownIds = new Set(allBooks.value.map((book) => book.bookId))
-    allBooks.value.push(...(result.data ?? []).filter((book) => !knownIds.has(book.bookId)))
+    allBooks.value.push(
+      ...(result.data ?? []).filter((book) => {
+        if (knownIds.has(book.bookId)) return false
+        knownIds.add(book.bookId)
+        return true
+      }),
+    )
     bookOutputs.value = result
     activeInput.value = nextInput
+    pendingMoreInput = undefined
   } catch (error) {
-    if (version === requestVersion) {
-      moreError.value = error instanceof Error ? error.message : t('后续画册加载失败')
+    if (
+      version === requestVersion &&
+      !signal.aborted &&
+      !(error instanceof Error && error.name === 'AbortError')
+    ) {
+      moreError.value = error instanceof Error ? error.message : t('加载失败')
     }
   } finally {
-    if (version === requestVersion) loadingMore.value = false
+    if (version === requestVersion) {
+      loadingMore.value = false
+      persistListSession()
+    }
   }
 }
 
@@ -404,6 +567,11 @@ async function searchByImage(mode: 'exact' | 'similar') {
 
 function beginRequest() {
   resumeStructuredSearch = false
+  resumeMore = false
+  pendingMoreInput = undefined
+  restoredPosition = undefined
+  restoringPosition = false
+  successfulSearchKey = ''
   moreError.value = ''
   loadingMore.value = false
   loading.value = false
@@ -423,6 +591,7 @@ function showSearchError(error: unknown) {
 
 function setupObserver() {
   observer?.disconnect()
+  if (!viewActive || restoringPosition) return
   observer = new IntersectionObserver(
     (entries) => {
       if (entries.some((entry) => entry.isIntersecting)) void loadMore()
@@ -434,10 +603,14 @@ function setupObserver() {
 
 onMounted(() => {
   mobileQuery.addEventListener('change', syncViewport)
+  window.addEventListener('pagehide', persistListSession)
+  document.addEventListener('visibilitychange', persistListSession)
   bindScrollListener()
   setupObserver()
 })
 onUnmounted(() => {
+  window.removeEventListener('pagehide', persistListSession)
+  document.removeEventListener('visibilitychange', persistListSession)
   mobileQuery.removeEventListener('change', syncViewport)
   requestController?.abort()
   clearImagePreview()
@@ -445,16 +618,32 @@ onUnmounted(() => {
   observer?.disconnect()
 })
 onActivated(() => {
+  viewActive = true
+  syncRouteSearch()
+  if (!requestController || requestController.signal.aborted)
+    requestController = new AbortController()
   bindScrollListener()
-  setupObserver()
+  if (restoringPosition) {
+    void restoreListPosition()
+    return
+  }
   if (resumeStructuredSearch) {
     resumeStructuredSearch = false
     void executeStructuredSearch(false)
+  } else if (resumeMore) {
+    resumeMore = false
+    void loadMore(true)
   }
+  setupObserver()
 })
-onBeforeRouteLeave(() => persistScrollPosition())
+onBeforeRouteLeave(() => {
+  persistScrollPosition()
+  persistListSession()
+})
 onDeactivated(() => {
   resumeStructuredSearch = loading.value && !imageSearchLoading.value
+  resumeMore = loadingMore.value
+  viewActive = false
   requestController?.abort()
   requestVersion++
   loading.value = false
@@ -646,7 +835,12 @@ onDeactivated(() => {
       }}</small>
     </div>
     <div class="book-list gallery-masonry" v-busy="loading || imageSearchLoading">
-      <BookItem v-for="book in allBooks" :key="book.bookId" :book="book" />
+      <BookItem
+        v-for="book in allBooks"
+        :key="book.bookId"
+        :book="book"
+        :data-book-id="book.bookId"
+      />
       <div ref="loadMoreTrigger" class="load-more-trigger" />
       <div v-if="loadingMore" class="loading-more">
         <IconFrame class="is-loading"><Loading /></IconFrame><span>{{ t('再翻一页…') }}</span>
@@ -657,10 +851,11 @@ onDeactivated(() => {
     </div>
     <Notice
       v-if="moreError"
-      :title="t('后续画册加载失败')"
+      :title="t('加载失败')"
       :description="t(moreError)"
       tone="error"
     >
+      <p>{{ t('已保留已加载的画册和浏览位置。') }}</p>
       <ActionButton size="sm" :loading="loadingMore" @click="loadMore(true)">{{
         t('重试加载')
       }}</ActionButton>
