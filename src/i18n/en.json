@@ -636,7 +636,7 @@
   "已调整账户过滤": "Account filters adjusted",
   "请检查筛选条件": "Check your filters",
   "搜索失败，请重试": "Search failed. Try again.",
-  "后续画册加载失败": "Could not load more galleries",
+  "加载失败": "Loading failed",
   "请选择图片文件": "Choose an image file",
   "请先选择图片": "Select an image first",
   "图片搜索失败，请重试": "Image search failed. Try again.",
@@ -1576,5 +1576,6 @@
   "源站未提供费用": "The source did not provide the cost",
   "源站未提供邮资": "The source did not provide the postage cost",
   "无法确认领取费用，暂不能领取附件。": "Attachment claiming is disabled because its cost could not be confirmed.",
-  "所选护符或护符袋不可用": "The selected charm or pouch is unavailable"
+  "所选护符或护符袋不可用": "The selected charm or pouch is unavailable",
+  "已保留已加载的画册和浏览位置。": "Your loaded galleries and browsing position have been kept."
 }
