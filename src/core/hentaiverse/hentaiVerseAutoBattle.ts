@@ -294,8 +294,7 @@ export function decideAutoBattleAction(
   const { reserve, healAt } = recovery
   const mana = battle.vitals.find((vital) => vital.key === 'magic')?.current
   const living = battle.monsters.filter(
-    (monster) =>
-      !monster.defeated && monster.healthPercent !== undefined && monster.healthPercent > 0,
+    (monster) => !monster.defeated && monster.healthPercent !== undefined,
   )
   if (!living.length) return { reason: '没有可确认的存活目标，请从服务器恢复' }
   if (target === undefined) return { reason: '剩余目标处于控制状态，已暂停等待接管' }

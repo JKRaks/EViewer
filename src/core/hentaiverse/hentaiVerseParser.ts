@@ -43,6 +43,9 @@ import type {
 } from './model/hentaiVerse'
 import { getHentaiVerseSection } from './hentaiVerseProtocol'
 import { readEquipmentSources } from './hentaiVerseEquipment'
+import { parseHentaiVerseArmory } from './hentaiVerseArmory'
+import { parseHentaiVerseBazaar } from './hentaiVerseBazaar'
+import { parseHentaiVerseServices } from './hentaiVerseServices'
 import {
   decodeHentaiVerseGlyphs,
   getAttributeLabel,
@@ -76,9 +79,28 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
       section === 'abilities' ? parseAbilities(document, scriptText, target) : undefined
     const training = section === 'training' ? parseTraining(document, scriptText) : undefined
     const inventory = section === 'inventory' ? parseInventory(document) : undefined
+    const armory =
+      authenticated && section === 'armory' ? parseHentaiVerseArmory(document, target) : undefined
+    const bazaar =
+      authenticated && ['itemShop', 'market', 'shrine'].includes(section)
+        ? parseHentaiVerseBazaar(document, target)
+        : undefined
+    const services =
+      authenticated &&
+      ['monsterLab', 'moogleMail', 'weaponLottery', 'armorLottery'].includes(section)
+        ? parseHentaiVerseServices(document, target)
+        : undefined
 
     return {
       section,
+      world: /Currently playing on Isekai/i.test(
+        document.querySelector('#world_text')?.textContent || '',
+      )
+        ? 'isekai'
+        : 'persistent',
+      season: cleanText(document.querySelector('#world_text')?.textContent).match(
+        /\d{4} Season \d+/,
+      )?.[0],
       title: translateHentaiVerseText(
         document.querySelector('h1, #mainpane h2, title')?.textContent || 'HentaiVerse',
       ),
@@ -92,9 +114,12 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
       attributes: parseAttributes(scriptText),
       personas: parsePersonas(document, personaName),
       equipment,
-      equipmentSources: ['equipment', 'itemWorld'].includes(section)
-        ? readEquipmentSources(document)
-        : [],
+      armory,
+      bazaar,
+      services,
+      equipmentSources:
+        armory?.equipmentSources ||
+        (['equipment', 'itemWorld'].includes(section) ? readEquipmentSources(document) : []),
       abilities,
       training,
       inventory,
@@ -103,7 +128,7 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
         : undefined,
       challengePostToken: document.querySelector<HTMLInputElement>('input[name="postoken"]')?.value,
       itemWorld: section === 'itemWorld' ? parseItemWorld(document, scriptText, target) : undefined,
-      forms: parseForms(document, section),
+      forms: armory || bazaar || services ? [] : parseForms(document, section),
       notices: parseNotices(document),
     }
   })
@@ -880,7 +905,10 @@ function parseForms(
       }
       if (
         !actions.length &&
-        (pageSection === 'arena' || pageSection === 'ringOfBlood' || pageSection === 'grindfest')
+        (pageSection === 'arena' ||
+          pageSection === 'ringOfBlood' ||
+          pageSection === 'grindfest' ||
+          pageSection === 'tower')
       ) {
         actions.push(...parseBattleEntryActions(document, pageSection))
       }
@@ -899,6 +927,7 @@ function parseForms(
         ringOfBlood: '鲜血之环挑战',
         grindfest: '混战祭',
         itemWorld: '装备界',
+        tower: '塔挑战',
       }
       return {
         id: form.id || `hv-form-${index}`,
@@ -1003,7 +1032,7 @@ function parseFormElement(
 
 function parseBattleEntryActions(
   document: Document,
-  pageSection: Extract<HentaiVersePage['section'], 'arena' | 'ringOfBlood' | 'grindfest'>,
+  pageSection: Extract<HentaiVersePage['section'], 'arena' | 'ringOfBlood' | 'grindfest' | 'tower'>,
 ): HentaiVerseFormAction[] {
   return Array.from(document.querySelectorAll<HTMLElement>('[onclick*="init_battle"]')).flatMap(
     (node) => {
@@ -1017,7 +1046,9 @@ function parseBattleEntryActions(
           ? '开始竞技场挑战'
           : pageSection === 'grindfest'
             ? '开始混战祭'
-            : '进入鲜血之环'
+            : pageSection === 'tower'
+              ? '开始塔挑战'
+              : '进入鲜血之环'
       return [
         {
           name: 'initid',
@@ -1032,7 +1063,7 @@ function parseBattleEntryActions(
 }
 
 function readSectionDescription(document: Document, pageSection: HentaiVersePage['section']) {
-  if (pageSection === 'grindfest') {
+  if (pageSection === 'grindfest' || pageSection === 'tower') {
     const rules = Array.from(document.querySelectorAll('#mainpane p'), (node) =>
       translateHentaiVerseDescription(cleanText(node.textContent)),
     ).filter(Boolean)
@@ -1297,7 +1328,15 @@ function parseMonsters(document: Document): HentaiVerseBattleMonster[] {
       const name = rawName ? rawName.charAt(0).toUpperCase() + rawName.slice(1) : ''
       if (!name || monsters.has(id)) return
       const level = cleanText(node.querySelector('.btm2 > div:nth-child(2)')?.textContent)
-      const health = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="health"]'))
+      // The source rounds living monsters' health bars down to 0px. Death is
+      // represented by nbardead.png (or an explicit state), not the bar width.
+      const defeated =
+        Array.from(node.querySelectorAll<HTMLImageElement>('img')).some((image) =>
+          /\/nbardead\.png(?:[?#]|$)/i.test(image.getAttribute('src') || ''),
+        ) || /(?:^|\s)(?:dead|defeated)(?:\s|$)/i.test(node.className)
+      const health = defeated
+        ? 0
+        : readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="health"]'))
       const magic = readBattleBarPercent(node.querySelector<HTMLImageElement>('img[alt="magic"]'))
       const status = level ? formatSystemMessage('等级 {p0}', { p0: level }) : ''
       const log = document.querySelector('#textlog')?.textContent || ''
@@ -1308,7 +1347,7 @@ function parseMonsters(document: Document): HentaiVerseBattleMonster[] {
         status,
         healthPercent: health,
         magicPercent: magic,
-        defeated: health === 0 || /(?:^|\s)(?:dead|defeated)(?:\s|$)/i.test(node.className),
+        defeated,
         spiritPercent: readBattleBarPercent(
           node.querySelector<HTMLImageElement>('img[alt="spirit"]'),
         ),

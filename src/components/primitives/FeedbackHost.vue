@@ -48,6 +48,7 @@ function confirm() {
     v-if="current"
     :model-value="true"
     :title="t(current.title)"
+    stacked
     :dismissible="current.options.showClose !== false"
     width="min(440px, calc(100vw - 24px))"
     @update:model-value="!$event && settleDialog(false)"

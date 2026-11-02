@@ -17,7 +17,7 @@ export default String.raw`
     buildVersion: config.version,
     protocolVersion: config.protocolVersion, origin: location.origin,
     manager: info?.scriptHandler || '', managerVersion: info?.version || '',
-    available: Boolean(invoke), capabilities: ['text', 'binary', 'multipart', 'abort', 'hentaiverse', 'exhentai'],
+    available: Boolean(invoke), capabilities: ['text', 'binary', 'multipart', 'abort', 'hentaiverse', 'hentaiverse-services', 'exhentai'],
   }
   const active = new Map()
   const send = (data) => window.postMessage({ channel, direction: 'assistant', instance, ...data }, location.origin)
@@ -36,11 +36,13 @@ export default String.raw`
     if (url.hostname === 'upload.e-hentai.org' && url.pathname === '/image_lookup.php' && method === 'POST') return url.href
     if (url.hostname === 'hentaiverse.org') {
       const route = url.searchParams.get('s') + ':' + url.searchParams.get('ss')
-      const page = url.pathname === '/' && (
+      const page = ['/', '/isekai/'].includes(url.pathname) && (
         (!url.searchParams.has('s') && !url.searchParams.has('ss')) ||
-        /^(Character:(ch|eq|ab|tr|it|se)|Battle:(ba|ar|rb|gr|iw))$/.test(route))
-      const asset = /^\/dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-[1-9]\d{0,19}\.js$/.test(url.pathname)
-      if ((method === 'GET' && (page || asset)) || (method === 'POST' && (page || url.pathname === '/json'))) return url.href
+        /^(Character:(ch|eq|ab|it|se)|Battle:(ba|ar|rb|gr|iw)|Bazaar:(am|is|mk|ss|mm))$/.test(route) ||
+        (url.pathname === '/' && /^(Character:tr|Bazaar:(ml|lt|la))$/.test(route)) ||
+        (url.pathname === '/isekai/' && route === 'Battle:tw'))
+      const asset = /^\/(?:isekai\/)?dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-[1-9]\d{0,19}\.js$/.test(url.pathname)
+      if ((method === 'GET' && (page || asset)) || (method === 'POST' && (page || ['/json', '/isekai/json'].includes(url.pathname)))) return url.href
       throw new Error('TARGET_NOT_ALLOWED')
     }
     if (!['e-hentai.org', 'exhentai.org'].includes(url.hostname)) throw new Error('TARGET_NOT_ALLOWED')
@@ -82,7 +84,7 @@ export default String.raw`
       if (active.has(id) || active.size >= 32) throw new Error('REQUEST_LIMIT')
       url = allowedTarget(input.url, input.method, input.binary)
       body = requestBody(input)
-      if (new URL(url).hostname === 'hentaiverse.org' && new URL(url).pathname === '/json') {
+      if (new URL(url).hostname === 'hentaiverse.org' && ['/json', '/isekai/json'].includes(new URL(url).pathname)) {
         if (input.contentType !== 'application/json' || typeof body !== 'string') throw new Error('INVALID_BODY')
         const action = JSON.parse(body)
         if (action.type !== 'battle' || action.method !== 'action' ||
@@ -131,7 +133,7 @@ export default String.raw`
     try {
       const headers = { Accept: input.binary ? 'image/*' : 'text/html,application/xhtml+xml,*/*' }
       if (new URL(url).hostname === 'hentaiverse.org') {
-        headers.Referer = 'https://hentaiverse.org/'
+        headers.Referer = new URL(url).pathname.startsWith('/isekai/') ? 'https://hentaiverse.org/isekai/' : 'https://hentaiverse.org/'
         if (input.contentType === 'application/json') headers.Accept = 'application/json'
       }
       if (input.body?.kind === 'text') headers['Content-Type'] = input.contentType === 'application/json'

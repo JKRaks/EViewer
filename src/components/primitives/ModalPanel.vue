@@ -8,7 +8,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog'
-import { ref, watch } from 'vue'
+import { ref, watch, type HTMLAttributes } from 'vue'
 withDefaults(
   defineProps<{
     title: string
@@ -17,6 +17,8 @@ withDefaults(
     dismissible?: boolean
     outsideDismissible?: boolean
     sheet?: boolean
+    stacked?: boolean
+    contentClass?: HTMLAttributes['class']
   }>(),
   { dismissible: true, outsideDismissible: true },
 )
@@ -56,8 +58,12 @@ function restoreFocus(event: Event) {
   emit('close-auto-focus', event)
   if (event.defaultPrevented) return
   if (returnFocus?.isConnected) {
+    const target = returnFocus.matches(':disabled')
+      ? returnFocus.closest<HTMLElement>('[role="dialog"]')
+      : returnFocus
+    if (!target) return
     event.preventDefault()
-    returnFocus.focus({ preventScroll: true })
+    target.focus({ preventScroll: true })
   }
 }
 function updateOpen(shown: boolean) {
@@ -70,7 +76,15 @@ function updateOpen(shown: boolean) {
   <Dialog :open="open" @update:open="updateOpen"
     ><DialogContent
       class="ui-dialog"
-      :class="{ 'ui-dialog--fullscreen': fullscreen, 'ui-dialog--sheet': sheet }"
+      :class="[
+        contentClass,
+        {
+          'ui-dialog--fullscreen': fullscreen,
+          'ui-dialog--sheet': sheet,
+          'ui-dialog--stacked': stacked,
+        },
+      ]"
+      :overlay-class="stacked ? 'ui-dialog-overlay--stacked' : undefined"
       :show-close-button="dismissible !== false"
       :style="[viewportStyles, width ? { maxWidth: width } : undefined]"
       @close-auto-focus="restoreFocus"

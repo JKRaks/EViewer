@@ -18,6 +18,9 @@ import { Zap as Lightning, RefreshCw as Refresh } from '@lucide/vue'
 import AbilityPanel from '@/components/hentaiverse/AbilityPanel.vue'
 import CharacterOverviewPanel from '@/components/hentaiverse/CharacterOverviewPanel.vue'
 import EquipmentPanel from '@/components/hentaiverse/EquipmentPanel.vue'
+import ArmoryPanel from '@/components/hentaiverse/ArmoryPanel.vue'
+import BazaarPanel from '@/components/hentaiverse/BazaarPanel.vue'
+import ServicesPanel from '@/components/hentaiverse/ServicesPanel.vue'
 import HentaiVerseFormPanel from '@/components/hentaiverse/HentaiVerseFormPanel.vue'
 import InventoryPanel from '@/components/hentaiverse/InventoryPanel.vue'
 import TrainingPanel from '@/components/hentaiverse/TrainingPanel.vue'
@@ -25,8 +28,10 @@ import StatGroupsPanel from '@/components/hentaiverse/StatGroupsPanel.vue'
 import ChallengePanel from '@/components/hentaiverse/ChallengePanel.vue'
 import ItemWorldPanel from '@/components/hentaiverse/ItemWorldPanel.vue'
 import { HentaiVerseBusi } from '@/core/hentaiverse/hentaiVerseBusi'
+import { hentaiVerseWorld, hentaiVerseSourceUrl } from '@/core/hentaiverse/hentaiVerseWorld'
 import {
   HENTAIVERSE_SECTIONS,
+  HENTAIVERSE_SECTION_GROUPS,
   isHentaiVerseBattleStart,
 } from '@/core/hentaiverse/hentaiVerseProtocol'
 import type {
@@ -52,12 +57,14 @@ defineOptions({ name: 'HentaiVerseView' })
 const busi = new HentaiVerseBusi()
 const authState = useAuthState()
 const activeSection = ref<HentaiVerseSection>('character')
+const mobileNavigationGroup = ref<(typeof HENTAIVERSE_SECTION_GROUPS)[number]['key']>('character')
+const mobileSectionsElement = ref<HTMLElement>()
 const page = ref<HentaiVersePage>()
 const loading = ref(false)
 useAppLaunchReadiness(() => loading.value, 'battle')
 const error = ref('')
 const battleBlocked = ref(false)
-const currentTarget = ref<HentaiVersePageTarget>({ ...HENTAIVERSE_SECTIONS[0]!.target })
+const currentTarget = ref<HentaiVersePageTarget>({ s: 'Character', ss: 'ch' })
 const characterSummary = ref({ name: '', persona: '' })
 const equipmentDetails = ref<Record<string, HentaiVerseEquipmentDetail>>({})
 const equipmentDetailsLoading = ref(false)
@@ -67,7 +74,13 @@ let equipmentDetailsRequestId = 0
 
 watch(page, (nextPage) => void loadEquipmentDetails(nextPage))
 watch(
-  () => [authState.source, authState.site, authState.loggedIn, authState.memberId],
+  () => [
+    authState.source,
+    authState.site,
+    authState.loggedIn,
+    authState.memberId,
+    hentaiVerseWorld.value,
+  ],
   () => {
     requestId++
     page.value = undefined
@@ -75,7 +88,11 @@ watch(
     loading.value = false
     error.value = ''
     battleBlocked.value = false
-    if (authState.loggedIn) void loadSection()
+    if (authState.loggedIn) {
+      if (!availableSections.value.some((section) => section.key === activeSection.value))
+        activeSection.value = 'character'
+      void loadSection(activeSection.value, {})
+    }
   },
   { flush: 'sync' },
 )
@@ -86,7 +103,7 @@ onBeforeUnmount(() => {
 
 async function loadEquipmentDetails(nextPage = page.value) {
   const currentRequest = ++equipmentDetailsRequestId
-  equipmentDetails.value = {}
+  equipmentDetails.value = { ...nextPage?.armory?.inlineDetails }
   equipmentDetailsError.value = ''
   const sources = nextPage?.equipmentSources || []
   equipmentDetailsLoading.value = sources.length > 0
@@ -110,11 +127,44 @@ async function loadEquipmentDetails(nextPage = page.value) {
 const currentMeta = computed(
   () => HENTAIVERSE_SECTIONS.find((item) => item.key === activeSection.value)!,
 )
-const characterSections = computed(() =>
-  HENTAIVERSE_SECTIONS.filter((item) => item.group === 'character'),
+const availableSections = computed(() =>
+  HENTAIVERSE_SECTIONS.filter(
+    (section) => !section.worlds || section.worlds.includes(hentaiVerseWorld.value),
+  ),
 )
-const battleSections = computed(() =>
-  HENTAIVERSE_SECTIONS.filter((item) => item.group === 'battle'),
+const navigationGroups = computed(() =>
+  HENTAIVERSE_SECTION_GROUPS.map((group) => ({
+    ...group,
+    sections: availableSections.value.filter((item) => item.group === group.key),
+  })).filter((group) => group.sections.length),
+)
+const mobileNavigationSections = computed(
+  () =>
+    navigationGroups.value.find((group) => group.key === mobileNavigationGroup.value)?.sections ||
+    [],
+)
+
+// Browsing a mobile group only reveals its links; selecting a link loads the page.
+watch(activeSection, (section) => {
+  mobileNavigationGroup.value = HENTAIVERSE_SECTIONS.find((item) => item.key === section)!.group
+})
+
+watch(
+  [activeSection, mobileNavigationSections],
+  () => {
+    const navigation = mobileSectionsElement.value
+    const selected = navigation?.querySelector<HTMLElement>('[aria-current="page"]')
+    if (!navigation?.clientWidth || !selected) return
+    const bounds = navigation.getBoundingClientRect()
+    const item = selected.getBoundingClientRect()
+    if (item.left < bounds.left) navigation.scrollLeft += item.left - bounds.left
+    else if (item.right > bounds.right) navigation.scrollLeft += item.right - bounds.right
+  },
+  { flush: 'post' },
+)
+
+const currentGroup = computed(
+  () => HENTAIVERSE_SECTION_GROUPS.find((group) => group.key === currentMeta.value.group)!,
 )
 
 watch(
@@ -138,6 +188,8 @@ function updateCharacterSummary(nextPage: HentaiVersePage) {
 function setPage(nextPage: HentaiVersePage) {
   page.value = nextPage
   battleBlocked.value = false
+  if (nextPage.services?.canonicalQuery)
+    currentTarget.value = { ...nextPage.services.canonicalQuery, world: hentaiVerseWorld.value }
   if (nextPage.equipment)
     currentTarget.value.equip_slot = nextPage.equipment.selectedSlot || undefined
   updateCharacterSummary(nextPage)
@@ -166,6 +218,7 @@ async function loadSection(
   currentTarget.value = {
     ...meta.target,
     ...(!changedSection && !targetOverride ? currentTarget.value : targetOverride || {}),
+    world: hentaiVerseWorld.value,
   }
   if (changedSection) page.value = undefined
   const currentRequest = ++requestId
@@ -273,7 +326,9 @@ async function submitForm(section: HentaiVerseFormSection, data: HentaiVerseForm
       if (!result.page.authenticated)
         throw new Error(t('HentaiVerse 登录态已失效，请重新维护认证 Cookie'))
       setPage(result.page)
-      notify.success(t('HentaiVerse 设置已更新'))
+      if (result.page.armory || result.page.bazaar || result.page.services)
+        notify.info(t('已收到源站响应'))
+      else notify.success(t('HentaiVerse 设置已更新'))
     }
   } catch (submitError) {
     if (currentRequest === requestId && memberId === authState.memberId)
@@ -281,6 +336,13 @@ async function submitForm(section: HentaiVerseFormSection, data: HentaiVerseForm
   } finally {
     if (currentRequest === requestId) loading.value = false
   }
+}
+
+function navigateService(query: Record<string, string>) {
+  const meta = availableSections.value.find(
+    (item) => item.target.s === query.s && item.target.ss === query.ss,
+  )
+  if (meta) void loadSection(meta.key, query)
 }
 
 function selectEquipmentSet(id: string, postToken: string) {
@@ -389,7 +451,7 @@ onMounted(() => {
 <template>
   <div class="hv-view hv-theme">
     <header class="hv-page-header">
-      <div>
+      <div class="hv-header-title">
         <span>{{ t('冒险手帐') }}</span>
         <h1>HentaiVerse</h1>
         <p class="hv-module-description">
@@ -402,6 +464,16 @@ onMounted(() => {
           >
         </p>
       </div>
+      <SelectField
+        v-if="authState.loggedIn"
+        v-model="hentaiVerseWorld"
+        class="hv-mobile-world"
+        :aria-label="t('世界')"
+        :disabled="loading || hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
+      >
+        <option value="persistent" :label="t('永久世界')" />
+        <option value="isekai" :label="t('异世界')" />
+      </SelectField>
       <div class="hv-header-actions">
         <ActionButton :icon="Lightning" @click="resumeBattle">{{ t('恢复战斗') }}</ActionButton>
         <ActionButton
@@ -415,7 +487,8 @@ onMounted(() => {
     </header>
 
     <CampScene :compact="activeSection !== 'character'" />
-    <div v-if="authState.source === 'local'" class="hv-local-help">
+    <details v-if="authState.source === 'local'" class="hv-local-help" :open="!authState.loggedIn">
+      <summary>{{ t('连接说明') }}</summary>
       <p>
         {{
           t(
@@ -423,11 +496,11 @@ onMounted(() => {
           )
         }}
       </p>
-      <a href="https://hentaiverse.org/" target="_blank" rel="noopener noreferrer">{{
+      <a :href="hentaiVerseSourceUrl" target="_blank" rel="noopener noreferrer">{{
         t('打开 HentaiVerse')
       }}</a>
       <RouterLink :to="ASSISTANT_SETTINGS">{{ t('安装或更新浏览器助手') }}</RouterLink>
-    </div>
+    </details>
     <Notice
       v-if="!authState.loggedIn"
       :title="t('请先在账号信息中完成当前连接模式的登录验证。')"
@@ -437,42 +510,62 @@ onMounted(() => {
 
     <div v-else class="hv-shell">
       <aside class="hv-navigation">
-        <strong>{{ t('角色') }}</strong>
-        <button
-          v-for="item in characterSections"
-          :key="item.key"
-          type="button"
-          :class="{ active: activeSection === item.key }"
-          @click="loadSection(item.key)"
+        <SelectField
+          v-model="hentaiVerseWorld"
+          :aria-label="t('世界')"
+          :disabled="loading || hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
         >
-          <PixelIcon :kind="item.key" />{{ t(item.label) }}
-        </button>
-        <strong>{{ t('战斗') }}</strong>
-        <button
-          v-for="item in battleSections"
-          :key="item.key"
-          type="button"
-          :class="{ active: activeSection === item.key }"
-          @click="loadSection(item.key)"
-        >
-          <PixelIcon :kind="item.key" />{{ t(item.label) }}
-        </button>
+          <option value="persistent" :label="t('永久世界')" />
+          <option value="isekai" :label="t('异世界')" />
+        </SelectField>
+        <template v-for="group in navigationGroups" :key="group.key">
+          <strong>{{ t(group.label) }}</strong>
+          <button
+            v-for="item in group.sections"
+            :key="item.key"
+            type="button"
+            :class="{ active: activeSection === item.key }"
+            :aria-current="activeSection === item.key ? 'page' : undefined"
+            @click="loadSection(item.key)"
+          >
+            <PixelIcon :kind="item.key" />{{ t(item.label) }}
+          </button>
+        </template>
       </aside>
 
       <main class="hv-content">
-        <SelectField
-          v-model="activeSection"
-          class="hv-mobile-navigation"
-          :aria-label="t('HentaiVerse 页面')"
-          @change="loadSection"
-        >
-          <option
-            v-for="item in HENTAIVERSE_SECTIONS"
-            :key="item.key"
-            :label="t(item.label)"
-            :value="item.key"
-          ></option>
-        </SelectField>
+        <div class="hv-mobile-navigation">
+          <nav class="hv-mobile-groups" :aria-label="t('HentaiVerse 分区')">
+            <button
+              v-for="group in navigationGroups"
+              :key="group.key"
+              type="button"
+              :aria-pressed="mobileNavigationGroup === group.key"
+              :class="{ active: mobileNavigationGroup === group.key }"
+              aria-controls="hv-mobile-sections"
+              @click="mobileNavigationGroup = group.key"
+            >
+              {{ t(group.label) }}
+            </button>
+          </nav>
+          <nav
+            ref="mobileSectionsElement"
+            id="hv-mobile-sections"
+            class="hv-mobile-sections"
+            :aria-label="t('当前分区功能')"
+          >
+            <button
+              v-for="item in mobileNavigationSections"
+              :key="item.key"
+              type="button"
+              :class="{ active: activeSection === item.key }"
+              :aria-current="activeSection === item.key ? 'page' : undefined"
+              @click="loadSection(item.key)"
+            >
+              {{ t(item.label) }}
+            </button>
+          </nav>
+        </div>
 
         <div v-if="loading && !page" class="hv-loading">
           <SkeletonBlock :rows="7" />
@@ -508,10 +601,9 @@ onMounted(() => {
         <template v-else-if="page">
           <div class="hv-content-heading">
             <div>
-              <span>{{
-                t(currentMeta.group === 'character' ? t('角色维护') : t('战斗入口'))
-              }}</span>
+              <span>{{ t(currentGroup.heading) }}</span>
               <h2>{{ t(currentMeta.label) }}</h2>
+              <small v-if="page.season">{{ page.season }}</small>
             </div>
             <TagChip v-if="loading" tone="info">{{ t('更新中') }}</TagChip>
           </div>
@@ -546,6 +638,32 @@ onMounted(() => {
             @slot="selectEquipmentSlot"
             @equip="equipItem"
             @unequip="unequipItem"
+          />
+
+          <ArmoryPanel
+            v-else-if="page.armory"
+            :data="page.armory"
+            :loading="loading"
+            :details="equipmentDetails"
+            :details-loading="equipmentDetailsLoading"
+            :details-error="equipmentDetailsError"
+            @retry-details="loadEquipmentDetails()"
+            @navigate="navigateService"
+            @submit="submitForm('armory', $event)"
+          />
+          <BazaarPanel
+            v-else-if="page.bazaar"
+            :data="page.bazaar"
+            :loading="loading"
+            @navigate="navigateService"
+            @submit="submitForm(activeSection, $event)"
+          />
+          <ServicesPanel
+            v-else-if="page.services"
+            :data="page.services"
+            :loading="loading"
+            @navigate="navigateService"
+            @submit="submitForm(activeSection, $event)"
           />
 
           <AbilityPanel
@@ -615,6 +733,9 @@ onMounted(() => {
               activeSection !== 'character' &&
               !page.forms.length &&
               !page.equipment &&
+              !page.armory &&
+              !page.bazaar &&
+              !page.services &&
               !page.abilities &&
               !page.training &&
               !page.inventory &&
@@ -639,6 +760,10 @@ onMounted(() => {
 
 .hv-local-help p {
   margin: 0 0 4px;
+}
+.hv-local-help summary {
+  cursor: pointer;
+  padding: 8px 0;
 }
 
 .hv-local-help a {
@@ -758,10 +883,23 @@ onMounted(() => {
   letter-spacing: 0;
 }
 
+.hv-mobile-world,
 .hv-mobile-navigation {
   display: none;
-  width: 100%;
-  margin-bottom: 18px;
+}
+
+/* Keep the shared primitives visually consistent inside the HV feature. */
+.hv-view :deep(.ui-button) {
+  min-height: 36px;
+  border-radius: 5px;
+  box-shadow: none;
+  font-weight: 500;
+}
+
+.hv-navigation button:focus-visible,
+.hv-mobile-navigation button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .hv-notice {
@@ -773,11 +911,56 @@ onMounted(() => {
 }
 
 @media (max-width: 767px) {
-  .hv-page-header {
-    align-items: stretch;
-    flex-direction: column;
-    gap: 14px;
-    padding-top: 8px;
+  .hv-view.hv-theme .hv-page-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(116px, auto);
+    align-items: center;
+    gap: 10px;
+    padding: 8px 0 12px;
+  }
+
+  .hv-header-title {
+    min-width: 0;
+  }
+
+  .hv-header-title > span,
+  .hv-module-description {
+    display: none;
+  }
+
+  .hv-view.hv-theme .hv-page-header h1 {
+    font-size: 22px;
+  }
+
+  .hv-page-header .hv-character-summary {
+    overflow: hidden;
+    font-size: 12px;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+
+  .hv-mobile-world {
+    display: block;
+    min-width: 0;
+    width: 100%;
+  }
+
+  .hv-header-actions {
+    grid-column: 1 / -1;
+  }
+
+  .hv-view :deep(.camp-scene) {
+    height: 64px;
+    margin-bottom: 10px;
+  }
+
+  .hv-view :deep(.camp-scene .scene-caption) {
+    bottom: 8px;
+    font-size: 10px;
+  }
+
+  .hv-local-help {
+    margin: 4px 0;
   }
 
   .hv-page-header h1 {
@@ -802,7 +985,88 @@ onMounted(() => {
   }
 
   .hv-mobile-navigation {
-    display: block;
+    display: grid;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .hv-mobile-groups {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 4px;
+    padding: 4px;
+    border: 1px solid var(--border-soft);
+    border-radius: 6px;
+    background: var(--muted-soft);
+  }
+
+  .hv-mobile-navigation button {
+    min-width: 0;
+    min-height: 44px;
+    padding: 8px;
+    border: 1px solid transparent;
+    border-radius: 4px;
+    color: var(--muted-foreground);
+    font-size: 14px;
+    line-height: 1.4;
+    background: transparent;
+    cursor: pointer;
+    overflow-wrap: anywhere;
+  }
+
+  .hv-mobile-groups button.active {
+    color: var(--accent);
+    background: var(--background);
+    border-color: var(--border);
+    font-weight: 700;
+  }
+
+  .hv-mobile-sections {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 4px;
+    min-width: 0;
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    scrollbar-width: thin;
+  }
+
+  .hv-mobile-sections button {
+    flex: 0 0 auto;
+    padding-inline: 12px;
+    border-color: var(--border-soft);
+    color: var(--text);
+    white-space: nowrap;
+    overflow-wrap: normal;
+  }
+
+  .hv-mobile-sections button.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-soft);
+    font-weight: 700;
+  }
+
+  .hv-view :deep(.ui-button) {
+    min-height: 44px;
+    white-space: normal;
+  }
+
+  .hv-view :deep(.ui-button--icon) {
+    min-width: 44px;
+    flex-shrink: 0;
+  }
+
+  .hv-view :deep(input:not([type='checkbox']):not([type='radio'])),
+  .hv-view :deep(select),
+  .hv-view :deep(textarea),
+  .hv-view :deep(.ui-select-trigger) {
+    min-height: 44px;
+    font-size: 16px;
+  }
+
+  .hv-local-help summary {
+    min-height: 44px;
   }
 }
 </style>

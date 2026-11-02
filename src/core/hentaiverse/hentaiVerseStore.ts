@@ -5,14 +5,20 @@ import { hentaiVerseState } from './hentaiVerseRuntime'
 import { canUseAutomaticBattleAction } from './hentaiVerseAutoBattle'
 import { watch } from 'vue'
 import { authState } from '@/core/auth/authState'
-import { currentTransportSignal } from '@/core/connector/connectionSettings'
+import { currentHentaiVerseSignal, hentaiVerseWorld } from './hentaiVerseWorld'
 
 export { hentaiVerseState } from './hentaiVerseRuntime'
 
 const busi = new HentaiVerseBusi()
 let generation = 0
 watch(
-  () => [authState.source, authState.site, authState.loggedIn, authState.memberId],
+  () => [
+    authState.source,
+    authState.site,
+    authState.loggedIn,
+    authState.memberId,
+    hentaiVerseWorld.value,
+  ],
   () => clearHentaiVerseState(),
   { flush: 'sync' },
 )
@@ -30,9 +36,11 @@ export function dismissHentaiVerseEncounter() {
 
 export async function enterHentaiVerseBattle(encounter = hentaiVerseState.encounter?.token) {
   if (hentaiVerseState.battleLoading) return
+  // Gallery encounters belong to Persistent, regardless of the last maintenance page.
+  if (encounter) hentaiVerseWorld.value = 'persistent'
   hentaiVerseState.battleLoading = true
   hentaiVerseState.error = ''
-  const signal = currentTransportSignal()
+  const signal = currentHentaiVerseSignal()
   const startedGeneration = generation
   try {
     const battle = await busi.enterBattle(encounter)
@@ -68,10 +76,7 @@ export async function performHentaiVerseBattleAction(
       action.target === 'enemy' &&
       !current.monsters.some(
         (monster) =>
-          monster.id === target &&
-          !monster.defeated &&
-          monster.healthPercent !== undefined &&
-          monster.healthPercent > 0,
+          monster.id === target && !monster.defeated && monster.healthPercent !== undefined,
       )
     )
       throw new Error('自动战斗目标已不可用，已暂停')

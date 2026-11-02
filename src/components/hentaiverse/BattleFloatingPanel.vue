@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { hentaiVerseSourceUrl } from '@/core/hentaiverse/hentaiVerseWorld'
 import { t } from '@/i18n'
 
 import '@/assets/hentaiverse.css'
@@ -11,6 +12,7 @@ import IconFrame from '@/components/primitives/IconFrame.vue'
 import ModalPanel from '@/components/primitives/ModalPanel.vue'
 import SelectField from '@/components/primitives/SelectField.vue'
 import ToggleField from '@/components/primitives/ToggleField.vue'
+import TagChip from '@/components/primitives/TagChip.vue'
 import { computed, onUnmounted, ref, watch } from 'vue'
 import {
   CircleCheck,
@@ -48,8 +50,7 @@ const battle = computed(() => hentaiVerseState.battle)
 const livingMonsters = computed(
   () =>
     battle.value?.monsters.filter(
-      (monster) =>
-        !monster.defeated && monster.healthPercent !== undefined && monster.healthPercent > 0,
+      (monster) => !monster.defeated && monster.healthPercent !== undefined,
     ) || [],
 )
 const activeTarget = computed(() => {
@@ -296,13 +297,7 @@ function closeLocalBattle() {
       :aria-label="t('HentaiVerse 战斗')"
     >
       <header class="battle-header">
-        <div>
-          <strong>{{ t(battle.title) }}</strong>
-          <span v-if="battle.verificationRequired">{{ t('等待手动验证') }}</span>
-          <span v-else-if="battle.completed">{{ t('战斗已结束') }}</span>
-          <span v-else-if="battle.roundCompleted">{{ t('本轮已结束') }}</span>
-          <span v-else>{{ t('回合进行中') }}</span>
-        </div>
+        <strong>{{ t(battle.title) }}</strong>
         <div class="battle-window-actions">
           <ActionButton
             v-if="!battle.completed"
@@ -321,30 +316,38 @@ function closeLocalBattle() {
             @click="closeLocalBattle"
           />
         </div>
-        <div
-          v-if="!battle.completed && !battle.verificationRequired"
-          class="battle-auto-indicator"
-          :title="t(autoReason)"
-        >
-          <span>{{ t(autoRunning ? '自动战斗中' : '手动操作') }}</span>
-          <div v-if="autoRunning" class="battle-auto-decision">
-            <span v-if="autoAction" class="battle-planned-action">
-              {{ t(autoAction) }}
-              <template v-if="autoTarget !== undefined">
-                · {{ battle.monsters.find((monster) => monster.id === autoTarget)?.name }}
-              </template>
-            </span>
-            <div
-              class="auto-countdown-line"
-              :aria-label="t('自动操作倒计时')"
-              role="progressbar"
-              :aria-valuenow="autoCountdown"
-              :aria-valuemin="0"
-              :aria-valuemax="delaySeconds"
-            >
-              <i
-                :style="{ transform: `scaleX(${autoRunning ? autoCountdown / delaySeconds : 0})` }"
-              />
+        <div class="battle-status-row">
+          <span v-if="battle.verificationRequired">{{ t('等待手动验证') }}</span>
+          <span v-else-if="battle.completed">{{ t('战斗已结束') }}</span>
+          <span v-else-if="battle.roundCompleted">{{ t('本轮已结束') }}</span>
+          <span v-else>{{ t('回合进行中') }}</span>
+          <div
+            v-if="!battle.completed && !battle.verificationRequired"
+            class="battle-auto-indicator"
+            :title="t(autoReason)"
+          >
+            <span>{{ t(autoRunning ? '自动战斗中' : '手动操作') }}</span>
+            <div v-if="autoRunning" class="battle-auto-decision">
+              <span v-if="autoAction" class="battle-planned-action">
+                {{ t(autoAction) }}
+                <template v-if="autoTarget !== undefined">
+                  · {{ battle.monsters.find((monster) => monster.id === autoTarget)?.name }}
+                </template>
+              </span>
+              <div
+                class="auto-countdown-line"
+                :aria-label="t('自动操作倒计时')"
+                role="progressbar"
+                :aria-valuenow="autoCountdown"
+                :aria-valuemin="0"
+                :aria-valuemax="delaySeconds"
+              >
+                <i
+                  :style="{
+                    transform: `scaleX(${autoRunning ? autoCountdown / delaySeconds : 0})`,
+                  }"
+                />
+              </div>
             </div>
           </div>
         </div>
@@ -434,20 +437,20 @@ function closeLocalBattle() {
                   <b>{{ Math.round(monster.magicPercent) }}%</b>
                 </span>
               </div>
-              <small v-if="monster.defeated || monster.healthPercent === 0">{{
-                t('已击败')
-              }}</small>
-              <small v-else-if="monster.healthPercent === undefined">{{
-                t('无血条 · 不可选择')
-              }}</small>
-              <small v-if="monster.activeEffects?.length" class="monster-effects">
+              <small
+                v-if="!monster.defeated && monster.activeEffects?.length"
+                class="monster-effects"
+              >
                 {{
                   monster.activeEffects.map((effect) => t(effect.label || effect.id)).join(' · ')
                 }}
               </small>
             </div>
+            <TagChip v-if="monster.defeated" class="monster-defeated" tone="info">{{
+              t('已击败')
+            }}</TagChip>
             <span
-              v-if="monster.healthPercent !== undefined"
+              v-else-if="monster.healthPercent !== undefined"
               class="pixel-gauge health"
               role="meter"
               :aria-label="t('生命')"
@@ -456,7 +459,13 @@ function closeLocalBattle() {
               aria-valuemax="100"
             >
               <i :style="{ width: `${monster.healthPercent}%` }" />
-              <b>{{ Math.round(monster.healthPercent) }}%</b>
+              <b
+                >{{
+                  !monster.defeated && monster.healthPercent < 1
+                    ? '<1'
+                    : Math.round(monster.healthPercent)
+                }}%</b
+              >
             </span>
           </button>
         </div>
@@ -478,7 +487,7 @@ function closeLocalBattle() {
           <div class="verification-actions">
             <a
               class="ui-button"
-              href="https://hentaiverse.org/"
+              :href="hentaiVerseSourceUrl"
               target="_blank"
               rel="noopener noreferrer"
               >{{ t('打开源站完成验证') }}</a
@@ -830,11 +839,15 @@ function closeLocalBattle() {
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
-.battle-header > div:first-child {
+.battle-status-row {
   display: flex;
-  flex-direction: column;
+  grid-column: 1 / -1;
+  align-items: center;
   min-width: 0;
-  gap: 4px;
+  gap: 12px;
+}
+.battle-status-row > span {
+  flex-shrink: 0;
 }
 .battle-header strong {
   font-family: var(--font-display);
@@ -850,7 +863,7 @@ function closeLocalBattle() {
 }
 .battle-auto-indicator {
   display: flex;
-  grid-column: 1 / -1;
+  flex: 1;
   align-items: center;
   gap: 12px;
   min-width: 0;
@@ -862,7 +875,8 @@ function closeLocalBattle() {
 }
 .battle-auto-decision {
   display: flex;
-  flex: 1;
+  flex: 0 1 180px;
+  margin-left: auto;
   flex-direction: column;
   gap: 4px;
   min-width: 0;
@@ -872,8 +886,9 @@ function closeLocalBattle() {
   color: var(--accent);
   white-space: nowrap;
   text-overflow: ellipsis;
+  text-align: right;
 }
-/* Keep the wait track with the decision text on the same row as the mode label. */
+/* Keep the compact wait track aligned with the right-hand decision text. */
 .auto-countdown-line {
   width: 100%;
   height: 2px;
@@ -959,6 +974,10 @@ function closeLocalBattle() {
 }
 .monster-info {
   min-width: 0;
+}
+.monster-defeated {
+  justify-self: end;
+  white-space: nowrap;
 }
 .monster-info strong {
   display: block;
