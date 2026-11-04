@@ -1,5 +1,6 @@
 import type { HentaiVerseFormData, HentaiVersePageTarget } from './model/hentaiVerse'
 import {
+  getHentaiVerseItemPresentation,
   translateHentaiVerseDescription,
   translateHentaiVerseText,
 } from './hentaiVerseTranslations'
@@ -45,6 +46,7 @@ export interface HentaiVerseMarketOrder {
 }
 
 export interface HentaiVerseBazaarPage {
+  receivedAt?: number
   kind: 'itemShop' | 'market' | 'shrine'
   navigation: HentaiVerseBazaarLink[]
   filters: HentaiVerseBazaarLink[]
@@ -198,6 +200,7 @@ function parseItemShop(document: Document, page: HentaiVerseBazaarPage) {
     throw new Error('无法识别物品商店页面')
   page.hidden = hiddenFields(document.querySelector('#shopform'))
   page.credits = numeric(text(document.querySelector('#networth')))
+  const parser = new DOMParser()
   for (const mode of ['item_pane', 'shop_pane'] as const) {
     document.querySelectorAll(`#${mode} [onclick]`).forEach((node) => {
       const args = node
@@ -206,15 +209,22 @@ function parseItemShop(document: Document, page: HentaiVerseBazaarPage) {
           /itemshop\.set_item\(\s*['"](?:item_pane|shop_pane)['"]\s*,\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/,
         )
       if (!args) return
-      const popup = node
-        .getAttribute('onmouseover')
-        ?.match(/show_itemr_box\([\s\S]*?,'(?:[^'\\]|\\.)*','((?:[^'\\]|\\.)*)','/)
+      const popup = node.getAttribute('onmouseover')?.match(/\bshow_itemr_box\s*\(([\s\S]*)\)/)?.[1]
+      // The final three strings are name, description and category; pane and
+      // alignment strings earlier in the call are not item details.
+      const detail = Array.from(
+        (popup || '').matchAll(/'((?:\\.|[^'\\])*)'|"((?:\\.|[^"\\])*)"/g),
+        (match) => (match[1] ?? match[2] ?? '').replace(/\\(['"\\])/g, '$1'),
+      ).slice(-3)
+      const description = detail[1] ? text(parser.parseFromString(detail[1], 'text/html').body) : ''
       page.items.push({
         id: args[1]!,
         name: translateHentaiVerseText(text(node)),
         stock: Number(args[2]),
         price: Number(args[3]),
-        description: popup?.[1] ? translateHentaiVerseDescription(popup[1]) : '',
+        description: description
+          ? translateHentaiVerseDescription(description)
+          : getHentaiVerseItemPresentation(args[1]!)?.description || '',
         mode,
         required: 1,
       })
@@ -245,7 +255,7 @@ function parseMarket(document: Document, page: HentaiVerseBazaarPage) {
     .filter((entry) => !entry.src)
     .map((entry) => entry.textContent)
     .join('\n')
-  page.batchSize = Number(script.match(/\bvar\s+batch_size\s*=\s*(\d+)\s*;/)?.[1]) || 1
+  page.batchSize = Number(script.match(/\bvar\s+batch_size\s*=\s*(\d+)\s*;/)?.[1]) || 0
   page.playerStock = Number(script.match(/\bvar\s+player_stock\s*=\s*(\d+)\s*;/)?.[1]) || 0
   for (const side of ['buy', 'sell'] as const) {
     const count = root.querySelector<HTMLInputElement>(`#${side}order_batchcount`)
@@ -435,6 +445,8 @@ export function buildHentaiVerseMarketOrder(
 ): HentaiVerseFormData {
   if (
     !page.orders.includes(order) ||
+    !Number.isSafeInteger(page.batchSize) ||
+    page.batchSize < 1 ||
     !Number.isInteger(count) ||
     count < 1 ||
     count > order.maxCount ||

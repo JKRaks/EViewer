@@ -48,6 +48,8 @@ const INTERFACE_LABEL_TRANSLATIONS: Record<string, string> = {
   Draft: '草稿',
   Sender: '寄件人',
   Recipient: '收件人',
+  Seller: '卖家',
+  Buyer: '买家',
   From: '寄件人',
   To: '收件人',
   Received: '收件时间',
@@ -55,6 +57,18 @@ const INTERFACE_LABEL_TRANSLATIONS: Record<string, string> = {
   Expiration: '到期时间',
   State: '状态',
   Attachments: '附件',
+  Hungry: '饥饿',
+  Starving: '饥饿严重',
+  Happy: '愉快',
+  Unhappy: '不开心',
+  Full: '饱食',
+  Restoratives: '恢复品',
+  Infusions: '附魔药',
+  Scrolls: '卷轴',
+  Special: '特殊物品',
+  'Insufficient Credits': '信用点不足',
+  'Not enough Credits': '信用点不足',
+  'You are already training.': '已有训练进行中。',
 }
 const LOWERCASE_INTERFACE_LABELS = Object.fromEntries(
   Object.entries(INTERFACE_LABEL_TRANSLATIONS).map(([key, value]) => [key.toLowerCase(), value]),
@@ -91,9 +105,13 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'ManBearPig Tail': '人熊猪的尾巴',
     'Holy Hand Grenade of Antioch': '安提阿神圣手榴弹',
     'Mithra Flower': '米丝拉之花',
+    "Mithra's Flower": '米丝拉之花',
     'Dalek Voicebox': '戴立克发声器',
     'Broken Glasses': '破损的眼镜',
     'Noodly Appendage': '面条状附肢',
+    'Lock of Blue Hair': '蓝色发束',
+    'Bunny-Girl Costume': '兔女郎服装',
+    'Hinamatsuri Doll': '女儿节人偶',
     'Precursor Artifact': '先驱者文物',
     'Rare Artifact': '稀有文物',
     'Energy Cell': '能量电池',
@@ -120,6 +138,40 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Binding of Warding': '守护结晶',
     'Binding of the Fleet': '迅捷结晶',
     'Binding of the Nimble': '灵巧结晶',
+    'Binding of the Demon-fiend': '魔族结晶',
+    'Binding of Niflheim': '尼福尔海姆结晶',
+    'Binding of the Fire-eater': '噬火者结晶',
+    'Binding of the Frost-born': '霜生者结晶',
+    'Binding of the Thunder-child': '雷霆之子结晶',
+    'Binding of the Wind-waker': '唤风者结晶',
+    'Binding of the Thrice-blessed': '三重祝福结晶',
+    'Aether Shard': '以太碎片',
+    'Featherweight Shard': '轻羽碎片',
+    'Twilight Sparkle Figurine': '暮光闪闪手办',
+    'Applejack Figurine': '苹果杰克手办',
+    'Fluttershy Figurine': '小蝶手办',
+    'Pinkie Pie Figurine': '萍琪派手办',
+    'Rarity Figurine': '珍奇手办',
+    'Trixie Figurine': '崔克西手办',
+    'Princess Celestia Figurine': '塞拉斯蒂娅公主手办',
+    'Princess Luna Figurine': '露娜公主手办',
+    'Apple Bloom Figurine': '小萍花手办',
+    'Scootaloo Figurine': '飞板璐手办',
+    'Sweetie Belle Figurine': '甜贝儿手办',
+    'Big Macintosh Figurine': '大麦哥手办',
+    'Spitfire Figurine': '喷火手办',
+    'Derpy Hooves Figurine': '小呆手办',
+    'Lyra Heartstrings Figurine': '天琴心弦手办',
+    'Zecora Figurine': '泽科拉手办',
+    'Cheerilee Figurine': '车厘子手办',
+    'Vinyl Scratch Figurine': 'DJ3号手办',
+    'Daring Do Figurine': '无畏天马手办',
+    'Doctor Whooves Figurine': '神秘博士手办',
+    'Berry Punch Figurine': '莓莓酒手办',
+    'Bon-Bon Figurine': '糖糖手办',
+    'Fluffle Puff Figurine': '毛毛手办',
+    'Angel Bunny Figurine': '天使兔手办',
+    'Gummy Figurine': '甘米手办',
     'Browse Items': '浏览物品',
     'My Buy Orders': '我的买单',
     'My Sell Orders': '我的卖单',
@@ -298,7 +350,9 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Choose number to buy:': '选择购买数量：',
     'Grand Prize': '大奖',
     'Golden Lottery Ticket': '黄金彩票',
+    'Golden Lottery Tickets': '黄金彩票',
     'Caffeinated Candy': '咖啡因糖果',
+    'Caffeinated Candies': '咖啡因糖果',
     'Chaos Tokens': '混沌令牌',
     'Chaos Token': '混沌令牌',
     'You cannot opt out unless you have at least one ticket.': '至少持有一张彩票才能放弃大奖。',
@@ -384,6 +438,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'One-Handed': '单手武器',
     'Two-Handed': '双手武器',
     Staves: '法杖',
+    Staffs: '法杖',
     Shields: '盾牌',
     'Cloth Armor': '布甲',
     'Light Armor': '轻甲',
@@ -419,6 +474,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Item Level': '装备等级',
     'Potency Tier': '潜能阶数',
     'Potency Level': '潜能等级',
+    Tier: '阶数',
     'Damage Taken': '承受伤害',
     Ethereal: '虚空',
     Fiery: '炽热',
@@ -434,6 +490,7 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     Reinforced: '强化',
     Savage: '狂野',
     Frugal: '节约',
+    Mithril: '秘银',
     Cobalt: '钴蓝',
     Ruby: '红宝石',
     Zircon: '锆石',
@@ -476,6 +533,8 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Counter-resist': '反抵抗',
     'Damage Mitigation': '伤害减免',
     'Spell Damage': '法术伤害加成',
+    'Cold Spell Damage': '冰冷法术伤害',
+    'Forbidden Magic Proficiency': '禁断魔法熟练度',
     'Slashing Damage': '斩击伤害',
     'Piercing Damage': '穿刺伤害',
     'Fire Damage': '火焰伤害',
@@ -587,6 +646,16 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Plate Armor': '板甲',
     'Reactive Armor': '反应式护甲',
     'Power Armor': '动力护甲',
+    'Power Helmet': '动力头盔',
+    'Power Gauntlets': '动力护手',
+    'Power Leggings': '动力护腿',
+    'Power Boots': '动力靴',
+    'Fire Strike': '火焰打击',
+    'Cold Strike': '冰冷打击',
+    'Elec Strike': '雷电打击',
+    'Wind Strike': '风之打击',
+    'Holy Strike': '神圣打击',
+    'Dark Strike': '黑暗打击',
     Shortsword: '短剑',
     Dagger: '匕首',
     Axe: '战斧',
@@ -841,8 +910,12 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
     'Crystal of Fortitude': '坚韧水晶',
     'Crystal of Cunning': '机敏水晶',
     'Crystal of Frost': '冰霜水晶',
+    'Crystal of Lightning': '雷电水晶',
+    'Electrical Resistance': '雷电抗性',
     'Crystal of Tempest': '风暴水晶',
     'Crystal of Devotion': '虔诚水晶',
+    'Crystal of Corruption': '腐蚀水晶',
+    'Dark Resistance': '黑暗抗性',
     'Caffeinated Candy': '咖啡因糖果',
     'Health Gem': '生命宝石',
     'Mana Gem': '魔力宝石',
@@ -1049,6 +1122,101 @@ const DOMAIN_TRANSLATIONS: Record<string, Record<string, string>> = {
 }
 
 const DESCRIPTION_TRANSLATIONS: Record<string, string> = {
+  'No longer will MBP spread havoc, destruction, and melted polar ice caps.':
+    '人熊猪再也无法散播混乱、制造破坏，或融化两极冰盖了。',
+  'You found this item in the lair of a White Bunneh. It appears to be a dud.':
+    '你在白兔的巢穴中找到了它，看起来是一枚哑弹。',
+  'A Lilac flower given to you by a Mithra when you defeated her. Apparently, this type was her favorite.':
+    '击败米丝拉后，她送给你一朵丁香花。显然，这是她最喜欢的花。',
+  'Taken from the destroyed remains of a Dalek shell.': '从被摧毁的戴立克外壳残骸中取出。',
+  'Given to you by Konata when you defeated her. It smells of Timotei.':
+    '击败泉此方后，她把这束头发送给了你，闻起来有蒂沐蝶洗发水的香味。',
+  'Given to you by Mikuru when you defeated her. If you wear it, keep it to yourself.':
+    '击败朝比奈实玖瑠后，她把这套服装送给了你。若要穿上，请别让别人知道。',
+  'Given to you by Ryouko when you defeated her. You decided to name it Achakura, for no particular reason.':
+    '击败朝仓凉子后，她把这只人偶送给了你。没什么特别的理由，你决定叫它小朝仓。',
+  'Given to you by Yuki when you defeated her. She looked better without them anyway.':
+    '击败长门有希后，她把这副眼镜送给了你。反正她不戴眼镜更好看。',
+  'Tiny pills filled with delicious artificial happiness. Use on monsters to restore morale if you cannot keep them happy. It beats leaving them sad and miserable.':
+    '充满人造快乐的小药丸。无法让怪物保持愉快时，可用来恢复士气，总比让它们伤心难过好。',
+  'Some materials scavenged from fallen adventurers by a monster. Required to reforge and upgrade cloth armor.':
+    '怪物从阵亡冒险者身上搜集的材料，用于重铸和升级布甲。',
+  'Some materials scavenged from fallen adventurers by a monster. Required to reforge and upgrade light armor.':
+    '怪物从阵亡冒险者身上搜集的材料，用于重铸和升级轻甲。',
+  'Some materials scavenged from fallen adventurers by a monster. Required to reforge and upgrade heavy armor and weapons.':
+    '怪物从阵亡冒险者身上搜集的材料，用于重铸和升级重甲及武器。',
+  'Some materials scavenged from fallen adventurers by a monster. Required to reforge and upgrade staffs and shields.':
+    '怪物从阵亡冒险者身上搜集的材料，用于重铸和升级法杖及盾牌。',
+  'A cylindrical object filled to the brim with magitech energy. Used to power charms and advanced equipment.':
+    '充满魔导能量的圆柱形物体，用于为护符和高级装备供能。',
+  'Used to power Aether Charms.': '用于为以太护符供能。',
+  'Used to power Featherweight Charms.': '用于为轻羽护符供能。',
+  'A 1/10th scale figurine of Twilight Sparkle, the cutest, smartest, all-around best pony. According to Pinkie Pie, anyway.':
+    '暮光闪闪的 1:10 比例手办，她是最可爱、最聪明、各方面都最棒的小马。至少萍琪派是这么说的。',
+  "A 1/10th scale figurine of Applejack, the loyalest of friends and most dependable of ponies. Equestria's best applebucker, and founder of Appleholics Anonymous.":
+    '苹果杰克的 1:10 比例手办，她是最忠诚的朋友、最可靠的小马，也是小马利亚最棒的踢苹果能手和匿名苹果迷互助会创始人。',
+  "A 1/10th scale figurine of Fluttershy, resident animal caretaker. You're going to love her. Likes baby dragons; Hates grown up could-eat-a-pony-in-one-bite dragons.":
+    '小蝶的 1:10 比例手办，她是当地的动物照护者。你一定会喜欢她。她喜欢幼龙，讨厌能一口吞下小马的成年巨龙。',
+  'A 1/10th scale figurine of Pinkie Pie, a celebrated connoisseur of cupcakes and confectioneries. She just wants to keep smiling forever.':
+    '萍琪派的 1:10 比例手办，她是著名的纸杯蛋糕和糖果鉴赏家，只想永远保持微笑。',
+  "A 1/10th scale figurine of Rarity, the mistress of fashion and elegance. Even though she's prim and proper, she could make it in a pillow fight.":
+    '珍奇的 1:10 比例手办，她是时尚与优雅的大师。虽然端庄得体，但打起枕头仗来同样不在话下。',
+  'A 1/10th scale figurine of The Great and Powerful Trixie. After losing her wagon, she now secretly lives in the Ponyville library with her girlfriend, Twilight Sparkle.':
+    '伟大又全能的崔克西的 1:10 比例手办。失去马车后，她和女友暮光闪闪秘密住在小马谷图书馆里。',
+  'A 1/10th scale figurine of Princess Celestia, co-supreme ruler of Equestria. Bored of the daily squabble of the Royal Court, she has recently taken up sock swapping.':
+    '塞拉斯蒂娅公主的 1:10 比例手办，她是小马利亚的共同最高统治者。厌倦宫廷日复一日的争吵后，她最近迷上了交换袜子。',
+  "A 1/10th scale figurine of Princess Luna, aka Nightmare Moon. After escaping her 1000 year banishment to the moon, she was grounded for stealing Celestia's socks.":
+    '露娜公主的 1:10 比例手办，她也被称为梦魇之月。摆脱长达一千年的月球流放后，她又因偷拿塞拉斯蒂娅的袜子被禁足。',
+  'A 1/10th scale figurine of Apple Bloom, Applejack\'s little sister. Comes complete with a "Draw Your Own Cutie Mark" colored pencil and permanent tattoo applicator set.':
+    '苹果杰克的妹妹小萍花的 1:10 比例手办，附赠“画出你自己的可爱标记”彩色铅笔和永久纹身工具套装。',
+  'A 1/10th scale figurine of Scootaloo. Die-hard Dashie fanfilly, best pony of the Cutie Mark Crusaders, and inventor of the Wingboner Propulsion Drive. 1/64th chicken.':
+    '飞板璐的 1:10 比例手办。她是云宝的铁杆粉丝、可爱标记童子军中最棒的小马，也是翘翅推进器的发明者，拥有六十四分之一的鸡血统。',
+  "A 1/10th scale figurine of Sweetie Belle, Rarity's little sister. Comes complete with evening gown and cocktail dress accessories made of 100% Dumb Fabric.":
+    '珍奇的妹妹甜贝儿的 1:10 比例手办，附赠由百分之百“蠢布料”制成的晚礼服和鸡尾酒会礼裙配件。',
+  "A 1/10th scale figurine of Big Macintosh, Applejack's older brother. Famed applebucker and draft pony, and an expert in applied mathematics.":
+    '苹果杰克的哥哥大麦哥的 1:10 比例手办。他是著名的踢苹果能手和役马，也是应用数学专家。',
+  "A 1/10th scale figurine of Spitfire, team leader of the Wonderbolts. Dashie's idol and occasional shipping partner. Doesn't actually spit fire.":
+    '闪电飞马队队长喷火的 1:10 比例手办。她是云宝的偶像，偶尔也被和云宝配成一对。她其实不会喷火。',
+  "A 1/10th scale figurine of Derpy Hooves, Ponyville's leading mailmare. Outspoken proponent of economic stimulus through excessive muffin consumption.":
+    '小马谷首席邮递员小呆的 1:10 比例手办。她公开倡导通过大量消费松饼来刺激经济。',
+  'A 1/10th scale figurine of Lyra Heartstrings. Features twenty-six points of articulation, replaceable pegasus hoofs, and a detachable unicorn horn.':
+    '天琴心弦的 1:10 比例手办，拥有二十六个可动关节、可替换的飞马蹄和可拆卸的独角。',
+  "A 1/10th scale figurine of Zecora, a mysterious zebra from a distant land. She'll never hesitate to mix her brews or lend you a hand. Err, hoof.":
+    '来自远方的神秘斑马泽科拉的 1:10 比例手办。她总会毫不犹豫地调制药剂，或向你伸出援手——呃，援蹄。',
+  "A 1/10th scale figurine of Cheerilee, Ponyville's most beloved educational institution. Your teachers will never be as cool as Cheerilee.":
+    '车厘子的 1:10 比例手办，她是小马谷最受喜爱的教育工作者。你的老师永远不会像车厘子这么酷。',
+  "A 1/10th scale bobblehead figurine of Vinyl Scratch, the original DJ P0n-3. Octavia's musical rival and wub wub wub interest.":
+    '初代 DJ3号的 1:10 比例摇头手办。她是奥克塔维娅的音乐对手，也是让她心动的低音节拍。',
+  "A 1/10th scale figurine of Daring Do, the thrill-seeking, action-taking mare starring numerous best-selling books. Dashie's recolor and favorite literary character.":
+    '无畏天马的 1:10 比例手办。她是众多畅销书中追求刺激、勇于行动的主角，既是云宝的换色版本，也是云宝最喜欢的文学角色。',
+  'A 1/10th scale figurine of Doctor Whooves. Not a medical doctor. Once got into a hoof fight with Applejack over a derogatory remark about apples.':
+    '神秘博士的 1:10 比例手办。他并非医生，曾因贬低苹果而与苹果杰克大打出蹄。',
+  "A 1/10th scale figurine of Berry Punch. Overly protective parent pony and Ponyville's resident lush. It smells faintly of fruit wine.":
+    '莓莓酒的 1:10 比例手办。她是过度保护孩子的家长，也是小马谷的常驻酒鬼。手办散发着淡淡的果酒香。',
+  'A 1/10th scale figurine of Bon-Bon. Usually seen in the company of Lyra. Suffers from various throat ailments that make her sound different every time you see her.':
+    '糖糖的 1:10 比例手办。她通常与天琴形影不离；各种喉咙毛病让她每次出现时的声音都不一样。',
+  'A 1/10th scale fluffy figurine of Fluffle Puff. Best Bed Forever.':
+    '毛毛的 1:10 比例毛绒手办，永远最棒的床。',
+  "A lifesize figurine of Angel Bunny, Fluttershy's faithful yet easily vexed pet and life partner. All-purpose assistant, time keeper, and personal attack alarm.":
+    '天使兔的等身手办。他是小蝶忠诚却容易恼火的宠物与生活伙伴，兼任全能助手、计时员和贴身袭击警报器。',
+  "A lifesize figurine of Gummy, Pinkie Pie's faithful pet. Usually found lurking in your bathtub. While technically an alligator, he is still arguably the best pony.":
+    '萍琪派忠实宠物甘米的等身手办。他通常潜伏在你的浴缸里。虽然严格来说是只短吻鳄，但依然有资格争夺最棒小马的称号。',
+  "Welcome to Snowflake's Shrine.": '欢迎来到雪花神殿。',
+  'Here you can make an offering to Snowflake, the Goddess of Loot and Harvest. Snowflake will grant you various boons depending on your offering.':
+    '在这里，你可以向掌管战利品与丰收的雪花女神献祭。她会根据祭品赐予不同奖励。',
+  'Select a trophy, artifact or collectible to continue.': '选择奖杯、神器或收藏品以继续。',
+  'Artifacts can be exchanged for a random reward.': '神器可兑换随机奖励。',
+  'Depending on your luck and earlier rewards, you can get one of the following:':
+    '根据运气和此前获得的奖励，你可能获得以下一种奖励：',
+  'Some Hath': '少量 Hath',
+  'A bunch of crystals': '一批水晶',
+  'Some rare consumables': '一些稀有消耗品',
+  'A permanent +1 bonus to a primary stat': '某项基础属性永久增加 1 点',
+  'Trophies can be exchanged for a piece of equipment.': '奖杯可兑换一件装备。',
+  'The quality and tier of the item depends on the trophy you offer. You can select the major class of the item being granted from the list below.':
+    '装备的品质和档次取决于提交的奖杯。你可以从下方列表选择装备大类。',
+  'Collectibles can be exchanged for a random selection of bindings and materials.':
+    '收藏品可兑换随机种类的结晶和材料。',
   'A ball of fire is hurled at the target.': '向目标投掷一团火球。',
   'A bolt of lightning strikes the target, causing Elec damage.':
     '以一道闪电击中目标，造成雷电伤害。',
@@ -1296,6 +1464,12 @@ export function translateHentaiVerseText(value: string) {
 function translateHentaiVerseTextInChinese(value: string): string {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
+  const insufficient = source.match(
+    /^(?:insufficient|not enough|you (?:do not|don't) have enough)\s+(credits?|GP|Hath|stamina|tokens?|ability points?|mastery points?|soul fragments?)[.!]?$/i,
+  )
+  if (insufficient) return `${translateHentaiVerseTextInChinese(insufficient[1]!)}不足。`
+  const powerLevel = source.match(/^Power\s*Level\s*:?\s*([\d,]+)$/i)
+  if (powerLevel) return `强度等级：${powerLevel[1]}`
   if (LOWERCASE_INTERFACE_LABELS[source.toLowerCase()])
     return LOWERCASE_INTERFACE_LABELS[source.toLowerCase()]!
   // Older collected candidates and mixed source labels may use the text entry
@@ -1333,7 +1507,36 @@ function translateHentaiVerseTextInChinese(value: string): string {
     return `距离本期开奖还有 ${remaining}。售票最早会在开奖前十分钟结束。`
   }
   const grandPrize = source.match(/^Grand Prize for (.+?):$/i)
-  if (grandPrize) return `${grandPrize[1]} 大奖：`
+  if (grandPrize) {
+    const date = grandPrize[1]!.match(/^([a-z]+) (\d{1,2})(?:st|nd|rd|th)$/i)
+    const months = [
+      'january',
+      'february',
+      'march',
+      'april',
+      'may',
+      'june',
+      'july',
+      'august',
+      'september',
+      'october',
+      'november',
+      'december',
+    ]
+    const month = date ? months.indexOf(date[1]!.toLowerCase()) + 1 : 0
+    return `${date && month ? `${month} 月 ${date[2]} 日` : grandPrize[1]} 大奖：`
+  }
+  const marketNavigation = source.match(
+    /^(?:◀\s*)?(Previous|Next|Back to) (Consumables?|Materials?|Trophies|Trophy|Artifacts?|Collectibles?|Monster Items?)(?:\s*▶)?$/i,
+  )
+  if (marketNavigation) {
+    const direction = marketNavigation[1]!.toLowerCase()
+    return direction === 'back to'
+      ? `返回${translateHentaiVerseTextInChinese(marketNavigation[2]!)}`
+      : direction === 'previous'
+        ? '上一件物品'
+        : '下一件物品'
+  }
   const lowerPrize = source.match(/^([2-5])(?:nd|rd|th) Prize:\s*(.+)$/i)
   if (lowerPrize)
     return `${lowerPrize[1]} 等奖：${translateHentaiVerseTextInChinese(lowerPrize[2]!)}`
@@ -1351,6 +1554,13 @@ export function translateHentaiVerseDescription(value: string) {
 function translateHentaiVerseDescriptionInChinese(value: string) {
   const source = value.replace(/\s+/g, ' ').trim()
   if (!source) return ''
+  const shrineBonus = source.match(
+    /^You cannot currently receive more than \+(\d+) to any primary stat\. This increases by one for every tenth level\. Gaining primary stats in this way will not increase how much EXP your next point costs\.$/i,
+  )
+  if (shrineBonus)
+    return `当前每项基础属性最多通过献祭增加 ${shrineBonus[1]} 点。角色每升 10 级，上限增加 1 点。此方式获得的属性不会提高下一点属性所需的经验。`
+  const trophyValue = source.match(/^You have handed in ([\d,]+) credits worth of trophies\.$/i)
+  if (trophyValue) return `已提交价值 ${trophyValue[1]} 信用点的奖杯。`
   const marketInfo = source.match(
     /^You have ([\d,]+) available to sell\. This item is traded in batches of ([\d,]+); all prices are per batch\. Min price is ([\d,]+ C) for market orders\.(?: Can always be bought for ([\d,]+ C)\.)?$/,
   )
@@ -1417,6 +1627,15 @@ function translateHentaiVerseDescriptionInChinese(value: string) {
   )
   if (crystal)
     return `可在怪物实验室融合此水晶，提高怪物的${translateHentaiVerseText(crystal[1]!)}。`
+  const binding = source.match(
+    /^Some materials scavenged from fallen adventurers by a monster\. Required to upgrade equipment bonuses to (.+)\.$/i,
+  )
+  if (binding)
+    return `怪物从阵亡冒险者身上搜集的材料，可用于升级装备的${translateHentaiVerseText(binding[1]!)}加成。`
+  const scrap = source.match(
+    /^Various bits and pieces of (scrap cloth|scrap leather|scrap metal|scrap wood)\. These can be used to mend the condition of an equipment piece\.$/i,
+  )
+  if (scrap) return `零散的${translateHentaiVerseText(scrap[1]!)}，可用于修复装备耐久。`
   const cooldown = source.match(/^cooldown:\s*(?:(\d+)h\s*)?(?:(\d+)m)?$/i)
   if (cooldown)
     return `冷却剩余：${cooldown[1] ? `${cooldown[1]} 小时 ` : ''}${cooldown[2] ? `${cooldown[2]} 分钟` : ''}`.trim()

@@ -61,7 +61,7 @@ async function manageCandidates(action: 'export' | 'review' | 'clear') {
     <div class="capture-setting">
       <div>
         <strong>{{ t('收集未翻译文本') }}</strong>
-        <p>{{ t('使用 HentaiVerse 时，记录未翻译或部分翻译的文本，仅保存在当前浏览器。') }}</p>
+        <p>{{ t('在本地收集漏译内容，统一导出') }}</p>
       </div>
       <ToggleField v-model="translationCapture.enabled" :aria-label="t('收集未翻译文本')" />
     </div>

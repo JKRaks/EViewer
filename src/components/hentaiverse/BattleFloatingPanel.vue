@@ -207,7 +207,8 @@ watch(battle, (current, previous) => {
 
 async function act(action: HentaiVerseBattleAction) {
   pauseAutoBattle('已切换为手动操作')
-  if (hentaiVerseState.actionPending || hentaiVerseState.battleLoading) return
+  if (hentaiVerseState.actionPending || hentaiVerseState.battleLoading || hentaiVerseState.error)
+    return
   pendingAction.value = `${action.mode}:${action.skill}`
   try {
     const target = action.target === 'enemy' ? activeTarget.value : 0
@@ -249,7 +250,7 @@ function saveAutoSettings() {
 async function recover() {
   pauseAutoBattle()
   try {
-    await enterHentaiVerseBattle(undefined)
+    await enterHentaiVerseBattle()
   } catch (error) {
     notify.error(error instanceof Error ? error.message : t('恢复战斗失败'))
   }
@@ -544,7 +545,11 @@ function closeLocalBattle() {
           <BattleActionMenu
             v-if="manualOpen"
             :actions="battle.actions"
-            :pending="hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
+            :pending="
+              hentaiVerseState.actionPending ||
+              hentaiVerseState.battleLoading ||
+              Boolean(hentaiVerseState.error)
+            "
             :active-key="pendingAction"
             @act="act"
           />

@@ -4,7 +4,7 @@ import { t } from '@/i18n'
 import { computed } from 'vue'
 import type { HentaiVerseEquipmentDetail } from '@/core/hentaiverse/model/hentaiVerse'
 import { getEquipmentHighlights } from '@/core/hentaiverse/hentaiVerseEquipment'
-const props = defineProps<{ data: HentaiVerseEquipmentDetail }>()
+const props = defineProps<{ data: HentaiVerseEquipmentDetail; expanded?: boolean }>()
 const highlights = computed(() => getEquipmentHighlights(props.data))
 </script>
 
@@ -25,7 +25,7 @@ const highlights = computed(() => getEquipmentHighlights(props.data))
       >
     </p>
     <p v-for="effect in data.effects" :key="effect" class="equipment-effect">{{ t(effect) }}</p>
-    <details>
+    <details :open="expanded">
       <summary>{{ t('完整属性') }}</summary>
       <section v-for="group in data.groups" :key="group.title" class="equipment-stat-group">
         <h4>{{ t(group.title) }}</h4>

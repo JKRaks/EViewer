@@ -544,7 +544,10 @@ function createMonster(attack: string) {
         {{ t('尚未拥有怪物。解锁槽位后可在实验室创建怪物。') }}
       </p>
       <div v-for="(monster, index) in data.monsters" :key="index" class="monster-row">
-        <p>{{ monster.name }}</p>
+        <div>
+          <p>{{ monster.name }}</p>
+          <small v-if="monster.description" class="muted">{{ t(monster.description) }}</small>
+        </div>
         <ActionButton
           v-if="monster.query"
           variant="outline"

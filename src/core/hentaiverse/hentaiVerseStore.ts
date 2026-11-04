@@ -34,8 +34,8 @@ export function dismissHentaiVerseEncounter() {
   hentaiVerseState.encounter = undefined
 }
 
-export async function enterHentaiVerseBattle(encounter = hentaiVerseState.encounter?.token) {
-  if (hentaiVerseState.battleLoading) return
+export async function enterHentaiVerseBattle(encounter?: string) {
+  if (hentaiVerseState.battleLoading || hentaiVerseState.actionPending) return
   // Gallery encounters belong to Persistent, regardless of the last maintenance page.
   if (encounter) hentaiVerseWorld.value = 'persistent'
   hentaiVerseState.battleLoading = true
@@ -48,7 +48,7 @@ export async function enterHentaiVerseBattle(encounter = hentaiVerseState.encoun
     hentaiVerseState.battle = battle
     hentaiVerseState.battleVisible = true
     hentaiVerseState.battleMinimized = false
-    hentaiVerseState.encounter = undefined
+    if (encounter) hentaiVerseState.encounter = undefined
   } catch (error) {
     if (signal.aborted || startedGeneration !== generation) return
     hentaiVerseState.error = error instanceof Error ? error.message : '进入 HentaiVerse 战斗失败'
@@ -67,6 +67,8 @@ export async function performHentaiVerseBattleAction(
   const current = hentaiVerseState.battle
   if (!current || current.completed || current.roundCompleted || current.verificationRequired)
     throw new Error('当前没有可执行的战斗动作')
+  if (hentaiVerseState.error) throw new Error('战斗结果尚未确认，请先恢复战斗')
+  if (hentaiVerseState.battleLoading) throw new Error('正在恢复战斗，请稍候')
   if (hentaiVerseState.actionPending) throw new Error('前一战斗动作尚未完成')
   if (automatic) {
     const action = current.actions.find((item) => item.mode === mode && item.skill === skill)
@@ -106,6 +108,8 @@ export async function continueHentaiVerseBattleRound() {
   if (
     !current?.roundCompleted ||
     current.completed ||
+    current.verificationRequired ||
+    hentaiVerseState.error ||
     hentaiVerseState.battleLoading ||
     hentaiVerseState.actionPending
   )

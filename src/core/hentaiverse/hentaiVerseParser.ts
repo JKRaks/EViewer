@@ -69,6 +69,17 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
       !/you (?:must|have to) (?:be logged on|log on)|requires you to log on|please log on|log on with an EH account/i.test(
         bodyText,
       )
+    if (!authenticated) throw new Error('HentaiVerse 登录态已失效，请在当前连接模式下重新登录')
+    if (
+      isVerificationDocument(document) ||
+      document.querySelector('#challenge-form, #cf-challenge-running, .cf-turnstile') ||
+      /just a moment|verify you are human|checking your browser/i.test(document.title)
+    )
+      throw new Error('源站需要验证，请打开源站完成验证后重新加载')
+    if (/service unavailable|bad gateway|maintenance|internal server error/i.test(document.title))
+      throw new Error('源站暂时不可用，请稍后重新加载')
+    if (!document.querySelector('#mainpane, #csp, #navbar'))
+      throw new Error('未能识别有效的 HentaiVerse 页面，请重新加载或检查源站状态')
     const scriptText = Array.from(document.scripts, (script) => script.textContent || '').join('\n')
     const section = getHentaiVerseSection(target)
     const personaName = readScriptString(scriptText, 'current_persona_name')
@@ -90,6 +101,7 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
       ['monsterLab', 'moogleMail', 'weaponLottery', 'armorLottery'].includes(section)
         ? parseHentaiVerseServices(document, target)
         : undefined
+    if (bazaar) bazaar.receivedAt = Date.now()
 
     return {
       section,
@@ -98,9 +110,11 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
       )
         ? 'isekai'
         : 'persistent',
-      season: cleanText(document.querySelector('#world_text')?.textContent).match(
-        /\d{4} Season \d+/,
-      )?.[0],
+      season: cleanText(document.querySelector('#world_text')?.textContent)
+        .match(/\d{4} Season \d+/)?.[0]
+        ?.replace(/(\d{4}) Season (\d+)/, (_, year, season) =>
+          formatSystemMessage('{p0} 年第 {p1} 赛季', { p0: year, p1: season }),
+        ),
       title: translateHentaiVerseText(
         document.querySelector('h1, #mainpane h2, title')?.textContent || 'HentaiVerse',
       ),
@@ -129,7 +143,7 @@ export function parseHentaiVersePage(html: string, target: HentaiVersePageTarget
       challengePostToken: document.querySelector<HTMLInputElement>('input[name="postoken"]')?.value,
       itemWorld: section === 'itemWorld' ? parseItemWorld(document, scriptText, target) : undefined,
       forms: armory || bazaar || services ? [] : parseForms(document, section),
-      notices: parseNotices(document),
+      ...parseNotices(document, section),
     }
   })
 }
@@ -301,23 +315,26 @@ export function parseBattleResponse(
 
 function parseAttributes(scriptText: string): HentaiVerseAttribute[] {
   const raw = matchValue(scriptText, /attr_current\s*=\s*(\{[^;]+\})/)
+  if (!raw) return []
   let values: Record<string, number> = {}
   try {
     values = raw ? (JSON.parse(raw.replace(/'/g, '"')) as Record<string, number>) : {}
   } catch {
     values = Object.fromEntries(
-      (['str', 'dex', 'agi', 'end', 'int', 'wis'] as const).map((key) => [
-        key,
-        Number(matchValue(raw, new RegExp(`["']?${key}["']?\\s*:\\s*(\\d+)`)) || 0),
-      ]),
+      (['str', 'dex', 'agi', 'end', 'int', 'wis'] as const).flatMap((key) => {
+        const value = matchValue(raw, new RegExp(`["']?${key}["']?\\s*:\\s*(\\d+)`))
+        return value ? [[key, Number(value)]] : []
+      }),
     )
   }
-  return (['str', 'dex', 'agi', 'end', 'int', 'wis'] as const).map((key) => ({
-    key,
-    label: getAttributeLabel(key),
-    value: Number(values[key] ?? 0),
-    delta: 0,
-  }))
+  return (['str', 'dex', 'agi', 'end', 'int', 'wis'] as const)
+    .filter((key) => typeof values[key] === 'number' && Number.isFinite(values[key]))
+    .map((key) => ({
+      key,
+      label: getAttributeLabel(key),
+      value: Number(values[key] ?? 0),
+      delta: 0,
+    }))
 }
 
 function parseMetrics(document: Document, scriptText: string): HentaiVerseMetric[] {
@@ -810,6 +827,7 @@ function parseTraining(document: Document, scriptText: string): HentaiVerseTrain
 }
 
 function parseInventory(document: Document): HentaiVerseInventoryPage {
+  if (!document.querySelector('#item_list, .itemlist')) throw new Error('无法读取源站物品页面')
   const items = new Map<string, HentaiVerseInventoryItem>()
   document
     .querySelectorAll<HTMLElement>('#item_list tr, #item_list [data-item], .itemlist tr')
@@ -1595,17 +1613,30 @@ function normalizeControlType(type: string): HentaiVerseFormControl['type'] {
   return 'text'
 }
 
-function parseNotices(document: Document) {
-  return Array.from(
+function parseNotices(document: Document, section: HentaiVersePage['section']) {
+  const noticeTones: NonNullable<HentaiVersePage['noticeTones']> = {}
+  const notices = Array.from(
     document.querySelectorAll<HTMLElement>(
-      '.stuffbox, #messagebox, #message_box, [role="alert"], .notice, .errorbox, #arena_list td[colspan], #mainpane > p',
+      '.stuffbox, #messagebox, #message_box, [role="alert"], .notice, .errorbox, #arena_list td[colspan]' +
+        (['grindfest', 'tower'].includes(section) ? '' : ', #mainpane > p'),
     ),
   )
-    .map((node) => translateHentaiVerseDescription(cleanText(node.textContent)))
+    .map((node) => {
+      const source = cleanText(node.textContent)
+      const message = translateHentaiVerseDescription(source)
+      const rejected =
+        node.matches('.errorbox, .error, [data-status="error"]') ||
+        /\b(insufficient|not enough|you cannot|you do not have enough|request failed|access denied)\b/i.test(
+          source,
+        )
+      noticeTones[message] = rejected ? 'error' : node.matches('.warning') ? 'warning' : 'info'
+      return message
+    })
     .filter(
       (value, index, values) => value && value.length <= 500 && values.indexOf(value) === index,
     )
     .slice(0, 8)
+  return { notices, noticeTones }
 }
 
 function readCharacterName(document: Document, personaName: string) {
@@ -1946,9 +1977,10 @@ function readAbilityAction(
 function countActiveAbilityLevels(row: HTMLElement) {
   const tiers = Array.from(row.querySelectorAll<HTMLElement>(':scope > div:nth-child(3) > div'))
   const sourceBars = tiers.map((node) =>
-    node.style.backgroundImage.match(/\/ab\/\d+(rf|x)\.png/i)?.[1]?.toLowerCase(),
+    node.style.backgroundImage.match(/\/ab\/\d+(rf|ru|x)\.png/i)?.[1]?.toLowerCase(),
   )
   if (sourceBars.length && sourceBars.every(Boolean)) {
+    // rf is acquired; ru is the next available upgrade, not an acquired rank.
     return sourceBars.filter((state) => state === 'rf').length
   }
   // Count only recognizable acquired/empty markers. Unknown markup must not

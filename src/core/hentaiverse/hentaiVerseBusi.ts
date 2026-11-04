@@ -22,6 +22,12 @@ import {
 import { parseEquipmentData } from './hentaiVerseEquipment'
 import { isHentaiVerseBattleStart } from './hentaiVerseProtocol'
 
+export interface HentaiVersePageResult {
+  page?: HentaiVersePage
+  battle?: HentaiVerseBattleSnapshot
+  confirmed?: boolean
+}
+
 export class HentaiVerseBusi {
   private readonly proxyOrigin = new URL(eurlEnum.EH, window.location.origin).origin
   private readonly equipmentDataCache = new Map<
@@ -55,9 +61,7 @@ export class HentaiVerseBusi {
    * Input: 受白名单约束的 HentaiVerse 页面参数。
    * Output: 已解析的角色维护页面；源站在活动战斗期间会返回战斗页，此时返回战斗快照。
    */
-  async getPage(
-    target: HentaiVersePageTarget,
-  ): Promise<{ page?: HentaiVersePage; battle?: HentaiVerseBattleSnapshot }> {
+  async getPage(target: HentaiVersePageTarget): Promise<HentaiVersePageResult> {
     const html = await this.requestText('/hentaiverse/page', { query: { ...target } })
     if (isHentaiVerseBattleHtml(html)) return { battle: parseBattlePage(html) }
     return { page: parseHentaiVersePage(html, target) }
@@ -71,13 +75,15 @@ export class HentaiVerseBusi {
     section: HentaiVerseFormSection,
     data: HentaiVerseFormData,
     target: HentaiVersePageTarget,
-  ): Promise<{ page?: HentaiVersePage; battle?: HentaiVerseBattleSnapshot }> {
+  ): Promise<HentaiVersePageResult> {
     const html = await this.requestText('/hentaiverse/form', {
       method: 'POST',
       body: { section, data, target },
     })
     if (isHentaiVerseBattleHtml(html)) return { battle: parseBattlePage(html) }
     const page = parseHentaiVersePage(html, target)
+    const rejection = page.notices.find((notice) => page.noticeTones?.[notice] === 'error')
+    if (rejection) throw new Error(rejection)
     if (!page.authenticated || !isHentaiVerseBattleStart(section, data)) return { page }
     // A successful start can return an intermediate entry page. Confirm with one
     // read, rather than reporting a settings update or submitting the start again.
@@ -106,7 +112,7 @@ export class HentaiVerseBusi {
     if (refreshed.page?.equipment?.sets.find((set) => set.active)?.id !== setId) {
       throw new Error('源站未确认装备套装切换，请刷新后重试')
     }
-    return refreshed
+    return { ...refreshed, confirmed: true }
   }
 
   /** Input: 部位、装备编号及页面令牌。Output: 完成装备后的当前部位页面。 */
@@ -154,7 +160,7 @@ export class HentaiVerseBusi {
     const slot = refreshed.page.equipment?.slots.find((item) => item.id === slotId)
     if (!slot || slot.equipmentId !== equipmentId)
       throw new Error('源站未确认装备更新，请刷新后重试')
-    return refreshed
+    return { ...refreshed, confirmed: true }
   }
 
   /** Input: 能力操作名和能力或槽位编号。Output: 更新后的能力页。 */
@@ -193,17 +199,25 @@ export class HentaiVerseBusi {
     ) {
       throw new Error('源站未确认能力装配，请检查能力是否已解锁、槽位类型是否匹配，并刷新后重试')
     }
-    return refreshed
+    return { ...refreshed, confirmed: true }
   }
 
   /** Input: 训练项目编号。Output: 开始训练后的训练页。 */
   async startTraining(trainingId: string, target: HentaiVersePageTarget) {
-    return this.submitForm('training', { start_train: trainingId }, target)
+    const result = await this.submitForm('training', { start_train: trainingId }, target)
+    if (result.battle || !result.page?.authenticated) return result
+    if (!result.page.training?.active)
+      throw new Error('源站未确认训练开始，请核对费用与训练状态后刷新')
+    return { ...result, confirmed: true }
   }
 
   /** Input: 无。Output: 取消当前训练后的训练页。 */
   async cancelTraining(target: HentaiVersePageTarget) {
-    return this.submitForm('training', { cancel_train: '1' }, target)
+    const result = await this.submitForm('training', { cancel_train: '1' }, target)
+    if (result.battle || !result.page?.authenticated) return result
+    if (!result.page.training || result.page.training.active)
+      throw new Error('源站未确认训练取消，请刷新训练状态')
+    return { ...result, confirmed: true }
   }
 
   /** Input: 战斗物品槽位和物品编号。Output: 更新后的物品页。 */
@@ -213,7 +227,7 @@ export class HentaiVerseBusi {
     const slot = result.page.inventory?.slots.find((item) => item.id === slotId)
     if (!slot || slot.itemId !== (itemId === '0' ? '' : itemId))
       throw new Error('源站未确认物品槽位更新，请检查物品类型并刷新后重试')
-    return result
+    return { ...result, confirmed: true }
   }
 
   /**

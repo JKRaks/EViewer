@@ -162,6 +162,8 @@ async function submit(action?: ArmoryAction) {
   const label = action?.label || labels[props.data.screen] || props.data.screen
   if (props.data.screen === 'modify' && !props.data.modify) {
     emit('navigate', {
+      s: 'Bazaar',
+      ss: 'am',
       screen: 'modify',
       filter: props.data.filters.find((f) => f.active)?.query.filter || 'new',
       'eqids[]': selected.value[0]!,
@@ -668,6 +670,10 @@ async function submit(action?: ArmoryAction) {
   .armory-panel {
     gap: 12px;
     padding-bottom: calc(80px + env(safe-area-inset-bottom));
+  }
+  .armory-selection-bar {
+    margin-right: calc(var(--fab-size) + var(--fab-inset));
+    flex-wrap: wrap;
   }
   .armory-navigation {
     display: none;

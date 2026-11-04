@@ -8,6 +8,7 @@ import NumberField from '@/components/primitives/NumberField.vue'
 import CheckField from '@/components/primitives/CheckField.vue'
 import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
 import RadioChoice from '@/components/primitives/RadioChoice.vue'
+import Notice from '@/components/primitives/Notice.vue'
 import { computed, reactive, ref, watch } from 'vue'
 import type {
   HentaiVerseFormAction,
@@ -28,6 +29,21 @@ const emit = defineEmits<{
 
 const expandedGroups = ref<string[]>([])
 const values = reactive<Record<string, string | boolean>>({})
+const initialValues = ref('')
+const dirty = computed(() => JSON.stringify(values) !== initialValues.value)
+const validationErrors = computed(() =>
+  props.form.controls.flatMap((control) => {
+    if (control.disabled || control.type !== 'number' || values[control.name] === '') return []
+    const value = Number(values[control.name])
+    if (
+      !Number.isFinite(value) ||
+      (control.min !== undefined && value < control.min) ||
+      (control.max !== undefined && value > control.max)
+    )
+      return [t('请检查 {p0} 的数值范围', { p0: t(control.label) })]
+    return []
+  }),
+)
 const controlGroups = computed(() => {
   const definitions = props.form.groups?.length
     ? props.form.groups
@@ -94,11 +110,13 @@ watch(
         else if (!(control.name in values)) values[control.name] = ''
       } else values[control.name] = control.value
     })
+    initialValues.value = JSON.stringify(values)
   },
   { immediate: true },
 )
 
 function submit(action?: HentaiVerseFormAction) {
+  if (props.loading || action?.disabled || validationErrors.value.length) return
   const data: Record<string, string | number | boolean> = { ...props.form.hidden }
   props.form.controls.forEach((control) => {
     if (control.disabled) return
@@ -119,7 +137,9 @@ function submit(action?: HentaiVerseFormAction) {
     <header class="hv-panel-heading">
       <div>
         <h2>{{ t(form.title) }}</h2>
-        <p v-if="form.description">{{ t(form.description) }}</p>
+        <p v-if="form.description && !['grindfest', 'tower'].includes(form.section)">
+          {{ t(form.description) }}
+        </p>
       </div>
       <ActionButton
         v-if="controlGroups.length > 1"
@@ -128,6 +148,13 @@ function submit(action?: HentaiVerseFormAction) {
         >{{ t(allExpanded ? t('全部收起') : t('全部展开')) }}</ActionButton
       >
     </header>
+    <details
+      v-if="form.description && ['grindfest', 'tower'].includes(form.section)"
+      class="hv-entry-rules"
+    >
+      <summary>{{ t('挑战规则') }}</summary>
+      <p>{{ t(form.description) }}</p>
+    </details>
 
     <component
       :is="group.title ? 'details' : 'section'"
@@ -223,13 +250,21 @@ function submit(action?: HentaiVerseFormAction) {
     </component>
 
     <footer class="hv-form-actions">
+      <span v-if="form.section === 'settings'" class="hv-form-status" role="status">{{
+        t(loading ? '正在更新' : dirty ? '有未提交的更改' : '与源站配置一致')
+      }}</span>
+      <Notice v-if="validationErrors.length" tone="error" :title="validationErrors[0]" />
       <ActionButton
         v-for="action in form.actions"
         :key="`${action.name}:${action.value}`"
         :variant="action.danger ? 'destructive' : 'default'"
         :plain="action.danger"
         :loading="loading"
-        :disabled="action.disabled"
+        :disabled="
+          action.disabled ||
+          !!validationErrors.length ||
+          (form.section === 'settings' && !action.danger && !dirty)
+        "
         @click="submit(action)"
       >
         {{ t(action.label) }}
@@ -239,6 +274,22 @@ function submit(action?: HentaiVerseFormAction) {
 </template>
 
 <style scoped>
+.hv-form-status {
+  color: var(--muted-foreground);
+  font-size: 12px;
+  margin-right: auto;
+}
+.hv-entry-rules {
+  margin-bottom: 16px;
+  color: var(--muted-foreground);
+  font-size: 13px;
+  line-height: 1.7;
+}
+.hv-entry-rules summary {
+  cursor: pointer;
+  min-height: 40px;
+  align-content: center;
+}
 .control-help {
   color: var(--muted-foreground);
   font-size: 12px;
