@@ -6,6 +6,7 @@ export interface HentaiVerseMarketDepth {
   averages: { range: number; levels: number; batches: number; price: number }[]
 }
 export interface HentaiVerseMarketQuote {
+  unavailable: string[]
   depth: HentaiVerseMarketDepth[]
   trades: { time: string; timestamp: number; quantity: number; price: number }[]
   periods: {
@@ -50,8 +51,17 @@ function sourceTimestamp(value: string): number | undefined {
 }
 
 export function readHentaiVerseMarketQuote(page: HentaiVerseBazaarPage): HentaiVerseMarketQuote {
-  const result: HentaiVerseMarketQuote = { depth: [], trades: [], periods: [] }
+  const result: HentaiVerseMarketQuote = { depth: [], trades: [], periods: [], unavailable: [] }
   for (const table of page.tables) {
+    const expected =
+      table.title === '最近交易'
+        ? ['', 'Seller', 'Buyer', 'Sold', 'Price']
+        : table.title === '价格历史'
+          ? ['', 'Sold', 'Low', 'Avg', 'High', 'Vol']
+          : ['市场买单', '市场卖单'].includes(table.title)
+            ? ['Count', 'Price', 'Total']
+            : undefined
+    if (expected && !schema(table, expected)) result.unavailable.push(table.title)
     if (
       ['市场买单', '市场卖单'].includes(table.title) &&
       schema(table, ['Count', 'Price', 'Total'])
@@ -65,7 +75,11 @@ export function readHentaiVerseMarketQuote(page: HentaiVerseBazaarPage): HentaiV
           : []
       })
       // Partial order books can misrepresent best price and depth; preserve their table instead.
-      if (!levels.length || levels.length !== table.rows.length) continue
+      if (levels.length !== table.rows.length) {
+        result.unavailable.push(table.title)
+        continue
+      }
+      if (!levels.length) continue
       const side = table.title === '市场买单' ? 'buy' : 'sell'
       levels.sort((a, b) => (side === 'buy' ? b.price - a.price : a.price - b.price))
       result.depth.push({
@@ -95,6 +109,7 @@ export function readHentaiVerseMarketQuote(page: HentaiVerseBazaarPage): HentaiV
       })
       if (trades.length === table.rows.length)
         result.trades = trades.sort((a, b) => a.timestamp - b.timestamp)
+      else result.unavailable.push(table.title)
     }
     if (table.title === '价格历史' && schema(table, ['', 'Sold', 'Low', 'Avg', 'High', 'Vol'])) {
       result.periods = table.rows.flatMap((row) => {
@@ -105,10 +120,13 @@ export function readHentaiVerseMarketQuote(page: HentaiVerseBazaarPage): HentaiV
           low !== undefined &&
           average !== undefined &&
           high !== undefined &&
-          volume !== undefined
+          volume !== undefined &&
+          low <= average &&
+          average <= high
           ? [{ period: cells[0]!, sold, low, average, high, volume }]
           : []
       })
+      if (result.periods.length !== table.rows.length) result.unavailable.push(table.title)
     }
   }
   result.bid = result.depth.find((entry) => entry.side === 'buy')?.levels[0]?.price

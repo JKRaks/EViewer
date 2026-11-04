@@ -7,7 +7,7 @@ defineProps<{ groups: HentaiVerseStatGroup[] }>()
 
 <template>
   <section class="stat-groups" :aria-label="t('角色详细属性')">
-    <details v-for="group in groups" :key="group.title" open>
+    <details v-for="group in groups" :key="group.title">
       <summary>{{ t(group.title) }}</summary>
       <dl>
         <template v-for="metric in group.metrics" :key="metric.label">

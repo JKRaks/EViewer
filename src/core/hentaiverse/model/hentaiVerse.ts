@@ -301,6 +301,7 @@ export interface HentaiVersePage {
   itemWorld?: HentaiVerseItemWorldPage
   forms: HentaiVerseFormBlock[]
   notices: string[]
+  noticeTones?: Record<string, 'info' | 'warning' | 'error' | 'success'>
 }
 
 export interface HentaiVerseChallenge {

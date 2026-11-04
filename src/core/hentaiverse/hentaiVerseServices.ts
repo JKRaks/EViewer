@@ -143,6 +143,14 @@ function description(element: Element | null | undefined) {
   return translateHentaiVerseDescription(text(element))
 }
 
+function monsterActionDescription(element: Element | null | undefined) {
+  if (!element) return ''
+  const clone = element.cloneNode(true) as Element
+  clone.querySelectorAll('img').forEach((image) => image.remove())
+  clone.querySelectorAll('br').forEach((lineBreak) => lineBreak.replaceWith(' · '))
+  return description(clone)
+}
+
 function queryFrom(element: Element): Record<string, string> | undefined {
   const source =
     element.getAttribute('href') ||
@@ -458,9 +466,19 @@ function parseMonsterLab(document: Document): HentaiVerseServicesPage {
       const source = node.matches('[onclick], a[href]')
         ? node
         : node.querySelector('[onclick], a[href]')
+      const walker = document.createTreeWalker(node, NodeFilter.SHOW_TEXT)
+      const lines: string[] = []
+      while (walker.nextNode()) {
+        const value = text(walker.currentNode as Element)
+        if (value) lines.push(value)
+      }
+      const statusAt = lines.findIndex((line) =>
+        /^(?:Power\s*Level\b|Hungry$|Starving$|Happy$|Unhappy$|Hunger\b|Morale\b)/i.test(line),
+      )
       return {
-        name: text(node),
-        description: '',
+        name: (statusAt > 0 ? lines.slice(0, statusAt) : lines).join(' '),
+        description:
+          statusAt > 0 ? lines.slice(statusAt).map(translateHentaiVerseText).join(' · ') : '',
         query: source ? queryFrom(source) : undefined,
       }
     })
@@ -473,7 +491,7 @@ function parseMonsterLab(document: Document): HentaiVerseServicesPage {
         ? [
             {
               label: value === 'food' ? '喂养全部怪物' : '为全部怪物使用快乐药丸',
-              description: description(image.parentElement?.parentElement),
+              description: monsterActionDescription(image.parentElement?.parentElement),
               data: { ...hiddenFields(document.querySelector('#feed_form')), feed_all: value },
             },
           ]
@@ -481,11 +499,7 @@ function parseMonsterLab(document: Document): HentaiVerseServicesPage {
     },
   )
   const notices = [...root.querySelectorAll('#monster_actions > div')]
-    .map((node) => {
-      const clone = node.cloneNode(true) as Element
-      clone.querySelectorAll('img').forEach((image) => image.remove())
-      return translated(clone)
-    })
+    .map(monsterActionDescription)
     .filter(Boolean)
   return {
     kind: 'monsterLab',
@@ -499,7 +513,7 @@ function parseMonsterLab(document: Document): HentaiVerseServicesPage {
         ? [
             {
               label: '解锁怪物槽位',
-              description: description(unlock.parentElement?.parentElement),
+              description: monsterActionDescription(unlock.parentElement?.parentElement),
               data: { unlock_slot: '1' },
             },
           ]

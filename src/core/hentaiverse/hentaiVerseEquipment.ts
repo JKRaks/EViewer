@@ -10,6 +10,16 @@ import { translateHentaiVerseText } from './hentaiVerseTranslations'
 const EQUIPMENT_SOURCE =
   /^\/(?:isekai\/)?dynjs\/\d{1,20}\/[a-zA-Z0-9_-]{1,64}\/equip-[1-9]\d{0,19}\.js$/
 
+/** Missing or unrecognized durability stays unknown, rather than appearing as zero. */
+export function getEquipmentDurability(detail?: HentaiVerseEquipmentDetail) {
+  const match = detail?.status
+    .join(' ')
+    .match(/(?:耐久|Condition|Durability)\s*[:：]?\s*(\d+(?:\.\d+)?)\s*%/i)
+  if (!match) return undefined
+  const value = Number(match[1])
+  return value >= 0 && value <= 100 ? value : undefined
+}
+
 /** Pick meaningful comparison stats for each equipment family, independently of source row order. */
 export function getEquipmentHighlights(detail: HentaiVerseEquipmentDetail) {
   const kind = `${detail.summary} ${detail.name}`

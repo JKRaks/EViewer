@@ -1,14 +1,16 @@
 <script setup lang="ts">
 import { t } from '@/i18n'
 
-import PixelIcon from './PixelIcon.vue'
+import ModalPanel from '@/components/primitives/ModalPanel.vue'
+import { createReusableTemplate, useMediaQuery } from '@vueuse/core'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
 import RadioChoice from '@/components/primitives/RadioChoice.vue'
 import TagChip from '@/components/primitives/TagChip.vue'
 import EmptyState from '@/components/primitives/EmptyState.vue'
 import { computed, ref, watch } from 'vue'
-import { ArrowLeft } from '@lucide/vue'
+import { ArrowLeft, Sword, Shield, HardHat, Shirt, Hand, Columns2, Footprints } from '@lucide/vue'
+import { getEquipmentDurability } from '@/core/hentaiverse/hentaiVerseEquipment'
 import type { HentaiVerseEquipmentPage } from '@/core/hentaiverse/model/hentaiVerse'
 import type { HentaiVerseEquipmentDetail } from '@/core/hentaiverse/model/hentaiVerse'
 import EquipmentDetail from './EquipmentDetail.vue'
@@ -30,6 +32,31 @@ const emit = defineEmits<{
 }>()
 
 const candidateId = ref('')
+const inspectedSlotId = ref('')
+const detailOpen = ref(false)
+const mobile = useMediaQuery('(max-width: 767px)')
+const [DefineSlotDetails, SlotDetails] = createReusableTemplate()
+const inspectedSlot = computed(
+  () => props.data.slots.find((slot) => slot.id === inspectedSlotId.value) || props.data.slots[0],
+)
+const slotIcons: Record<string, typeof Sword> = {
+  '1': Sword,
+  '2': Shield,
+  '9': Shield,
+  '13': HardHat,
+  '11': Shirt,
+  '14': Hand,
+  '12': Columns2,
+  '15': Footprints,
+}
+const slotDurability = computed(() =>
+  Object.fromEntries(
+    props.data.slots.map((slot) => [
+      slot.id,
+      getEquipmentDurability(props.details?.[slot.equipmentId]),
+    ]),
+  ),
+)
 const activeSlot = computed(() =>
   props.data.slots.find((slot) => slot.id === props.data.selectedSlot),
 )
@@ -55,9 +82,24 @@ watch(
   () => props.data,
   (data) => {
     candidateId.value = data.candidates.find((candidate) => candidate.equipped)?.id || ''
+    detailOpen.value = false
+    if (!data.slots.some((slot) => slot.id === inspectedSlotId.value))
+      inspectedSlotId.value = data.slots[0]?.id || ''
   },
   { immediate: true },
 )
+watch(mobile, () => {
+  detailOpen.value = false
+})
+function inspectSlot(id: string) {
+  inspectedSlotId.value = id
+  if (mobile.value) detailOpen.value = true
+}
+function openCandidates() {
+  if (!inspectedSlot.value) return
+  detailOpen.value = false
+  emit('slot', inspectedSlot.value.id)
+}
 </script>
 
 <template>
@@ -68,7 +110,8 @@ watch(
         :key="set.id"
         type="button"
         :class="{ active: set.active }"
-        :disabled="loading"
+        :disabled="loading || set.active"
+        :aria-pressed="set.active"
         @click="emit('set', set.id, data.postToken)"
       >
         {{ t(set.label) }}
@@ -85,24 +128,73 @@ watch(
       }}</ActionButton>
     </div>
 
-    <div v-if="data.slots.length" class="equipment-slots">
-      <article
-        v-for="slot in data.slots"
-        :key="slot.id"
-        class="equipment-slot"
-        :class="{ active: slot.active || slot.id === data.selectedSlot }"
-      >
-        <button type="button" :disabled="loading || slot.disabled" @click="emit('slot', slot.id)">
-          <span class="equipment-slot-label"
-            ><PixelIcon kind="equipment" />{{ t(slot.label) }}</span
+    <DefineSlotDetails>
+      <section v-if="inspectedSlot" class="hv-window equipment-inspection">
+        <h3 class="hv-window-title">{{ t('装备详情') }} · {{ t(inspectedSlot.label) }}</h3>
+        <div class="hv-window-body">
+          <h3>{{ t(inspectedSlot.equipmentName || '未装备') }}</h3>
+          <EquipmentDetail
+            v-if="details?.[inspectedSlot.equipmentId]"
+            :data="details[inspectedSlot.equipmentId]!"
+            expanded
+          />
+          <p v-else>
+            {{ t(detailsLoading ? '正在加载装备属性…' : inspectedSlot.description || '未装备') }}
+          </p>
+        </div>
+        <div class="hv-window-footer">
+          <ActionButton
+            variant="default"
+            :disabled="loading || inspectedSlot.disabled"
+            @click="openCandidates"
+            >{{ t('更换装备') }}</ActionButton
           >
-          <strong>{{
-            t(slot.equipmentName || (slot.disabled ? t('当前主武器不可用') : t('未装备')))
-          }}</strong>
-        </button>
-        <EquipmentDetail v-if="details?.[slot.equipmentId]" :data="details[slot.equipmentId]!" />
-      </article>
+        </div>
+      </section>
+    </DefineSlotDetails>
+    <div v-if="data.slots.length && !data.selectedSlot" class="equipment-overview-layout">
+      <section class="hv-window">
+        <h3 class="hv-window-title">{{ t('已穿戴装备') }}</h3>
+        <div class="equipment-slots hv-window-body">
+          <article
+            v-for="slot in data.slots"
+            :key="slot.id"
+            class="equipment-slot"
+            :class="{ active: slot.id === inspectedSlot?.id }"
+          >
+            <button
+              type="button"
+              :disabled="loading || slot.disabled"
+              :aria-pressed="slot.id === inspectedSlot?.id"
+              @click="inspectSlot(slot.id)"
+            >
+              <span class="equipment-slot-label"
+                ><component :is="slotIcons[slot.id] || Shield" :size="18" aria-hidden="true" />{{
+                  t(slot.label)
+                }}</span
+              >
+              <strong>{{
+                t(slot.equipmentName || (slot.disabled ? t('当前主武器不可用') : t('未装备')))
+              }}</strong>
+              <span
+                v-if="slotDurability[slot.id] !== undefined"
+                class="equipment-durability"
+                :class="{ low: slotDurability[slot.id]! < 50 }"
+                >{{ t('耐久') }} {{ slotDurability[slot.id] }}%<span
+                  class="hv-meter"
+                  aria-hidden="true"
+                  ><span :style="{ width: `${slotDurability[slot.id]}%` }" /></span
+              ></span>
+            </button>
+          </article>
+        </div>
+      </section>
+      <SlotDetails v-if="!mobile" />
     </div>
+
+    <ModalPanel v-model="detailOpen" :title="t('装备详情')" content-class="hv-theme hv-dialog" sheet
+      ><SlotDetails
+    /></ModalPanel>
 
     <div v-if="data.selectedSlot" class="equipment-picker">
       <header>
@@ -133,7 +225,11 @@ watch(
         >
           <RadioChoice :value="candidate.id" :disabled="candidate.locked || loading">
             <span class="candidate-name"
-              ><PixelIcon kind="equipment" />{{ t(candidate.name) }}</span
+              ><component
+                :is="slotIcons[data.selectedSlot] || Shield"
+                :size="18"
+                aria-hidden="true"
+              />{{ t(candidate.name) }}</span
             >
             <TagChip v-if="candidate.equipped" size="small" tone="info">{{ t('已装备') }}</TagChip>
           </RadioChoice>

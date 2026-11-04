@@ -3,8 +3,7 @@ import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
 import '@/assets/hentaiverse.css'
-import CampScene from '@/components/hentaiverse/CampScene.vue'
-import PixelIcon from '@/components/hentaiverse/PixelIcon.vue'
+import SectionIcon from '@/components/hentaiverse/SectionIcon.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import Notice from '@/components/primitives/Notice.vue'
 import SelectField from '@/components/primitives/SelectField.vue'
@@ -14,7 +13,7 @@ import TagChip from '@/components/primitives/TagChip.vue'
 import EmptyState from '@/components/primitives/EmptyState.vue'
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { notify, dialogs } from '@/components/primitives/feedback'
-import { Zap as Lightning, RefreshCw as Refresh } from '@lucide/vue'
+import { Swords, PanelsTopLeft, RefreshCw as Refresh } from '@lucide/vue'
 import AbilityPanel from '@/components/hentaiverse/AbilityPanel.vue'
 import CharacterOverviewPanel from '@/components/hentaiverse/CharacterOverviewPanel.vue'
 import EquipmentPanel from '@/components/hentaiverse/EquipmentPanel.vue'
@@ -61,6 +60,7 @@ const mobileNavigationGroup = ref<(typeof HENTAIVERSE_SECTION_GROUPS)[number]['k
 const mobileSectionsElement = ref<HTMLElement>()
 const page = ref<HentaiVersePage>()
 const loading = ref(false)
+const submitting = ref(false)
 useAppLaunchReadiness(() => loading.value, 'battle')
 const error = ref('')
 const battleBlocked = ref(false)
@@ -86,12 +86,13 @@ watch(
     page.value = undefined
     characterSummary.value = { name: '', persona: '' }
     loading.value = false
+    submitting.value = false
     error.value = ''
     battleBlocked.value = false
     if (authState.loggedIn) {
       if (!availableSections.value.some((section) => section.key === activeSection.value))
         activeSection.value = 'character'
-      void loadSection(activeSection.value, {})
+      restoreSection()
     }
   },
   { flush: 'sync' },
@@ -193,6 +194,54 @@ function setPage(nextPage: HentaiVersePage) {
   if (nextPage.equipment)
     currentTarget.value.equip_slot = nextPage.equipment.selectedSlot || undefined
   updateCharacterSummary(nextPage)
+  try {
+    sessionStorage.setItem(
+      navigationKey(),
+      JSON.stringify({ section: activeSection.value, target: currentTarget.value }),
+    )
+  } catch {
+    // Navigation remains usable when session storage is unavailable.
+  }
+}
+
+function navigationKey() {
+  return `eviewer:hv-navigation:${authState.source}:${authState.site}:${authState.memberId}:${hentaiVerseWorld.value}`
+}
+
+function restoreSection() {
+  let section = activeSection.value
+  let target: Partial<HentaiVersePageTarget> = {}
+  try {
+    const saved = JSON.parse(sessionStorage.getItem(navigationKey()) || 'null')
+    const meta = availableSections.value.find((item) => item.key === saved?.section)
+    if (meta && saved.target && typeof saved.target === 'object') {
+      section = meta.key
+      const keys = [
+        'equip_slot',
+        'tree',
+        'filter',
+        'screen',
+        'eqids[]',
+        'itemid',
+        'tradelog',
+        'playerstock',
+        'marketstock',
+        'lottery',
+        'create',
+        'slot',
+        'pane',
+      ]
+      target = Object.fromEntries(
+        Object.entries(saved.target).filter(
+          ([key, value]) => keys.includes(key) && typeof value === 'string',
+        ),
+      )
+    }
+  } catch {
+    // Invalid saved navigation falls back to the current available section.
+  }
+  if (!availableSections.value.some((item) => item.key === section)) section = 'character'
+  void loadSection(section, target)
 }
 
 function openBattle(snapshot: HentaiVerseBattleSnapshot) {
@@ -206,21 +255,22 @@ async function loadSection(
   targetOverride?: Partial<HentaiVersePageTarget>,
 ) {
   const meta = HENTAIVERSE_SECTIONS.find((item) => item.key === section)
-  if (
-    !meta ||
-    (loading.value &&
-      meta.target.s === currentTarget.value.s &&
-      meta.target.ss === currentTarget.value.ss)
-  )
-    return
-  const changedSection = section !== page.value?.section
-  activeSection.value = section
-  currentTarget.value = {
+  if (!meta || submitting.value) return
+  const changedSection = section !== activeSection.value
+  const target = {
     ...meta.target,
     ...(!changedSection && !targetOverride ? currentTarget.value : targetOverride || {}),
     world: hentaiVerseWorld.value,
   }
-  if (changedSection) page.value = undefined
+  const targetChanged = Object.keys({ ...currentTarget.value, ...target }).some(
+    (key) =>
+      currentTarget.value[key as keyof HentaiVersePageTarget] !==
+      target[key as keyof HentaiVersePageTarget],
+  )
+  if (loading.value && !targetChanged) return
+  activeSection.value = section
+  currentTarget.value = target
+  if (changedSection || targetChanged) page.value = undefined
   const currentRequest = ++requestId
   loading.value = true
   error.value = ''
@@ -251,6 +301,8 @@ async function runDomainAction(
   const currentRequest = ++requestId
   const memberId = authState.memberId
   loading.value = true
+  submitting.value = true
+  error.value = ''
   try {
     const result = await request()
     if (currentRequest !== requestId || memberId !== authState.memberId) return
@@ -261,14 +313,18 @@ async function runDomainAction(
       if (!result.page.authenticated)
         throw new Error(t('HentaiVerse 登录态已失效，请在当前连接模式下重新登录'))
       setPage(result.page)
-      notify.success(successMessage)
+      if (result.confirmed) notify.success(successMessage)
+      else notify.info(t('已收到源站响应，请核对更新结果'))
     }
   } catch (actionError) {
     if (currentRequest === requestId && memberId === authState.memberId) {
-      notify.error(actionError instanceof Error ? actionError.message : t('操作失败'))
+      notify.error(t(actionError instanceof Error ? actionError.message : '操作失败'))
     }
   } finally {
-    if (currentRequest === requestId) loading.value = false
+    if (currentRequest === requestId) {
+      submitting.value = false
+      loading.value = false
+    }
   }
 }
 
@@ -278,6 +334,8 @@ async function submitForm(section: HentaiVerseFormSection, data: HentaiVerseForm
   const memberId = authState.memberId
   const target = { ...currentTarget.value }
   loading.value = true
+  submitting.value = true
+  error.value = ''
   try {
     try {
       if (section === 'persona' && data.persona_create) {
@@ -326,23 +384,25 @@ async function submitForm(section: HentaiVerseFormSection, data: HentaiVerseForm
       if (!result.page.authenticated)
         throw new Error(t('HentaiVerse 登录态已失效，请重新维护认证 Cookie'))
       setPage(result.page)
-      if (result.page.armory || result.page.bazaar || result.page.services)
-        notify.info(t('已收到源站响应'))
-      else notify.success(t('HentaiVerse 设置已更新'))
+      notify.info(t('已收到源站响应，请核对更新结果'))
     }
   } catch (submitError) {
     if (currentRequest === requestId && memberId === authState.memberId)
-      notify.error(submitError instanceof Error ? submitError.message : t('提交失败'))
+      notify.error(t(submitError instanceof Error ? submitError.message : '提交失败'))
   } finally {
-    if (currentRequest === requestId) loading.value = false
+    if (currentRequest === requestId) {
+      submitting.value = false
+      loading.value = false
+    }
   }
 }
 
 function navigateService(query: Record<string, string>) {
+  const target = { ...currentMeta.value.target, ...query }
   const meta = availableSections.value.find(
-    (item) => item.target.s === query.s && item.target.ss === query.ss,
+    (item) => item.target.s === target.s && item.target.ss === target.ss,
   )
-  if (meta) void loadSection(meta.key, query)
+  if (meta) void loadSection(meta.key, target)
 }
 
 function selectEquipmentSet(id: string, postToken: string) {
@@ -379,6 +439,8 @@ function selectAbilityTree(id: string) {
 }
 
 async function updateAbility(action: HentaiVerseAbilityActionName | 'reset_all', value: string) {
+  const source = page.value
+  if (loading.value) return
   if (['reset_all', 'reset_ability', 'unlock_slot'].includes(action)) {
     const ability = page.value?.abilities?.abilities.find((item) => item.id === value)
     const slot = page.value?.abilities?.slots.find((item) => item.id === value)
@@ -407,6 +469,7 @@ async function updateAbility(action: HentaiVerseAbilityActionName | 'reset_all',
       return
     }
   }
+  if (page.value !== source || loading.value) return
   void runDomainAction(
     () => busi.updateAbility(action, value, currentTarget.value),
     t('能力配置已更新'),
@@ -420,7 +483,20 @@ function equipAbility(slotId: string, abilityId: string) {
   )
 }
 
-function startTraining(id: string) {
+async function startTraining(id: string) {
+  const source = page.value
+  const option = source?.training?.options.find((item) => item.id === id)
+  if (!option?.canStart || loading.value) return
+  try {
+    await dialogs.confirm(
+      `${t(option.name)} · ${t('费用')} ${t(option.cost)} · ${t('耗时')} ${t(option.duration)}`,
+      t('确认开始训练'),
+      { confirmButtonText: t('开始训练'), cancelButtonText: t('取消') },
+    )
+  } catch {
+    return
+  }
+  if (page.value !== source || loading.value) return
   void runDomainAction(() => busi.startTraining(id, currentTarget.value), t('训练已开始'))
 }
 
@@ -437,26 +513,23 @@ function assignInventoryItem(slotId: string, itemId: string) {
 
 async function resumeBattle() {
   try {
-    await enterHentaiVerseBattle(undefined)
+    await enterHentaiVerseBattle()
   } catch (resumeError) {
     notify.info(resumeError instanceof Error ? resumeError.message : t('当前没有可恢复的战斗'))
   }
 }
 
 onMounted(() => {
-  if (authState.loggedIn) void loadSection()
+  if (authState.loggedIn) restoreSection()
 })
 </script>
 
 <template>
   <div class="hv-view hv-theme">
     <header class="hv-page-header">
+      <span class="hv-module-mark" aria-hidden="true"><Swords :size="22" /></span>
       <div class="hv-header-title">
-        <span>{{ t('冒险手帐') }}</span>
         <h1>HentaiVerse</h1>
-        <p class="hv-module-description">
-          {{ t('培养角色、配置装备与能力，并参加竞技场等战斗内容。') }}
-        </p>
         <p v-if="characterSummary.name" class="hv-character-summary">
           {{ t('当前角色：') }}{{ t(characterSummary.name)
           }}<template v-if="characterSummary.persona">
@@ -467,7 +540,7 @@ onMounted(() => {
       <SelectField
         v-if="authState.loggedIn"
         v-model="hentaiVerseWorld"
-        class="hv-mobile-world"
+        class="hv-world-select"
         :aria-label="t('世界')"
         :disabled="loading || hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
       >
@@ -475,7 +548,7 @@ onMounted(() => {
         <option value="isekai" :label="t('异世界')" />
       </SelectField>
       <div class="hv-header-actions">
-        <ActionButton :icon="Lightning" @click="resumeBattle">{{ t('恢复战斗') }}</ActionButton>
+        <ActionButton :icon="Swords" @click="resumeBattle">{{ t('恢复战斗') }}</ActionButton>
         <ActionButton
           :icon="Refresh"
           size="icon"
@@ -486,7 +559,6 @@ onMounted(() => {
       </div>
     </header>
 
-    <CampScene :compact="activeSection !== 'character'" />
     <details v-if="authState.source === 'local'" class="hv-local-help" :open="!authState.loggedIn">
       <summary>{{ t('连接说明') }}</summary>
       <p>
@@ -510,16 +582,16 @@ onMounted(() => {
 
     <div v-else class="hv-shell">
       <aside class="hv-navigation">
-        <SelectField
-          v-model="hentaiVerseWorld"
-          :aria-label="t('世界')"
-          :disabled="loading || hentaiVerseState.actionPending || hentaiVerseState.battleLoading"
+        <div class="hv-window-title">
+          <PanelsTopLeft :size="16" aria-hidden="true" />{{ t('功能目录') }}
+        </div>
+        <details
+          v-for="group in navigationGroups"
+          :key="group.key"
+          class="hv-navigation-group"
+          :open="currentMeta.group === group.key"
         >
-          <option value="persistent" :label="t('永久世界')" />
-          <option value="isekai" :label="t('异世界')" />
-        </SelectField>
-        <template v-for="group in navigationGroups" :key="group.key">
-          <strong>{{ t(group.label) }}</strong>
+          <summary>{{ t(group.label) }}</summary>
           <button
             v-for="item in group.sections"
             :key="item.key"
@@ -528,9 +600,9 @@ onMounted(() => {
             :aria-current="activeSection === item.key ? 'page' : undefined"
             @click="loadSection(item.key)"
           >
-            <PixelIcon :kind="item.key" />{{ t(item.label) }}
+            <SectionIcon :kind="item.key" />{{ t(item.label) }}
           </button>
-        </template>
+        </details>
       </aside>
 
       <main class="hv-content">
@@ -587,7 +659,7 @@ onMounted(() => {
           >
         </StatusPanel>
         <StatusPanel
-          v-else-if="error"
+          v-else-if="error && !page"
           icon="error"
           :title="t('HentaiVerse 页面加载失败')"
           :sub-title="t(error)"
@@ -599,6 +671,9 @@ onMounted(() => {
           >
         </StatusPanel>
         <template v-else-if="page">
+          <Notice v-if="error" tone="error" :title="t(error)" class="hv-notice">
+            <ActionButton size="sm" @click="loadSection()">{{ t('重新加载') }}</ActionButton>
+          </Notice>
           <div class="hv-content-heading">
             <div>
               <span>{{ t(currentGroup.heading) }}</span>
@@ -612,7 +687,7 @@ onMounted(() => {
             v-for="notice in page.notices"
             :key="notice"
             :title="t(notice)"
-            tone="info"
+            :tone="page.noticeTones?.[notice] || 'info'"
             :closable="false"
             class="hv-notice"
           />
@@ -712,10 +787,7 @@ onMounted(() => {
             @start="submitForm('itemWorld', $event)"
           />
 
-          <StatGroupsPanel
-            v-if="['character', 'equipment'].includes(activeSection)"
-            :groups="page.statGroups"
-          />
+          <StatGroupsPanel v-if="activeSection === 'equipment'" :groups="page.statGroups" />
 
           <HentaiVerseFormPanel
             v-for="form in page.forms.filter(
@@ -777,7 +849,9 @@ onMounted(() => {
   width: min(1240px, 100%);
   min-height: 100%;
   margin: 0 auto;
-  padding-bottom: 80px;
+  padding-bottom: calc(
+    5 * (var(--fab-size) + var(--fab-gap, 10px)) + var(--fab-inset) + env(safe-area-inset-bottom)
+  );
 }
 
 .hv-page-header {

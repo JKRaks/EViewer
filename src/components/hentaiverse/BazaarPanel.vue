@@ -44,7 +44,6 @@ const transferAmount = ref(1)
 const fundsOpen = ref(false)
 const recordsOpen = ref(false)
 const orderSide = ref<'buy' | 'sell'>('buy')
-const orderTouched = reactive<Record<string, boolean>>({})
 const transferTouched = ref(false)
 const mainNavigation = computed(() =>
   props.data.navigation.filter(
@@ -55,7 +54,7 @@ const recordNavigation = computed(() =>
   props.data.navigation.filter((link) => !mainNavigation.value.includes(link)),
 )
 const visibleOrders = computed(() =>
-  props.data.orders.filter((order) => !mobile.value || order.side === orderSide.value),
+  props.data.orders.filter((order) => order.side === orderSide.value),
 )
 const reward = ref('')
 const drafts = reactive<Record<string, { count: number; price: number }>>({})
@@ -82,8 +81,6 @@ watch(
     reward.value = ''
     count.value = 1
     transferTouched.value = false
-    orderTouched.buy = false
-    orderTouched.sell = false
     orderSide.value = data.orders[0]?.side || 'buy'
     if (recordNavigation.value.some((link) => link.active)) recordsOpen.value = true
     for (const order of data.orders)
@@ -236,7 +233,6 @@ function updateOrderDraft(side: 'buy' | 'sell', field: 'count' | 'price') {
   const draft = drafts[side]
   if (!draft) return
   draft[field] = Number(draft[field]) || 0
-  orderTouched[side] = true
 }
 
 function submitOrder(order: HentaiVerseMarketOrder) {
@@ -539,59 +535,60 @@ function selectItem(item: HentaiVerseBazaarPage['items'][number]) {
     <template v-if="data.kind === 'market'">
       <h3 v-if="data.itemName">{{ t(data.itemName) }}</h3>
       <p v-if="data.itemInfo">{{ t(data.itemInfo) }}</p>
-      <MarketQuote v-if="data.itemName" :data="data" />
       <p v-if="data.tables.some((table) => table.title === '物品列表')" class="bazaar-unit-note">
         {{ t('列表买卖报价单位：C/件') }}
       </p>
-      <ChoiceGroup
-        v-if="mobile && data.orders.length > 1"
-        v-model="orderSide"
-        :disabled="loading"
-        class="bazaar-order-switch"
-      >
-        <RadioChoice value="buy">{{ t('购买') }}</RadioChoice
-        ><RadioChoice value="sell">{{ t('出售') }}</RadioChoice>
-      </ChoiceGroup>
-      <div v-if="data.orders.length" class="bazaar-orders">
-        <article v-for="order in visibleOrders" :key="order.side">
-          <h3>{{ order.side === 'buy' ? t('提交买单') : t('提交卖单') }}</h3>
-          <label
-            >{{ t('批数') }} × {{ data.batchSize
-            }}<NumberField
-              v-model="drafts[order.side]!.count"
-              @change="updateOrderDraft(order.side, 'count')"
-              :min="1"
-              :max="order.maxCount"
-              :disabled="loading"
-          /></label>
-          <label
-            >{{ t('每批价格') }} (C)<NumberField
-              v-model="drafts[order.side]!.price"
-              @change="updateOrderDraft(order.side, 'price')"
-              :min="10"
-              :max="100000000"
-              :step="hentaiVerseMarketPriceStep(drafts[order.side]!.price)"
-              :disabled="loading"
-          /></label>
-          <p>
-            {{ t('总额') }}
-            {{ (drafts[order.side]!.count * drafts[order.side]!.price).toLocaleString() }} C
-          </p>
-          <p
-            v-if="orderTouched[order.side] && orderErrors[order.side]"
-            class="bazaar-validation"
-            role="status"
+      <div v-if="data.itemName || data.orders.length" class="market-workspace">
+        <MarketQuote v-if="data.itemName" :data="data" :loading="loading" />
+        <section v-if="data.orders.length" class="market-order-window hv-window">
+          <h3 class="hv-window-title">{{ t('创建订单') }}</h3>
+          <ChoiceGroup
+            v-if="data.orders.length > 1"
+            v-model="orderSide"
+            :disabled="loading"
+            class="bazaar-order-switch"
           >
-            {{ t(orderErrors[order.side]) }}
-          </p>
-          <ActionButton
-            variant="default"
-            :loading="loading"
-            :disabled="confirming || !!orderErrors[order.side]"
-            @click="submitOrder(order)"
-            >{{ order.side === 'buy' ? t('提交买单') : t('提交卖单') }}</ActionButton
-          >
-        </article>
+            <RadioChoice value="buy">{{ t('购买') }}</RadioChoice
+            ><RadioChoice value="sell">{{ t('出售') }}</RadioChoice>
+          </ChoiceGroup>
+          <div v-if="data.orders.length" class="bazaar-orders">
+            <article v-for="order in visibleOrders" :key="order.side">
+              <h3>{{ order.side === 'buy' ? t('提交买单') : t('提交卖单') }}</h3>
+              <label
+                >{{ t('批数') }} × {{ data.batchSize || '—'
+                }}<NumberField
+                  v-model="drafts[order.side]!.count"
+                  @change="updateOrderDraft(order.side, 'count')"
+                  :min="1"
+                  :max="order.maxCount"
+                  :disabled="loading"
+              /></label>
+              <label
+                >{{ t('每批价格') }} (C)<NumberField
+                  v-model="drafts[order.side]!.price"
+                  @change="updateOrderDraft(order.side, 'price')"
+                  :min="10"
+                  :max="100000000"
+                  :step="hentaiVerseMarketPriceStep(drafts[order.side]!.price)"
+                  :disabled="loading"
+              /></label>
+              <p>
+                {{ t('总额') }}
+                {{ (drafts[order.side]!.count * drafts[order.side]!.price).toLocaleString() }} C
+              </p>
+              <p v-if="orderErrors[order.side]" class="bazaar-validation" role="status">
+                {{ t(orderErrors[order.side]) }}
+              </p>
+              <ActionButton
+                variant="default"
+                :loading="loading"
+                :disabled="confirming || !!orderErrors[order.side]"
+                @click="submitOrder(order)"
+                >{{ order.side === 'buy' ? t('提交买单') : t('提交卖单') }}</ActionButton
+              >
+            </article>
+          </div>
+        </section>
       </div>
       <EmptyState v-if="data.emptyReason" :description="t(data.emptyReason)" />
       <details

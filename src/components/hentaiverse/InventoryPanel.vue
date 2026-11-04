@@ -6,12 +6,17 @@ import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
 import RadioChoice from '@/components/primitives/RadioChoice.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
 import EmptyState from '@/components/primitives/EmptyState.vue'
+import ModalPanel from '@/components/primitives/ModalPanel.vue'
+import { createReusableTemplate, useMediaQuery } from '@vueuse/core'
 import { computed, ref, watch } from 'vue'
 import type { HentaiVerseInventoryPage } from '@/core/hentaiverse/model/hentaiVerse'
 
 const props = defineProps<{ data: HentaiVerseInventoryPage; loading?: boolean }>()
 const emit = defineEmits<{ assign: [slotId: string, itemId: string] }>()
 const selectedItemId = ref('')
+const mobile = useMediaQuery('(max-width: 767px)')
+const slotsOpen = ref(false)
+const [DefineInventorySlots, InventorySlots] = createReusableTemplate()
 const activeCategory = ref('')
 const categories = computed(() =>
   Array.from(new Set(props.data.items.map((item) => item.category))),
@@ -24,6 +29,10 @@ const visibleItems = computed(() =>
 const selectedItem = computed(() =>
   props.data.items.find((item) => item.id === selectedItemId.value),
 )
+function selectItem(id: string | number | boolean | undefined) {
+  selectedItemId.value = id === undefined ? '' : String(id)
+  if (mobile.value && selectedItem.value?.canAssign) slotsOpen.value = true
+}
 
 watch(
   () => props.data.items,
@@ -37,6 +46,12 @@ watch(
 
 <template>
   <section class="inventory-panel">
+    <ActionButton
+      v-if="mobile && data.slots.length && data.items.length"
+      class="inventory-slot-trigger"
+      @click="slotsOpen = true"
+      >{{ t('配置战斗物品栏') }}</ActionButton
+    >
     <div v-if="data.items.length" class="inventory-layout">
       <div class="inventory-items">
         <header>
@@ -58,7 +73,11 @@ watch(
             {{ t(data.items.filter((item) => item.category === category).length) }}
           </button>
         </div>
-        <ChoiceGroup v-model="selectedItemId" :aria-label="t('选择物品')">
+        <ChoiceGroup
+          :model-value="selectedItemId"
+          :aria-label="t('选择物品')"
+          @update:model-value="selectItem"
+        >
           <RadioChoice
             v-for="item in visibleItems"
             :key="item.id"
@@ -87,51 +106,65 @@ watch(
         </p>
       </div>
 
-      <div class="inventory-slots">
-        <header>
-          <h3>{{ t('战斗槽位') }}</h3>
-          <span>{{ t('选择物品后点击槽位') }}</span>
-        </header>
-        <div v-if="data.slots.length" class="inventory-slot-grid">
-          <div
-            v-for="slot in data.slots"
-            :key="slot.id"
-            class="inventory-slot"
-            :class="{ equipped: slot.itemId }"
-          >
-            <button
-              type="button"
-              :disabled="
-                loading || !selectedItem?.canAssign || selectedItem.category !== slot.category
-              "
-              :title="
-                selectedItem && selectedItem.category !== slot.category
-                  ? t('此槽位仅能装配{p0}', { p0: slot.category })
-                  : slot.itemName
-              "
-              @click="emit('assign', slot.id, selectedItemId)"
+      <DefineInventorySlots>
+        <div class="inventory-slots">
+          <header>
+            <h3>{{ t('战斗槽位') }}</h3>
+            <span>{{ selectedItem ? t(selectedItem.name) : t('选择物品后点击槽位') }}</span>
+          </header>
+          <div v-if="data.slots.length" class="inventory-slot-grid">
+            <div
+              v-for="slot in data.slots"
+              :key="slot.id"
+              class="inventory-slot"
+              :class="{ equipped: slot.itemId }"
             >
-              <span>{{ t(slot.label) }} · {{ t(slot.category) }}</span>
-              <strong>{{ t(slot.itemName || t('空槽位')) }}</strong>
-            </button>
-            <ActionButton
-              v-if="slot.itemId"
-              size="sm"
-              variant="ghost"
-              :disabled="loading"
-              @click="emit('assign', slot.id, '0')"
-              >{{ t('清空槽位') }}</ActionButton
-            >
+              <button
+                type="button"
+                :disabled="
+                  loading || !selectedItem?.canAssign || selectedItem.category !== slot.category
+                "
+                :title="
+                  selectedItem && selectedItem.category !== slot.category
+                    ? t('此槽位仅能装配{p0}', { p0: slot.category })
+                    : slot.itemName
+                "
+                @click="emit('assign', slot.id, selectedItemId)"
+              >
+                <span>{{ t(slot.label) }} · {{ t(slot.category) }}</span>
+                <strong>{{ t(slot.itemName || t('空槽位')) }}</strong>
+              </button>
+              <ActionButton
+                v-if="slot.itemId"
+                size="sm"
+                variant="ghost"
+                :disabled="loading"
+                @click="emit('assign', slot.id, '0')"
+                >{{ t('清空槽位') }}</ActionButton
+              >
+            </div>
           </div>
+          <EmptyState v-else :description="t('没有可配置的物品槽位')" :image-size="70" />
         </div>
-        <EmptyState v-else :description="t('没有可配置的物品槽位')" :image-size="70" />
-      </div>
+      </DefineInventorySlots>
+      <InventorySlots v-if="!mobile" />
+      <ModalPanel
+        v-else
+        v-model="slotsOpen"
+        :title="t('配置战斗物品栏')"
+        content-class="hv-theme hv-dialog"
+        sheet
+        ><InventorySlots
+      /></ModalPanel>
     </div>
-    <EmptyState v-else :description="t('未能从源站解析物品列表')" />
+    <EmptyState v-else :description="t('当前世界暂无物品')" />
   </section>
 </template>
 
 <style scoped>
+.inventory-slot-trigger {
+  margin-bottom: 16px;
+}
 .inventory-slot {
   display: flex;
   flex-direction: column;
@@ -153,13 +186,15 @@ watch(
   border-bottom: 1px solid var(--border-soft);
 }
 
-.inventory-layout h3 {
+.inventory-items h3,
+.inventory-slots h3 {
   margin: 0;
   font-size: 16px;
   letter-spacing: 0;
 }
 
-.inventory-layout header span {
+.inventory-items header span,
+.inventory-slots header span {
   color: var(--muted-foreground);
   font-size: 12px;
 }
