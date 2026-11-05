@@ -12,8 +12,10 @@ import {
 } from '@/core/hentaiverse/hentaiVerseStore'
 
 async function enterBattle() {
+  const token = hentaiVerseState.encounter?.token
+  if (!token) return
   try {
-    await enterHentaiVerseBattle()
+    await enterHentaiVerseBattle(token)
   } catch (error) {
     notify.error(error instanceof Error ? error.message : t('进入随机遭遇失败'))
   }

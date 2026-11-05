@@ -1299,6 +1299,7 @@
   "HV 翻译收集": "HV translations",
   "收集未翻译文本": "Collect untranslated text",
   "使用 HentaiVerse 时，记录未翻译或部分翻译的文本，仅保存在当前浏览器。": "Record untranslated or partially translated HentaiVerse text locally in this browser.",
+  "在本地收集漏译内容，统一导出": "Collect untranslated text locally and export it together",
   "待补译 {p0} 条，其中部分翻译 {p1} 条；已覆盖 {p2} 条。": "{p0} candidates pending, including {p1} partially translated; {p2} covered.",
   "按句式去重，最多保留 1000 条候选及每条 3 个脱敏样例。导出后可用于补齐翻译规则。": "Groups by pattern, with up to 1,000 candidates and 3 redacted samples each. Export them to improve translation rules.",
   "本地存储不可用，本轮仅保存在内存中，请及时导出。": "Local storage is unavailable. Records are kept in memory for this session; export them before leaving.",
@@ -1577,5 +1578,18 @@
   "源站未提供邮资": "The source did not provide the postage cost",
   "无法确认领取费用，暂不能领取附件。": "Attachment claiming is disabled because its cost could not be confirmed.",
   "所选护符或护符袋不可用": "The selected charm or pouch is unavailable",
-  "已保留已加载的画册和浏览位置。": "Your loaded galleries and browsing position have been kept."
+  "已保留已加载的画册和浏览位置。": "Your loaded galleries and browsing position have been kept.",
+  "角色档案": "Character profile",
+  "功能目录": "Navigation",
+  "已穿戴装备": "Equipped items",
+  "装备详情": "Equipment details",
+  "更换装备": "Change equipment",
+  "耐久": "Durability",
+  "技能分类": "Ability category",
+  "创建订单": "Create order",
+  "人格槽": "Persona slots",
+  "详细属性与熟练度": "Attributes and proficiencies",
+  "增加{p0}": "Increase {p0}",
+  "减少{p0}": "Decrease {p0}",
+  "{p0}目标值": "{p0} target value"
 }

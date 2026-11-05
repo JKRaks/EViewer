@@ -25,7 +25,7 @@ interface CaptureContext {
 
 const settingKey = 'eviewer:hv-translation-capture'
 const recordKey = 'hv-translation-candidates-v1'
-const rulesVersion = 5
+const rulesVersion = 6
 const limit = 1000
 const candidates = new Map<string, TranslationCandidate>()
 let context: CaptureContext | undefined
@@ -188,8 +188,10 @@ function sanitize(value: string, maskNumbers = true, translatedNames = false): s
 function hasUntranslatedWords(value: string) {
   // Masked character names and the product name are intentionally kept verbatim.
   if (/^(?:The\s+)?\{actor\}$/i.test(value.trim())) return false
-  return /\b[a-z]{3,}\b/i.test(
-    value.replace(/\{[^}]+\}/g, '').replace(/\b(?:HentaiVerse|HP|MP|SP|EXP|N\/A)\b/gi, ''),
+  return /\b[a-z]{2,}\b/i.test(
+    value
+      .replace(/\{[^}]+\}/g, '')
+      .replace(/\b(?:HentaiVerse|HV|HP|MP|SP|EXP|GP|Hath|UTC|N\/A)\b/gi, ''),
   )
 }
 
@@ -262,9 +264,13 @@ export async function reviewTranslationCandidates(
     for (const entry of candidates.values()) {
       // Translation rules identify actor/custom skill names while replaying each sample.
       context = { section: entry.section, version: '', names: [], seen: new Set() }
-      const translated = translate(entry.domain, entry.samples[0] || entry.pattern)
+      const translated = sanitize(
+        translate(entry.domain, entry.samples[0] || entry.pattern),
+        true,
+        true,
+      )
       entry.translated = translated
-      entry.status = hasUntranslatedWords(sanitize(translated, false))
+      entry.status = hasUntranslatedWords(translated)
         ? /[\u3400-\u9fff]/.test(translated)
           ? 'partial'
           : 'unmatched'
