@@ -6,13 +6,13 @@
 
 面向 E-Hentai / ExHentai 的多端网页客户端，支持画廊搜索、阅读和收藏，并集成 HentaiVerse 功能。
 
-**[立即使用 EViewer](https://eviewer.c-h.cc/)** · [使用文档](docs/README.md) · [自行部署](docs/deployment.md)
+**[立即使用 EViewer](https://docs.gghf.top/projects/eviewer/)** · [使用文档](docs/README.md) · [自行部署](docs/deployment.md)
 
 ![EViewer 桌面、手机和平板界面](docs/images/hero.png)
 
 ## 开始使用
 
-访问 **[eviewer.c-h.cc](https://eviewer.c-h.cc/)**，推荐搭配浏览器助手使用本机代理。
+访问 **[https://eviewer.c-h.cc/](https://docs.gghf.top/projects/eviewer/)**，推荐搭配浏览器助手使用本机代理。
 
 > [!TIP]
 > **页面打不开，或画廊加载不出来？**
