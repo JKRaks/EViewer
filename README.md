@@ -12,7 +12,7 @@
 
 ## 开始使用
 
-访问 **[https://eviewer.c-h.cc/](https://docs.gghf.top/projects/eviewer/)**，推荐搭配浏览器助手使用本机代理。
+访问 **[https://docs.gghf.top/projects/eviewer](https://docs.gghf.top/projects/eviewer/)**，推荐搭配浏览器助手使用本机代理。
 
 > [!TIP]
 > **页面打不开，或画廊加载不出来？**
