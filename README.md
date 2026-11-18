@@ -1,187 +1,126 @@
 # EViewer
 
-[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
-[![Node.js Version](https://img.shields.io/badge/node-%3E%3D22.12.0-brightgreen)](https://nodejs.org/)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3-blue.svg)](LICENSE.txt)
 [![Vue 3](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vue.js)](https://vuejs.org/)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare)](https://workers.cloudflare.com/)
 
-E-Hentai / ExHentai 网页阅读器，通过自部署反向代理访问原站。
+EViewer 是面向 E-Hentai / ExHentai 的网页阅读器，也提供 HentaiVerse 的角色、装备和战斗界面。它把查找画廊、阅读、收藏与游戏操作放在同一个应用中，适配桌面、手机和平板，可自行部署到 Cloudflare Workers。
+
+![EViewer 桌面、手机和平板界面](docs/images/hero.png)
+
+[开始使用](#开始使用) · [功能](#功能) · [自行部署](docs/deployment.md) · [使用文档](docs/README.md) · [本地开发](docs/development.md)
 
 ## 功能
 
-- 浏览首页推荐、昨日排行与 Toplists
-- 高级搜索，标签包含与排除筛选
-- 连续滚动阅读，进度恢复，图片失败重试
-- 收藏夹管理，阅读历史
-- 种子下载，画廊分享二维码
-- HentaiVerse 角色、装备、物品、能力及战斗管理
-- 深色/浅色主题
-- 中文/英文界面
-- PWA 支持
+### 查找画廊
 
-## 技术栈
+从首页推荐、昨日排行和 Toplists 浏览内容，也可以直接搜索标题、标签或关键词。高级筛选支持分类、最低评分、页数、上传者，以及标签的包含和排除条件；组合好的条件会显示在结果上方，方便继续调整。
 
-- Vue 3、TypeScript、Vue Router、Vue I18n
-- Reka UI、Tailwind CSS 4、Lucide
-- Cloudflare Workers 代理
-- IndexedDB 缓存
-- Vite 构建
+图片搜索提供精确匹配与近似搜索：前者按文件哈希查询，后者将图片交给源站匹配。
 
-## 架构
+![输入标题查找画廊](docs/images/title-search-demo.webp)
 
-浏览器通过代理访问原站，前端与代理由同一个 Worker 提供：
+[搜索与筛选说明](docs/guide/search-and-reading.md#搜索画册)
 
+### 连续阅读与进度恢复
+
+阅读器按顺序连续加载图片，支持页码跳转、恢复上次阅读位置，以及单张或后续图片加载失败后的重试。阅读记录保存在当前浏览器，可以从历史中回到上次看到的位置。
+
+![跳转到指定阅读位置](docs/images/reader-demo.webp)
+
+[阅读器使用说明](docs/guide/search-and-reading.md#开始阅读)
+
+### 收藏、分享与下载
+
+- **收藏夹**：查看和管理源站账号的收藏。
+- **阅读历史**：在当前浏览器中查找读过的画廊及阅读进度。
+- **分享**：生成带二维码的分享图片，可选择本站或源站链接。
+- **种子下载**：查看画廊提供的种子资源。下载页的「源站下载」目前暂不支持。
+
+收藏与本地历史分开管理。阅读历史保存在当前浏览器，清除站点数据会删除这些记录。
+
+[收藏与历史](docs/guide/favorites-and-history.md) · [分享与下载](docs/guide/search-and-reading.md#分享与下载)
+
+### HentaiVerse
+
+在同一个应用中切换永久世界与异世界，查看角色状态、配置装备和能力，访问训练、物品、战斗及集市页面。
+
+| 分区 | 主要入口 |
+| --- | --- |
+| 角色 | 角色总览、装备、能力、训练、物品、战斗设置 |
+| 战斗 | 竞技场、鲜血之环、混战祭、装备界及对应世界的挑战 |
+| 集市 | 物品商店、市场、神殿、怪物实验室、莫古邮件 |
+| 装备库 | 装备维护 |
+
+![查看 HentaiVerse 角色与装备](docs/images/hentaiverse-demo.webp)
+
+具体入口和可执行操作受源站账号、世界及战斗状态限制。游戏操作作用于源站账号，涉及购买、训练或材料消耗时，应核对页面中的费用与确认提示。
+
+[HentaiVerse 使用说明](docs/guide/hentaiverse.md)
+
+### 多端界面与外观
+
+桌面使用较宽的列表和功能导航，手机、平板按可用宽度调整布局。支持中文和英文、日间和夜间模式、跟随系统及自定义配色；支持的浏览器可以将网站安装为 PWA，以独立窗口打开。
+
+![切换明暗模式与配色](docs/images/appearance-demo.webp)
+
+[外观与 PWA](docs/guide/appearance-and-pwa.md)
+
+## 开始使用
+
+先打开自己部署或信任的 EViewer 实例，在「系统设置 → 浏览器助手」选择连接方式，再到「账号信息」验证登录状态。
+
+| 连接方式 | 请求如何到达源站 | 使用前需要 |
+| --- | --- | --- |
+| 服务代理 | 通过 Cloudflare Worker 访问源站 | 可用的代理实例，并在「账号信息」配置登录态 |
+| 本机代理（Beta） | 通过浏览器助手使用当前浏览器的源站会话 | 支持脚本扩展的浏览器、已安装助手、同一浏览器已登录源站 |
+
+画廊与 HentaiVerse 使用同一连接方式。本机请求失败不会自动切换为服务代理；ExHentai 仍要求账号已有源站访问权限。
+
+浏览器助手支持 Tampermonkey 和 Userscripts。iPhone / iPad 上需在 Safari 普通标签页使用 Userscripts；Android 需要选择支持对应扩展的浏览器。
+
+完整安装步骤见[首次使用指南](docs/getting-started.md)。不要向不信任的实例提供登录凭据，也不要将 Cookie 放进 Issue 或截图。
+
+## 自行部署
+
+前端静态资源与代理由同一个 Cloudflare Worker 提供，不需要另建前端托管服务：
+
+```text
+浏览器 → EViewer Worker
+           ├─ 网页应用与静态资源
+           ├─ E-Hentai / ExHentai 代理
+           └─ HentaiVerse 代理
 ```
-浏览器 → Cloudflare Worker (eviewer-app)
-              ├── /              → 前端静态资源
-              ├── /ehentai/*     → e-hentai.org
-              ├── /exhentai/*    → exhentai.org
-              ├── /ehentai/auth/* → 认证接口
-              └── /hentaiverse/* → HentaiVerse
-```
+
+仓库包含 GitHub Actions 发布流程：`pre` 部署固定 Preview，`main` 部署生产环境。自行部署需要 Node.js `>=22.12.0`、Cloudflare 账号及部署凭据。
+
+[部署指南](docs/deployment.md)包含 Secret 配置、构建演练、发布检查与回滚说明。
 
 ## 本地开发
 
-### 前置要求
+项目使用 Vue 3、TypeScript、Reka UI、Tailwind CSS 4 和 Vite；代理运行在 Cloudflare Workers，本地缓存与阅读记录使用 IndexedDB。
 
-Node.js `>=22.12.0`
-
-### 安装
+启动构建后的前端与本地 Worker：
 
 ```sh
 npm ci
-```
-
-### 启动前端开发服务器
-
-```sh
-npm run dev
-```
-
-需要运行中的代理实例，`VITE_EH_URL` 指向代理地址。
-
-### 启动完整开发环境
-
-同时运行前端与代理，地址 `http://127.0.0.1:8787`：
-
-```sh
 npm run build
 npm run dev:worker
 ```
 
-热更新开发时可另启动 `npm run dev`，将 `VITE_EH_URL` 指向 Worker 地址。
+打开 `http://127.0.0.1:8787`。开发时需要的源站会话与连接配置仍需单独设置。
 
-## 认证配置
-
-代理使用 `ipb_member_id` 和 `ipb_pass_hash` Cookie 访问原站。在应用的「账号信息 → 认证信息 → 登录态」填写并保存。
-
-前端与代理不同源部署时，需将前端 origin 加入白名单。`ALLOWED_ORIGINS` 和 `ALLOWED_AUTH_EXPORT_ORIGINS` 在 Cloudflare Worker 中以 Secret 维护；部署时保留 `keep_vars: true`，不要在仓库或 CI 中写入这些值。
-
-## 浏览器助手
-
-浏览器助手可使用当前浏览器的源站登录状态访问 E-Hentai、ExHentai 和 HentaiVerse，无需手动配置 Cookie。
-
-前往「系统设置 → 浏览器助手」安装脚本，根据你的环境选择对应版本：
-
-- **Tampermonkey**（桌面浏览器）：点击安装链接，确认权限后刷新页面
-- **Userscripts**（iOS/iPadOS Safari）：在 Userscripts App 中启用 Safari 扩展，点击安装链接后从扩展菜单确认
-
-安装后选择「本机代理」，在同一浏览器登录源站，再前往「账号信息」检测登录状态。脚本安装和更新统一在设置中完成；使用 ExHentai 需具备源站访问权限。
-
-## 部署（Cloudflare Workers）
-
-### 准备
-
-1. 在 GitHub 仓库 **Settings → Secrets and variables → Actions** 添加 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`
-2. `main` 为生产分支，`pre` 为预发分支
-3. 关闭 Cloudflare 控制台的自动构建
-
-### 发布
-
-推送至 `pre` 或 `main` 后，GitHub Actions 自动构建并部署。
-
-构建演练：
-
-```sh
-npm ci
-npm run build
-npm run check:worker
-npm run deploy:cloudflare -- --dry-run --branch pre --commit <40位提交编号>
-npm run deploy:cloudflare -- --dry-run --branch main --commit <40位提交编号>
-```
-实际发布需先提交全部修改并使用当前 HEAD 重新构建，再去掉 `--dry-run`；通过安全环境变量提供 `CLOUDFLARE_API_TOKEN` 和 `CLOUDFLARE_ACCOUNT_ID`。
-
-| 分支 | Worker |
-| --- | --- |
-| `main` | `eviewer-app` 生产 |
-| `pre` | `eviewer-app` Preview |
-
-## 项目结构
-
-```
-EViewer/
-├── src/
-│   ├── components/       # Vue 组件
-│   │   ├── primitives/   # 业务组合控件
-│   │   └── hentaiverse/  # HentaiVerse 组件
-│   ├── core/             # 核心逻辑
-│   │   ├── auth/         # 认证
-│   │   ├── books/        # 画廊
-│   │   ├── cache/        # 缓存
-│   │   └── hentaiverse/  # HentaiVerse
-│   ├── router/           # 路由
-│   ├── i18n/             # 国际化
-│   └── views/            # 页面
-├── deploy/cloudflare/    # 部署脚本
-├── docs/                 # 文档
-├── tool/                 # 工具脚本
-├── proxy-server.workers.js  # 代理逻辑
-├── worker-app.js         # Worker 入口
-└── wrangler.jsonc        # Wrangler 配置
-```
-
-## 命令
-
-```sh
-npm run dev              # Vite 开发服务器
-npm run dev:worker       # Worker 开发服务器
-npm run build            # 生产构建
-npm run preview          # 预览构建
-npm run type-check       # TypeScript 检查
-npm run check:worker     # Worker 代码检查
-npm run lint             # ESLint 修复
-npm run format           # Prettier 格式化
-npm run icons:generate   # 生成应用图标
-```
-
-## 版本管理
-
-使用 `pre` 分支测试，验证后合并到 `main`。Cloudflare Workers 支持版本回滚。
-
-## 开发环境
-
-- [VS Code](https://code.visualstudio.com/) + [Vue - Official](https://marketplace.visualstudio.com/items?itemName=Vue.volar)（禁用 Vetur）
-- [Vue.js devtools](https://chromewebstore.google.com/detail/vuejs-devtools/nhdogjmejiglipccpnnnanhbledajbpd)
-- Chrome DevTools 开启 [Custom Object Formatter](http://bit.ly/object-formatters)
-
-## 贡献
-
-提交 Issue 和 Pull Request 前确保：
-
-- 通过 `npm run lint` 和 `npm run type-check`
-- 遵循项目代码风格
-- PR 描述清楚改动内容
-
-详见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+热更新、环境变量、项目结构和检查命令见[开发文档](docs/development.md)。提交改动前请阅读[贡献指南](CONTRIBUTING.md)。
 
 ## 文档
 
-- [贡献指南](CONTRIBUTING.md)
+- [使用文档目录](docs/README.md)
+- [常见问题](docs/troubleshooting.md)
 - [标签采集工具](tool/README.md)
-- [界面国际化](src/i18n/README.md)
-- [界面字体](src/assets/fonts/README.md)
-- [UI 来源](src/components/ui/README.md)
+- [界面国际化](src/i18n/README.md) · [界面字体](src/assets/fonts/README.md) · [UI 来源](src/components/ui/README.md)
 
-## License
+截图中的漫画为 David Revoy 创作、庄冉翻译的《小辣椒与萝卜头》。[作品来源与许可](docs/credits.md)。
+
+## 许可证
 
 [GNU General Public License v3.0](LICENSE.txt)
