@@ -91,7 +91,6 @@ wrangler.jsonc            Workers 配置
 | `npm run build` | 类型检查与生产构建 |
 | `npm run preview` | 预览前端构建，不等于完整代理环境 |
 | `npm run type-check` | TypeScript 检查 |
-| `npm run test:onboarding` | 首次连接引导的桌面与手机浏览器回归测试 |
 | `npm run check:worker` | 代理和 Worker 入口语法检查 |
 | `npm run lint` | ESLint 检查并自动修复，可能修改文件 |
 | `npm run format` | 格式化 `src/`，会修改文件 |
@@ -99,8 +98,6 @@ wrangler.jsonc            Workers 配置
 | `npm run deploy:cloudflare -- --dry-run ...` | 发布打包演练，参数见部署指南 |
 
 当前 CI 还运行 `node tool/check-assistant-version.mjs`，检查助手版本。涉及助手与认证协议的修改应一起核对脚本版本。
-
-首次运行浏览器测试前执行 `npx playwright install chromium`。测试会启动本地 Vite，并拦截代理与源站请求，使用合成响应和助手协议，不需要真实账号。
 
 ## 开发工具与提交
 
