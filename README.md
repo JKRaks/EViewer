@@ -4,11 +4,42 @@
 [![Vue 3](https://img.shields.io/badge/Vue-3.5-4FC08D?logo=vue.js)](https://vuejs.org/)
 [![Cloudflare Workers](https://img.shields.io/badge/Cloudflare-Workers-F38020?logo=cloudflare)](https://workers.cloudflare.com/)
 
-EViewer 是面向 E-Hentai / ExHentai 的网页阅读器，也提供 HentaiVerse 的角色、装备和战斗界面。它把查找画廊、阅读、收藏与游戏操作放在同一个应用中，适配桌面、手机和平板，可自行部署到 Cloudflare Workers。
+面向 E-Hentai / ExHentai 的多端网页客户端，支持画廊搜索、阅读和收藏，并集成 HentaiVerse 功能。
+
+**[立即使用 EViewer](https://eviewer.c-h.cc/)** · [使用文档](docs/README.md) · [自行部署](docs/deployment.md)
 
 ![EViewer 桌面、手机和平板界面](docs/images/hero.png)
 
-[开始使用](#开始使用) · [功能](#功能) · [自行部署](docs/deployment.md) · [使用文档](docs/README.md) · [本地开发](docs/development.md)
+## 开始使用
+
+访问 **[eviewer.c-h.cc](https://eviewer.c-h.cc/)**，推荐搭配浏览器助手使用本机代理。
+
+> [!TIP]
+> **页面打不开，或画廊加载不出来？**
+>
+> - 公共服务代理的出口由多人共享，可能受到源站的 IP 访问限制，导致画廊无法加载。遇到这种情况，可以安装浏览器助手并切换到**本机代理**。
+> - 在线站点目前仅允许中国大陆、香港和台湾地区的 IP 访问。如果你使用的网络或代理节点位于其他地区，可能会被 Cloudflare 拦截；请切换到允许访问的地区后重试。
+>
+> 这些情况通常与访问路径有关，不代表你的操作有误，也不一定是 EViewer 出现了故障。
+
+### 推荐：本机代理
+
+安装浏览器助手后，EViewer 可以通过你当前浏览器的源站会话发起请求。推荐优先使用本机代理，既能减少公共站点的代理流量，也能避免所有请求共用服务端出口。
+
+1. 在浏览器中登录源站。
+2. 安装适用于当前浏览器的脚本管理器和 EViewer 浏览器助手。
+3. 打开 EViewer，在「系统设置 → 浏览器助手」中选择本机代理。
+4. 前往「账号信息」检查登录状态。
+
+浏览器助手支持 Tampermonkey 和 Userscripts。iPhone / iPad 请在 Safari 普通标签页中使用 Userscripts；Android 需要选择支持对应扩展的浏览器。
+
+### 备选：服务代理
+
+如果当前设备不方便使用浏览器助手，可以选择服务代理，并在「账号信息」中配置源站登录态。服务代理会通过 Cloudflare Worker 访问源站。
+
+画廊和 HentaiVerse 使用同一连接方式。本机请求失败时不会自动切换为服务代理；访问 ExHentai 仍需要账号已有相应权限。
+
+完整步骤见[首次使用指南](docs/getting-started.md)。请勿向不信任的实例提供登录凭据，也不要将 Cookie 放进 Issue 或截图。
 
 ## 功能
 
@@ -65,21 +96,6 @@ EViewer 是面向 E-Hentai / ExHentai 的网页阅读器，也提供 HentaiVerse
 ![切换明暗模式与配色](docs/images/appearance-demo.webp)
 
 [外观与 PWA](docs/guide/appearance-and-pwa.md)
-
-## 开始使用
-
-先打开自己部署或信任的 EViewer 实例，在「系统设置 → 浏览器助手」选择连接方式，再到「账号信息」验证登录状态。
-
-| 连接方式 | 请求如何到达源站 | 使用前需要 |
-| --- | --- | --- |
-| 服务代理 | 通过 Cloudflare Worker 访问源站 | 可用的代理实例，并在「账号信息」配置登录态 |
-| 本机代理（Beta） | 通过浏览器助手使用当前浏览器的源站会话 | 支持脚本扩展的浏览器、已安装助手、同一浏览器已登录源站 |
-
-画廊与 HentaiVerse 使用同一连接方式。本机请求失败不会自动切换为服务代理；ExHentai 仍要求账号已有源站访问权限。
-
-浏览器助手支持 Tampermonkey 和 Userscripts。iPhone / iPad 上需在 Safari 普通标签页使用 Userscripts；Android 需要选择支持对应扩展的浏览器。
-
-完整安装步骤见[首次使用指南](docs/getting-started.md)。不要向不信任的实例提供登录凭据，也不要将 Cookie 放进 Issue 或截图。
 
 ## 自行部署
 
