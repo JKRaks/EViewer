@@ -1591,5 +1591,17 @@
   "详细属性与熟练度": "Attributes and proficiencies",
   "增加{p0}": "Increase {p0}",
   "减少{p0}": "Decrease {p0}",
-  "{p0}目标值": "{p0} target value"
+  "{p0}目标值": "{p0} target value",
+  "重新查看连接引导": "Review connection guide",
+  "先选择连接方式": "Choose how to connect",
+  "EViewer 为 E-Hentai、ExHentai 和 HentaiVerse 提供浏览与阅读界面，内容来自源站。": "EViewer is a browsing and reading interface for E-Hentai, ExHentai and HentaiVerse. Content comes from the source sites.",
+  "连接方式": "Connection method",
+  "浏览器助手（本机代理）": "Browser assistant (local proxy)",
+  "推荐": "Recommended",
+  "安装助手后，由当前浏览器连接源站，使用同一浏览器的源站登录状态。": "Install the assistant to connect through this browser using its source-site session.",
+  "通过本站服务连接源站，无需安装助手。登录相关功能需另行配置认证。": "Connect through this site's server without installing an assistant. Account features require separate authentication setup.",
+  "此选择同时用于画廊和 HentaiVerse，可随时在设置中更改。": "This choice applies to galleries and HentaiVerse. You can change it in Settings anytime.",
+  "安装并连接助手后即可继续。安装期间可以离开此页，返回后刷新或重新检测。": "Connect the assistant to continue. You can leave this page to install it, then return and refresh or check again.",
+  "确认并继续": "Confirm and continue",
+  "返回设置": "Back to Settings"
 }
