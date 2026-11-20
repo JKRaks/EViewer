@@ -1,4 +1,6 @@
 import 'reflect-metadata'
+// Must run before imports that initialize preferences or install router hooks.
+import './core/connector/connectionOnboarding'
 import './assets/main.css'
 
 import { createApp } from 'vue'

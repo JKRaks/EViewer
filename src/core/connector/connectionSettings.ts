@@ -19,6 +19,15 @@ function storedSite(): GallerySite {
   }
 }
 export const connectionSettings = reactive({ mode: storedMode(), site: storedSite() })
+/** Persist explicit choices even when the default value did not change. */
+export function setRequestMode(mode: RequestMode) {
+  connectionSettings.mode = mode
+  try {
+    localStorage.setItem(storageKey, mode)
+  } catch {
+    /* Optional preference storage. */
+  }
+}
 /** Account billing and overview live on E-Hentai for both gallery sites. */
 export function galleryOrigin(path = '') {
   return connectionSettings.site === 'ex' &&

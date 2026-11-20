@@ -1,9 +1,15 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { connectionSettings } from '@/core/connector/connectionSettings'
+import ConnectionGuideView from '@/views/ConnectionGuideView.vue'
 
 const router = createRouter({
   history: createWebHistory(import.meta.env.BASE_URL),
   routes: [
+    {
+      path: '/connection-guide',
+      name: 'connection-guide',
+      component: ConnectionGuideView,
+    },
     {
       path: '/',
       name: 'home',

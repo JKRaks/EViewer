@@ -1,42 +1,10 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, watch } from 'vue'
 import { RouterLink } from 'vue-router'
 import Notice from '@/components/primitives/Notice.vue'
 import { t } from '@/i18n'
-import { connectorState, startConnector, stopConnector } from '@/core/connector/connectorClient'
-import {
-  connectionSettings,
-  listenForConnectionSettings,
-} from '@/core/connector/connectionSettings'
+import { connectorState } from '@/core/connector/connectorClient'
+import { connectionSettings } from '@/core/connector/connectionSettings'
 import { ASSISTANT_SETTINGS } from '@/core/connector/connectorProtocol'
-import { localSession, refreshLocalAuthState, refreshServerAuthState } from '@/core/auth/authState'
-
-let stopStorage: (() => void) | undefined
-onMounted(() => {
-  startConnector()
-  stopStorage = listenForConnectionSettings()
-  void refreshServerAuthState().catch(() => {
-    /* Existing account hint remains until verification succeeds. */
-  })
-})
-watch(
-  () =>
-    [
-      connectionSettings.mode,
-      connectorState.phase,
-      connectionSettings.site,
-      localSession.checking,
-    ] as const,
-  ([mode, phase]) => {
-    if (mode === 'local' && phase === 'ready' && Date.now() - localSession.checkedAt > 5 * 60_000)
-      void refreshLocalAuthState()
-  },
-  { immediate: true },
-)
-onUnmounted(() => {
-  stopConnector()
-  stopStorage?.()
-})
 </script>
 
 <template>
