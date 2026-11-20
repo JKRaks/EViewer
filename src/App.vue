@@ -5,6 +5,9 @@ import FeedbackHost from '@/components/primitives/FeedbackHost.vue'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import SiteHeader from '@/components/SiteHeader.vue'
 import BrowserAssistantNotice from '@/components/BrowserAssistantNotice.vue'
+import ConnectionGuideView from '@/views/ConnectionGuideView.vue'
+import { connectionOnboarding } from '@/core/connector/connectionOnboarding'
+import { useBrowserAssistant } from '@/composables/useBrowserAssistant'
 import { connectionSettings } from '@/core/connector/connectionSettings'
 import IconFrame from '@/components/primitives/IconFrame.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
@@ -62,6 +65,10 @@ interface FloatingMenuItem {
 
 const route = useRoute()
 const router = useRouter()
+const showConnectionGuide = computed(
+  () => connectionOnboarding.status === 'pending' || route.name === 'connection-guide',
+)
+useBrowserAssistant(() => !showConnectionGuide.value)
 const menuExpanded = ref(false)
 const isMobile = ref(false)
 const showFloatingButtons = ref(true)
@@ -169,12 +176,17 @@ const getRouteScrollKey = (routePath: string) => {
 }
 
 const persistCurrentRouteScroll = (routePath = route.fullPath) => {
+  if (showConnectionGuide.value) return
   const mainElement = getLayoutScrollElement()
   if (!mainElement) {
     return
   }
 
-  sessionStorage.setItem(getRouteScrollKey(routePath), String(getLayoutScrollTop()))
+  try {
+    sessionStorage.setItem(getRouteScrollKey(routePath), String(getLayoutScrollTop()))
+  } catch {
+    /* Scroll restoration is optional when browser storage is blocked. */
+  }
 }
 
 const restoreRouteScroll = async (routePath = route.fullPath) => {
@@ -185,14 +197,19 @@ const restoreRouteScroll = async (routePath = route.fullPath) => {
     return
   }
 
-  const storedPosition = Number(sessionStorage.getItem(getRouteScrollKey(routePath)) || '0')
+  let storedPosition = 0
+  try {
+    storedPosition = Number(sessionStorage.getItem(getRouteScrollKey(routePath)) || '0')
+  } catch {
+    /* Continue without a saved position. */
+  }
   const routePathname = routePath.split('?')[0]
   const shouldRestorePosition =
     routePathname === '/' ||
     routePathname === '/booklist' ||
     routePathname === '/favorites' ||
     routePathname === '/toplists'
-  const targetPosition = shouldRestorePosition ? storedPosition : 0
+  const targetPosition = !showConnectionGuide.value && shouldRestorePosition ? storedPosition : 0
   lastScrollTop.value = targetPosition
 
   requestAnimationFrame(() => {
@@ -294,6 +311,10 @@ onMounted(() => {
   void restoreRouteScroll()
 })
 
+watch(showConnectionGuide, (visible) => {
+  if (!visible) void restoreRouteScroll()
+})
+
 watch(
   () => route.fullPath,
   async (newRoutePath, oldRoutePath) => {
@@ -325,31 +346,38 @@ onUnmounted(() => {
     >
       <div class="layout-safe-area" aria-hidden="true" />
       <main class="layout-main">
-        <SiteHeader v-if="route.path !== '/viewer'" />
-        <BrowserAssistantNotice />
-        <Suspense>
-          <template #default>
-            <RouterView v-slot="{ Component, route }">
-              <KeepAlive
-                :key="`${connectionSettings.mode}:${connectionSettings.site}`"
-                :include="cachedViews"
-              >
-                <component :is="Component" :key="route.path" />
-              </KeepAlive>
-            </RouterView>
-          </template>
-          <template #fallback>
-            <div class="loading-container">
-              <IconFrame class="is-loading" :size="40">
-                <Loading />
-              </IconFrame>
-              <p>{{ t('加载中...') }}</p>
-            </div>
-          </template>
-        </Suspense>
+        <ConnectionGuideView v-if="showConnectionGuide" />
+        <template v-else>
+          <SiteHeader v-if="route.path !== '/viewer'" />
+          <BrowserAssistantNotice />
+          <Suspense>
+            <template #default>
+              <RouterView v-slot="{ Component, route }">
+                <KeepAlive
+                  :key="`${connectionSettings.mode}:${connectionSettings.site}`"
+                  :include="cachedViews"
+                >
+                  <component :is="Component" :key="route.path" />
+                </KeepAlive>
+              </RouterView>
+            </template>
+            <template #fallback>
+              <div class="loading-container">
+                <IconFrame class="is-loading" :size="40">
+                  <Loading />
+                </IconFrame>
+                <p>{{ t('加载中...') }}</p>
+              </div>
+            </template>
+          </Suspense>
+        </template>
       </main>
 
-      <div class="floating-actions" :class="{ 'is-hidden': !showFloatingButtons }">
+      <div
+        v-if="!showConnectionGuide"
+        class="floating-actions"
+        :class="{ 'is-hidden': !showFloatingButtons }"
+      >
         <ActionButton
           v-if="showBackButton"
           class="floating-btn"
@@ -420,8 +448,11 @@ onUnmounted(() => {
           />
         </div>
       </div>
-      <EncounterPrompt v-if="hentaiVerseState.encounter" />
-      <BattleFloatingPanel v-if="hentaiVerseState.battle" :navigation-expanded="menuExpanded" />
+      <EncounterPrompt v-if="!showConnectionGuide && hentaiVerseState.encounter" />
+      <BattleFloatingPanel
+        v-if="!showConnectionGuide && hentaiVerseState.battle"
+        :navigation-expanded="menuExpanded"
+      />
     </div>
     <FeedbackHost />
   </TooltipProvider>

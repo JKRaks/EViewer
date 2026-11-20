@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { RouterLink, useRoute } from 'vue-router'
 import { ArrowUpRight, Copy, Download, Monitor, RefreshCw } from '@lucide/vue'
 import { t } from '@/i18n'
 import ChoiceGroup from '@/components/primitives/ChoiceGroup.vue'
@@ -15,7 +15,11 @@ import windowsIcon from '@/assets/platform-icons/windows.svg?raw'
 import appleIcon from '@/assets/platform-icons/apple.svg?raw'
 import androidIcon from '@/assets/platform-icons/android.svg?raw'
 import linuxIcon from '@/assets/platform-icons/linux.svg?raw'
-import { connectionSettings, galleryOrigin } from '@/core/connector/connectionSettings'
+import {
+  connectionSettings,
+  galleryOrigin,
+  setRequestMode,
+} from '@/core/connector/connectionSettings'
 import {
   assistantUrl,
   checkAssistantVersion,
@@ -24,6 +28,8 @@ import {
 } from '@/core/connector/connectorClient'
 import type { AssistantFlavor } from '@/core/connector/connectorProtocol'
 import { localSession, refreshLocalAuthState, useAuthState } from '@/core/auth/authState'
+
+const props = defineProps<{ installationOnly?: boolean }>()
 
 const browserNavigator = navigator as Navigator &
   Pick<AuthInstallContext, 'userAgentData' | 'standalone'>
@@ -128,6 +134,7 @@ watch(
 )
 
 async function check() {
+  if (checking.value) return
   checking.value = true
   try {
     await detectConnector()
@@ -142,7 +149,7 @@ function changeMode(value: unknown) {
     notify.warning(t('请先安装助手并检测连接'))
     return
   }
-  connectionSettings.mode = value
+  setRequestMode(value)
 }
 async function copyAddress() {
   try {
@@ -153,7 +160,7 @@ async function copyAddress() {
   }
 }
 async function scrollToEntry() {
-  if (route.hash !== '#browser-assistant') return
+  if (props.installationOnly || route.hash !== '#browser-assistant') return
   await nextTick()
   section.value?.scrollIntoView({ block: 'start' })
 }
@@ -169,42 +176,47 @@ onMounted(scrollToEntry)
     :aria-label="t('浏览器助手')"
   >
     <h2>{{ t('浏览器助手') }} <TagChip class="assistant-beta">Beta</TagChip></h2>
-    <div class="assistant-row">
-      <div>
-        <strong>{{ t('画廊请求方式') }}</strong>
-        <p>{{ t('本机模式通过脚本从当前浏览器访问所选画廊站点。') }}</p>
-      </div>
-      <ChoiceGroup
-        :model-value="connectionSettings.mode"
-        :aria-label="t('画廊请求方式')"
-        @update:model-value="changeMode"
-      >
-        <RadioChoice value="server">{{ t('服务代理') }}</RadioChoice>
-        <RadioChoice
-          value="local"
-          :disabled="connectorState.phase !== 'ready' && connectionSettings.mode !== 'local'"
-          >{{ t('本机代理') }} <TagChip class="assistant-beta">Beta</TagChip></RadioChoice
+    <template v-if="!installationOnly">
+      <RouterLink to="/connection-guide" class="assistant-guide-link">{{
+        t('重新查看连接引导')
+      }}</RouterLink>
+      <div class="assistant-row">
+        <div>
+          <strong>{{ t('画廊请求方式') }}</strong>
+          <p>{{ t('本机模式通过脚本从当前浏览器访问所选画廊站点。') }}</p>
+        </div>
+        <ChoiceGroup
+          :model-value="connectionSettings.mode"
+          :aria-label="t('画廊请求方式')"
+          @update:model-value="changeMode"
         >
-      </ChoiceGroup>
-    </div>
-    <div class="assistant-row">
-      <div>
-        <strong>{{ t('画廊站点') }}</strong>
-        <p>{{ t('ExHentai 需要账号已有访问权限。本机模式请先在同一浏览器打开源站。') }}</p>
+          <RadioChoice value="server">{{ t('服务代理') }}</RadioChoice>
+          <RadioChoice
+            value="local"
+            :disabled="connectorState.phase !== 'ready' && connectionSettings.mode !== 'local'"
+            >{{ t('本机代理') }} <TagChip class="assistant-beta">Beta</TagChip></RadioChoice
+          >
+        </ChoiceGroup>
       </div>
-      <ChoiceGroup v-model="connectionSettings.site" :aria-label="t('画廊站点')">
-        <RadioChoice value="eh">E-Hentai</RadioChoice>
-        <RadioChoice value="ex">ExHentai</RadioChoice>
-      </ChoiceGroup>
-    </div>
-    <p>{{ t('画廊和 HentaiVerse 均使用所选连接方式。本机请求失败后不会自动切回服务代理。') }}</p>
-    <p v-if="connectionSettings.site === 'ex'">
-      {{
-        t(
-          '服务代理如需 igneous，请在账号信息中通过 Cookie 字符串一并导入。账号总览、排行榜与捐赠信息仍由 E-Hentai 提供。',
-        )
-      }}
-    </p>
+      <div class="assistant-row">
+        <div>
+          <strong>{{ t('画廊站点') }}</strong>
+          <p>{{ t('ExHentai 需要账号已有访问权限。本机模式请先在同一浏览器打开源站。') }}</p>
+        </div>
+        <ChoiceGroup v-model="connectionSettings.site" :aria-label="t('画廊站点')">
+          <RadioChoice value="eh">E-Hentai</RadioChoice>
+          <RadioChoice value="ex">ExHentai</RadioChoice>
+        </ChoiceGroup>
+      </div>
+      <p>{{ t('画廊和 HentaiVerse 均使用所选连接方式。本机请求失败后不会自动切回服务代理。') }}</p>
+      <p v-if="connectionSettings.site === 'ex'">
+        {{
+          t(
+            '服务代理如需 igneous，请在账号信息中通过 Cookie 字符串一并导入。账号总览、排行榜与捐赠信息仍由 E-Hentai 提供。',
+          )
+        }}
+      </p>
+    </template>
     <div class="assistant-row">
       <div aria-live="polite">
         <strong>{{ status }}</strong>
@@ -233,7 +245,7 @@ onMounted(scrollToEntry)
       :description="t('安装后刷新 EViewer，再检测版本。版本较新或来自实验环境时也需要核对。')"
     />
 
-    <details class="assistant-install">
+    <details class="assistant-install" :open="installationOnly && connectorState.phase !== 'ready'">
       <summary>
         {{ t('安装与更新') }}
         <small>{{ flavor === 'userscripts' ? 'Safari Userscripts' : 'Tampermonkey' }}</small>
@@ -347,7 +359,7 @@ onMounted(scrollToEntry)
         <p>{{ t('安装与权限需手动确认。脚本管理器负责自动更新，EViewer 启动时检查线上版本。') }}</p>
       </details>
     </details>
-    <div v-if="connectionSettings.mode === 'local'" class="assistant-session">
+    <div v-if="!installationOnly && connectionSettings.mode === 'local'" class="assistant-session">
       <h3>{{ t('本机源站登录') }}</h3>
       <p>
         {{
@@ -387,6 +399,13 @@ onMounted(scrollToEntry)
   padding: 24px 0;
   border-bottom: 1px solid var(--border-soft);
   scroll-margin-top: 20px;
+}
+.assistant-guide-link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  color: var(--primary);
+  text-decoration: underline;
 }
 h2 {
   margin: 0 0 14px;
