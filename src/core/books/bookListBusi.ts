@@ -85,6 +85,7 @@ export class bookListBusi {
       result.msg = '获取画册列表成功'
     } else {
       result.msg = htmlResult.msg
+      result.ipRestricted = htmlResult.ipRestricted
     }
     return result
   }

@@ -25,6 +25,7 @@ export class toplistBusi {
 
     if (!htmlResult.isSuccess || !htmlResult.data) {
       result.msg = htmlResult.msg || '获取排行总览失败'
+      result.ipRestricted = htmlResult.ipRestricted
       return result
     }
 
@@ -50,6 +51,7 @@ export class toplistBusi {
 
     if (!htmlResult.isSuccess || !htmlResult.data) {
       result.msg = htmlResult.msg || '获取排行榜失败'
+      result.ipRestricted = htmlResult.ipRestricted
       return result
     }
 

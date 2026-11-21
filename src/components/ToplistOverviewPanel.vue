@@ -3,6 +3,7 @@ import { useAppLaunchReadiness } from '@/lib/appLaunch'
 import { t } from '@/i18n'
 
 import ActionButton from '@/components/primitives/ActionButton.vue'
+import HomeLoadErrorActions from '@/components/HomeLoadErrorActions.vue'
 import SectionTabs from '@/components/primitives/SectionTabs'
 import SectionTab from '@/components/primitives/SectionTab.vue'
 import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
@@ -28,6 +29,7 @@ const activePeriod = ref(5)
 const loading = ref(false)
 useAppLaunchReadiness(() => loading.value)
 const errorMessage = ref('')
+const ipRestricted = ref(false)
 let requestVersion = 0
 
 const categoryNames = new Map(toplistCategoryOptions.map((item) => [item.value, item.label]))
@@ -46,6 +48,7 @@ async function fetchOverview() {
   const version = ++requestVersion
   loading.value = true
   errorMessage.value = ''
+  ipRestricted.value = false
   try {
     const result = await new toplistBusi().getOverview()
     if (version !== requestVersion) return
@@ -54,6 +57,7 @@ async function fetchOverview() {
       return
     }
     errorMessage.value = result.msg || t('获取排行总览失败')
+    ipRestricted.value = result.ipRestricted === true
   } catch (error) {
     if (version === requestVersion) {
       errorMessage.value = error instanceof Error ? error.message : t('获取排行总览失败')
@@ -102,17 +106,15 @@ onMounted(() => void fetchOverview())
     </SectionTabs>
 
     <SkeletonBlock v-if="loading && sections.length === 0" :rows="12" />
-    <Notice v-else-if="errorMessage && sections.length === 0" tone="error" :closable="false">
+    <Notice v-else-if="errorMessage && (ipRestricted || sections.length === 0)" tone="error">
       <template #title
         ><IconFrame><Warning /></IconFrame> {{ t(errorMessage) }}</template
       >
-      <ActionButton size="sm" :icon="Refresh" @click="fetchOverview">{{
-        t('重新加载')
-      }}</ActionButton>
+      <HomeLoadErrorActions :ip-restricted="ipRestricted" @retry="fetchOverview" />
     </Notice>
     <EmptyState v-else-if="visibleSections.length === 0" :description="t('暂无排行总览数据')" />
 
-    <div v-else class="section-grid" v-busy="loading">
+    <div v-if="visibleSections.length" class="section-grid" v-busy="loading">
       <section v-for="section in visibleSections" :key="section.tl" class="ranking-section">
         <header class="section-header">
           <div>
