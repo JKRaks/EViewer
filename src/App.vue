@@ -7,6 +7,7 @@ import SiteHeader from '@/components/SiteHeader.vue'
 import BrowserAssistantNotice from '@/components/BrowserAssistantNotice.vue'
 import ConnectionGuideView from '@/views/ConnectionGuideView.vue'
 import { connectionOnboarding } from '@/core/connector/connectionOnboarding'
+import { ASSISTANT_SETTINGS } from '@/core/connector/connectorProtocol'
 import { useBrowserAssistant } from '@/composables/useBrowserAssistant'
 import { connectionSettings } from '@/core/connector/connectionSettings'
 import IconFrame from '@/components/primitives/IconFrame.vue'
@@ -190,6 +191,8 @@ const persistCurrentRouteScroll = (routePath = route.fullPath) => {
 }
 
 const restoreRouteScroll = async (routePath = route.fullPath) => {
+  // The proxy settings section scrolls to its own anchor after mounting.
+  if (!showConnectionGuide.value && routePath === ASSISTANT_SETTINGS) return
   await nextTick()
 
   const mainElement = getLayoutScrollElement()

@@ -12,4 +12,6 @@ export class P<T> {
   }
 
   msg: string = ''
+
+  ipRestricted?: boolean
 }
