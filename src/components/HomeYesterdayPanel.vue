@@ -6,10 +6,10 @@ import IconFrame from '@/components/primitives/IconFrame.vue'
 import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
 import SkeletonLine from '@/components/primitives/SkeletonLine.vue'
 import Notice from '@/components/primitives/Notice.vue'
-import ActionButton from '@/components/primitives/ActionButton.vue'
+import HomeLoadErrorActions from '@/components/HomeLoadErrorActions.vue'
 import EmptyState from '@/components/primitives/EmptyState.vue'
 import { onMounted, ref } from 'vue'
-import { ArrowRight, RefreshCw as Refresh, Trophy } from '@lucide/vue'
+import { ArrowRight, Trophy } from '@lucide/vue'
 import { RouterLink } from 'vue-router'
 import BookItem from '@/components/BookItem.vue'
 import { toplistBusi } from '@/core/books/toplistBusi'
@@ -22,6 +22,7 @@ const entries = ref<galleryToplistEntry[]>([])
 const loading = ref(false)
 useAppLaunchReadiness(() => loading.value)
 const errorMessage = ref('')
+const ipRestricted = ref(false)
 let requestVersion = 0
 
 async function fetchYesterday() {
@@ -29,6 +30,7 @@ async function fetchYesterday() {
   const version = ++requestVersion
   loading.value = true
   errorMessage.value = ''
+  ipRestricted.value = false
   try {
     const result = await new toplistBusi().getDetail(new toplistInput(15, 0))
     if (version !== requestVersion) return
@@ -39,6 +41,7 @@ async function fetchYesterday() {
       return
     }
     errorMessage.value = result.msg || t('获取昨日热门失败')
+    ipRestricted.value = result.ipRestricted === true
   } catch (error) {
     if (version === requestVersion) {
       errorMessage.value = error instanceof Error ? error.message : t('获取昨日热门失败')
@@ -77,18 +80,16 @@ onMounted(() => void fetchYesterday())
       </template>
     </SkeletonBlock>
     <Notice
-      v-else-if="errorMessage && entries.length === 0"
+      v-else-if="errorMessage && (ipRestricted || entries.length === 0)"
       class="load-error"
       tone="error"
       :title="t('暂时无法加载')"
       :description="t(errorMessage)"
     >
-      <ActionButton class="retry-button" size="sm" :icon="Refresh" @click="fetchYesterday">{{
-        t('重新加载')
-      }}</ActionButton>
+      <HomeLoadErrorActions :ip-restricted="ipRestricted" @retry="fetchYesterday" />
     </Notice>
     <EmptyState v-else-if="entries.length === 0" :description="t('暂无昨日榜单数据')" />
-    <div v-else class="ranking-grid gallery-masonry" v-busy="loading">
+    <div v-if="entries.length" class="ranking-grid gallery-masonry" v-busy="loading">
       <BookItem
         v-for="entry in entries"
         :key="entry.book.bookId"
@@ -112,10 +113,6 @@ onMounted(() => void fetchYesterday())
 .load-error :deep(p) {
   line-height: 1.6;
   overflow-wrap: anywhere;
-}
-.load-error .retry-button {
-  min-height: 44px;
-  margin: 8px 0 0;
 }
 .panel-header {
   display: flex;

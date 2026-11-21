@@ -87,7 +87,12 @@ export class httpClass {
       // console.log('最终响应 Cookie:', response.headers['set-cookie'])
 
       options.signal?.throwIfAborted()
-      this.checkSourceResponse(response)
+      const restriction = this.getIpRestrictionMessage(response.data)
+      if (restriction) {
+        result.ipRestricted = true
+        result.msg = restriction
+        return result
+      }
       if (response.status < 200 || response.status >= 300)
         throw new Error(
           formatSystemMessage('源站请求失败（HTTP {p0}），请重新加载。', { p0: response.status }),
@@ -136,9 +141,9 @@ export class httpClass {
   }
 
   /** The source reports temporary IP bans with HTTP 200 and a short error page. */
-  private static checkSourceResponse(response: { data: string }): void {
-    if (typeof response.data !== 'string' || response.data.length > 8192) return
-    const text = response.data
+  private static getIpRestrictionMessage(data: string): string | undefined {
+    if (typeof data !== 'string' || data.length > 8192) return
+    const text = data
       .replace(/<[^>]*>/g, ' ')
       .replace(/\s+/g, ' ')
       .trim()
@@ -149,6 +154,14 @@ export class httpClass {
       Number(cooldown.match(/(\d+)\s*hours?/i)?.[1] || 0) * 3600 +
       Number(cooldown.match(/(\d+)\s*minutes?/i)?.[1] || 0) * 60 +
       Number(cooldown.match(/(\d+)\s*seconds?/i)?.[1] || 0)
+    const local = connectionSettings.mode === 'local'
+    if (!seconds) {
+      return formatSystemMessage(
+        local
+          ? '当前设备的出口 IP 暂时受限，请稍后重试。'
+          : '当前服务代理的 IP 暂时受限，请稍后重试。切换到本机代理可能缓解此限制。',
+      )
+    }
     const totalMinutes = Math.ceil(seconds / 60)
     const hours = Math.floor(totalMinutes / 60)
     const minutes = totalMinutes % 60
@@ -158,23 +171,12 @@ export class httpClass {
         : hours
           ? formatSystemMessage('{p0} 小时', { p0: hours })
           : formatSystemMessage('{p0} 分钟', { p0: minutes })
-    const local = connectionSettings.mode === 'local'
-    const message =
-      seconds > 0
-        ? formatSystemMessage(
-            local
-              ? '主站暂时限制了当前设备出口 IP 的访问，请约 {p0}后重试。'
-              : '主站暂时限制了当前代理 IP 的访问，请约 {p0}后重试。',
-            {
-              p0: duration,
-            },
-          )
-        : formatSystemMessage(
-            local
-              ? '主站暂时限制了当前设备出口 IP 的访问，请稍后重试。'
-              : '主站暂时限制了当前代理 IP 的访问，请稍后重试。',
-          )
-    throw new Error(message)
+    return formatSystemMessage(
+      local
+        ? '当前设备的出口 IP 暂时受限，请约 {p0}后重试。'
+        : '当前服务代理的 IP 暂时受限，请约 {p0}后重试。切换到本机代理可能缓解此限制。',
+      { p0: duration },
+    )
   }
 
   // 手动处理重定向，确保携带 cookies

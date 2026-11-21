@@ -4,6 +4,7 @@ import { t } from '@/i18n'
 
 import IconFrame from '@/components/primitives/IconFrame.vue'
 import ActionButton from '@/components/primitives/ActionButton.vue'
+import HomeLoadErrorActions from '@/components/HomeLoadErrorActions.vue'
 import SkeletonBlock from '@/components/primitives/SkeletonBlock.vue'
 import SkeletonLine from '@/components/primitives/SkeletonLine.vue'
 import Notice from '@/components/primitives/Notice.vue'
@@ -21,11 +22,13 @@ const books = ref<bookItem[]>([])
 const loading = ref(false)
 useAppLaunchReadiness(() => loading.value)
 const errorMessage = ref('')
+const ipRestricted = ref(false)
 
 async function fetchPopularBooks() {
   if (loading.value) return
   loading.value = true
   errorMessage.value = ''
+  ipRestricted.value = false
 
   try {
     const result = await new bookListBusi().getPopularList(new popularInput())
@@ -34,6 +37,7 @@ async function fetchPopularBooks() {
       return
     }
     errorMessage.value = result.msg || t('获取最近流行画册失败')
+    ipRestricted.value = result.ipRestricted === true
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : t('获取最近流行画册失败')
   } finally {
@@ -85,20 +89,18 @@ onMounted(() => void fetchPopularBooks())
     </SkeletonBlock>
 
     <Notice
-      v-else-if="errorMessage && books.length === 0"
+      v-else-if="errorMessage && (ipRestricted || books.length === 0)"
       class="load-error"
       tone="error"
       :title="t('暂时无法加载')"
       :description="t(errorMessage)"
     >
-      <ActionButton class="retry-button" size="sm" :icon="Refresh" @click="fetchPopularBooks">{{
-        t('重新加载')
-      }}</ActionButton>
+      <HomeLoadErrorActions :ip-restricted="ipRestricted" @retry="fetchPopularBooks" />
     </Notice>
 
     <EmptyState v-else-if="books.length === 0" :description="t('暂无流行画册')" />
 
-    <div v-else class="popular-grid gallery-masonry" v-busy="loading">
+    <div v-if="books.length" class="popular-grid gallery-masonry" v-busy="loading">
       <BookItem v-for="book in books" :key="book.bookId" :book="book" />
     </div>
   </div>
@@ -116,10 +118,6 @@ onMounted(() => void fetchPopularBooks())
 .load-error :deep(p) {
   line-height: 1.6;
   overflow-wrap: anywhere;
-}
-.load-error .retry-button {
-  min-height: 44px;
-  margin: 8px 0 0;
 }
 .panel-header {
   display: flex;
